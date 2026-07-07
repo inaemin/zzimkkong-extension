@@ -130,6 +130,13 @@ async function waitForManualSlackModal(page) {
   }
 }
 
+async function enableManualSlackModalTrigger(page) {
+  await page.evaluate(() => {
+    window.localStorage.setItem("zzk-manual-slack-modal-trigger-v1", "1");
+  });
+  await page.reload({ waitUntil: "domcontentloaded" });
+}
+
 function validateReminderPayload(payload) {
   if (typeof payload !== "string" || payload.trim() === "") {
     throw new Error("Slack /remind 메시지가 비어 있습니다.");
@@ -193,7 +200,7 @@ function createBrowserLaunchError(error) {
         "복구 순서:",
         "1. npx playwright install chromium",
         "2. 그래도 실패하면 npm run pw:install",
-        "3. 다시 node scripts/verify-modal-overlap.mjs --pause-before-check 실행",
+        "3. 다시 node scripts/verify-remind-message.mjs --pause-before-check 실행",
         `원본 오류: ${message}`,
       ].join("\n")
     );
@@ -211,7 +218,7 @@ function createBrowserLaunchError(error) {
       "복구 순서:",
       "1. npx playwright install --force chromium",
       "2. 그래도 실패하면 rm -rf ~/Library/Caches/ms-playwright 후 npm run pw:install",
-      "3. 다시 node scripts/verify-modal-overlap.mjs --pause-before-check 실행",
+      "3. 다시 node scripts/verify-remind-message.mjs --pause-before-check 실행",
       `원본 오류: ${message}`,
     ].join("\n")
   );
@@ -249,6 +256,8 @@ try {
     console.log(`검증 URL로 다시 이동합니다: ${guestDetailUrl}`);
     await page.goto(guestDetailUrl, { waitUntil: "domcontentloaded" });
   }
+
+  await enableManualSlackModalTrigger(page);
 
   console.log(`검증 대상 페이지: ${page.url()}`);
 

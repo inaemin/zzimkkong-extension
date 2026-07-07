@@ -108,7 +108,15 @@
   }
 
   function shouldShowSlackModalTrigger() {
-    return DEBUG_MODE && isGuestPage() && !isGuestReservationEditPage();
+    const manualVerificationEnabled = (() => {
+      try {
+        return window.localStorage.getItem("zzk-manual-slack-modal-trigger-v1") === "1";
+      } catch (error) {
+        return false;
+      }
+    })();
+
+    return (DEBUG_MODE || manualVerificationEnabled) && isGuestPage() && !isGuestReservationEditPage();
   }
 
   function ensureSlackModalTrigger() {

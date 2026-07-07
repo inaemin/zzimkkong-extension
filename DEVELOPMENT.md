@@ -16,14 +16,14 @@
 - `npm run pw:test`: 전체 자동 테스트를 실행합니다.
 - `npm run pw:test:headed`: 브라우저 창을 띄운 상태로 자동 테스트를 실행합니다.
 
-## 수동 UI 검증
+## 수동 /remind 메시지 검증
 
-- Slack 모달과 레이더 UI 겹침을 실제 Chromium 확장 로드 환경에서 확인하려면 아래 스크립트를 사용합니다.
-  - `node scripts/verify-modal-overlap.mjs`
+- Slack 공유 모달의 `/remind` 메시지를 실제 Chromium 확장 로드 환경에서 확인하려면 아래 스크립트를 사용합니다.
+  - `node scripts/verify-remind-message.mjs`
 - 실행 전 `.env`에 `ZZK_GUEST_DETAIL_URL`을 실제 검증용 guest URL로 지정합니다.
 - 기본 브라우저 채널은 Playwright 확장 로드 권장값인 `chromium`입니다. 필요하면 `.env`의 `PW_BROWSER_CHANNEL`로 바꿀 수 있습니다.
 - OAuth 로그인이 필요하면 아래처럼 실행하고, 브라우저 창에서 로그인한 뒤 터미널에서 Enter를 눌러 검증을 시작합니다.
-  - `node scripts/verify-modal-overlap.mjs --pause-before-check`
+  - `node scripts/verify-remind-message.mjs --pause-before-check`
 - `Google Chrome for Testing Framework ... no such file` 오류가 나면 Playwright 브라우저 캐시가 깨진 상태이므로 아래 순서로 복구합니다.
   - `npx playwright install --force chromium`
   - 계속 실패하면 `rm -rf ~/Library/Caches/ms-playwright` 후 `npm run pw:install`
