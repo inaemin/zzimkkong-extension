@@ -1,0 +1,131 @@
+name: Publish Chrome Extension
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+    inputs:
+      publish:
+        description: "Submit the uploaded package for Chrome Web Store review"
+        required: true
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+
+concurrency:
+  group: chrome-web-store-publish
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    name: Test, package, and publish
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install Playwright browsers
+        run: npm run pw:install
+
+      - name: Run tests
+        run: npm run pw:test
+
+      - name: Package extension
+        run: npm run package
+
+      - name: Upload package artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: chrome-extension-package
+          path: dist/*.zip
+          if-no-files-found: error
+
+      - name: Upload package and optionally publish to Chrome Web Store
+        env:
+          CHROME_EXTENSION_ID: ${{ secrets.CHROME_EXTENSION_ID }}
+          CHROME_WEBSTORE_PUBLISHER_ID: ${{ secrets.CHROME_WEBSTORE_PUBLISHER_ID }}
+          CHROME_WEBSTORE_CLIENT_ID: ${{ secrets.CHROME_WEBSTORE_CLIENT_ID }}
+          CHROME_WEBSTORE_CLIENT_SECRET: ${{ secrets.CHROME_WEBSTORE_CLIENT_SECRET }}
+          CHROME_WEBSTORE_REFRESH_TOKEN: ${{ secrets.CHROME_WEBSTORE_REFRESH_TOKEN }}
+          SHOULD_PUBLISH: ${{ github.event_name == 'push' || inputs.publish == true }}
+        run: |
+          required=(
+            CHROME_EXTENSION_ID
+            CHROME_WEBSTORE_PUBLISHER_ID
+            CHROME_WEBSTORE_CLIENT_ID
+            CHROME_WEBSTORE_CLIENT_SECRET
+            CHROME_WEBSTORE_REFRESH_TOKEN
+          )
+          for name in "${required[@]}"; do
+            if [ -z "${!name}" ]; then
+              echo "Missing required secret: $name" >&2
+              exit 1
+            fi
+          done
+
+          zip_file=$(ls dist/*.zip | head -n 1)
+          if [ -z "$zip_file" ]; then
+            echo "No extension zip found in dist/" >&2
+            exit 1
+          fi
+
+          token_response=$(curl -sS -X POST "https://oauth2.googleapis.com/token" \
+            -d "client_id=${CHROME_WEBSTORE_CLIENT_ID}" \
+            -d "client_secret=${CHROME_WEBSTORE_CLIENT_SECRET}" \
+            -d "refresh_token=${CHROME_WEBSTORE_REFRESH_TOKEN}" \
+            -d "grant_type=refresh_token")
+
+          access_token=$(python -c 'import json,sys; data=json.load(sys.stdin); print(data.get("access_token", ""))' <<< "$token_response")
+          if [ -z "$access_token" ]; then
+            echo "Failed to obtain Chrome Web Store access token" >&2
+            python -c 'import json,sys; data=json.load(sys.stdin); print(data.get("error", "unknown_error")); print(data.get("error_description", ""))' <<< "$token_response" >&2
+            exit 1
+          fi
+          echo "::add-mask::$access_token"
+
+          upload_url="https://chromewebstore.googleapis.com/upload/v2/publishers/${CHROME_WEBSTORE_PUBLISHER_ID}/items/${CHROME_EXTENSION_ID}:upload"
+          response_file=$(mktemp)
+          status=$(curl -sS -o "$response_file" -w "%{http_code}" \
+            -H "Authorization: Bearer ${access_token}" \
+            -X POST \
+            -T "$zip_file" \
+            "$upload_url")
+
+          echo "Upload response status: $status"
+          cat "$response_file"
+          if [ "$status" -lt 200 ] || [ "$status" -ge 300 ]; then
+            echo "Chrome Web Store upload failed" >&2
+            exit 1
+          fi
+
+          if [ "$SHOULD_PUBLISH" != "true" ]; then
+            echo "Skipping Chrome Web Store publish request because publish=false."
+            exit 0
+          fi
+
+          publish_url="https://chromewebstore.googleapis.com/v2/publishers/${CHROME_WEBSTORE_PUBLISHER_ID}/items/${CHROME_EXTENSION_ID}:publish"
+          publish_response_file=$(mktemp)
+          publish_status=$(curl -sS -o "$publish_response_file" -w "%{http_code}" \
+            -H "Authorization: Bearer ${access_token}" \
+            -X POST \
+            "$publish_url")
+
+          echo "Publish response status: $publish_status"
+          cat "$publish_response_file"
+          if [ "$publish_status" -lt 200 ] || [ "$publish_status" -ge 300 ]; then
+            echo "Chrome Web Store publish request failed" >&2
+            exit 1
+          fi

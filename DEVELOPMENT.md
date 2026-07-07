@@ -47,16 +47,49 @@
 웹스토어 제출용 zip에는 실행에 필요한 파일만 포함합니다.
 
 ```bash
-mkdir -p dist
-rm -f dist/zzimkkong-radar-0.1.0-webstore.zip
-zip -r dist/zzimkkong-radar-0.1.0-webstore.zip manifest.json src assets icons README.md \
-  -x "src/ISSUE.md" "*.DS_Store"
-unzip -t dist/zzimkkong-radar-0.1.0-webstore.zip
+npm run package
 ```
 
 포함 대상: `manifest.json`, `src/`, `assets/`, `icons/`, `README.md`
 
 제외 대상: `node_modules/`, `tests/`, `src-backup/`, `test-results/`, `artifacts/`, `dist/`, `*.zip`, `crews.csv`, `.env*`, `src/ISSUE.md`
+
+생성 파일: `dist/zzimkkong-radar-<manifest.version>-webstore.zip`
+
+## Chrome Web Store 자동 배포
+
+GitHub Actions workflow: `.github/workflows/publish-chrome-extension.yml`
+
+실행 조건:
+
+- `v*` 태그 push 시 자동 실행
+- GitHub Actions의 **Run workflow** 버튼으로 수동 실행
+
+배포 단계:
+
+1. `npm ci`
+2. `npm run pw:install`
+3. `npm run pw:test`
+4. `npm run package`
+5. 생성된 zip을 GitHub artifact로 업로드
+6. Chrome Web Store API v2로 zip 업로드
+7. `publish=true`이면 Chrome Web Store 심사 제출
+
+필요한 GitHub Secrets:
+
+- `CHROME_EXTENSION_ID`: Chrome Web Store 확장 프로그램 ID
+- `CHROME_WEBSTORE_PUBLISHER_ID`: Chrome Web Store Publisher ID
+- `CHROME_WEBSTORE_CLIENT_ID`: Google Cloud OAuth client ID
+- `CHROME_WEBSTORE_CLIENT_SECRET`: Google Cloud OAuth client secret
+- `CHROME_WEBSTORE_REFRESH_TOKEN`: `https://www.googleapis.com/auth/chromewebstore` scope로 발급한 refresh token
+
+주의:
+
+- `manifest.json`의 `version`을 올리지 않으면 Web Store 업로드가 실패합니다.
+- 자동 publish는 즉시 공개가 아니라 Chrome Web Store 심사 제출입니다.
+- 이 workflow는 확장 프로그램 zip 업로드와 publish 심사 제출만 처리합니다. 웹스토어 설명, 스크린샷, 개인정보 입력 같은 listing metadata는 Developer Dashboard에서 관리합니다.
+- 인증값은 GitHub Secrets에만 저장하고 저장소에 커밋하지 않습니다.
+- 수동 실행 시 `publish=false`를 선택하면 zip 업로드까지만 수행하고 심사 제출은 건너뜁니다.
 
 ## 참고 문서
 

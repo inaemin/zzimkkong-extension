@@ -4,6 +4,7 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "package": "node scripts/package-extension.mjs",
     "pw:install": "playwright install chromium chrome",
     "pw:test": "playwright test",
     "pw:test:headed": "playwright test --headed",
