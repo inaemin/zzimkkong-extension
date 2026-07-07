@@ -373,6 +373,31 @@
     );
   }
 
+  function isRoomIdFieldKey(normalizedKey) {
+    return (
+      normalizedKey === "roomid" ||
+      normalizedKey === "spaceid" ||
+      normalizedKey === "room_id" ||
+      normalizedKey === "space_id" ||
+      normalizedKey.endsWith("roomid") ||
+      normalizedKey.endsWith("spaceid")
+    );
+  }
+
+  function parseReservationRoomIdCandidate(value) {
+    if (Number.isInteger(value)) {
+      return value;
+    }
+
+    const normalized = normalizeText(String(value || ""));
+    if (!/^\d+$/.test(normalized)) {
+      return null;
+    }
+
+    const roomId = Number.parseInt(normalized, 10);
+    return Number.isInteger(roomId) ? roomId : null;
+  }
+
   function mergeReservationRequestContext(baseContext, patchContext) {
     const base = baseContext && typeof baseContext === "object" ? { ...baseContext } : {};
     if (!patchContext || typeof patchContext !== "object") {
@@ -474,6 +499,14 @@
       if (isDescriptionFieldKey(normalizedKey)) {
         const description = normalizeDescriptionCandidate(stringValue);
         context = mergeReservationRequestContext(context, { description });
+        return;
+      }
+
+      if (isRoomIdFieldKey(normalizedKey)) {
+        const roomId = parseReservationRoomIdCandidate(rawValue);
+        if (Number.isInteger(roomId)) {
+          context = mergeReservationRequestContext(context, { roomId });
+        }
         return;
       }
 
@@ -794,6 +827,8 @@
     isDateFieldKey,
     isDescriptionFieldKey,
     isRoomNameFieldKey,
+    isRoomIdFieldKey,
+    parseReservationRoomIdCandidate,
     mergeReservationRequestContext,
     finalizeReservationRequestContext,
     extractReservationRequestContextFromEntries,

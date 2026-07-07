@@ -6932,15 +6932,35 @@
     const maxAgeMs = 120000;
     for (const [attemptId, attempt] of state.pendingReservationAttempts.entries()) {
       const attemptAt = Number(attempt?.at || 0);
-      if (
-        state.pendingReservationAttempts.size <= 10 &&
-        Number.isFinite(attemptAt) &&
-        now - attemptAt <= maxAgeMs
-      ) {
-        continue;
+      if (!Number.isFinite(attemptAt) || now - attemptAt > maxAgeMs) {
+        deletePendingReservationAttempt(attemptId);
       }
-      state.pendingReservationAttempts.delete(attemptId);
     }
+
+    if (state.pendingReservationAttempts.size <= 10) {
+      return;
+    }
+
+    const attemptsByAge = Array.from(state.pendingReservationAttempts.entries()).sort(
+      ([, leftAttempt], [, rightAttempt]) => Number(leftAttempt?.at || 0) - Number(rightAttempt?.at || 0),
+    );
+    for (const [attemptId] of attemptsByAge) {
+      if (state.pendingReservationAttempts.size <= 10) {
+        break;
+      }
+      deletePendingReservationAttempt(attemptId);
+    }
+  }
+
+  function deletePendingReservationAttempt(attemptId) {
+    if (typeof attemptId !== "string" || attemptId === "") {
+      return false;
+    }
+    const deleted = state.pendingReservationAttempts.delete(attemptId);
+    if (deleted) {
+      clearReservationAttemptDataset(attemptId);
+    }
+    return deleted;
   }
 
   function resolveReservationAttemptForPayload(payload) {
@@ -7011,7 +7031,28 @@
     if (typeof attemptId !== "string" || attemptId === "") {
       return;
     }
-    state.pendingReservationAttempts.delete(attemptId);
+    deletePendingReservationAttempt(attemptId);
+    clearReservationAttemptDataset(attemptId);
+    if (state.lastReservationAttemptId === attemptId) {
+      state.lastReservationAttemptId = "";
+    }
+  }
+
+  function clearReservationAttemptDataset(attemptId = "") {
+    if (!(document.documentElement instanceof HTMLElement)) {
+      return;
+    }
+
+    const currentAttemptId =
+      typeof document.documentElement.dataset.zzkReservationAttemptId === "string"
+        ? document.documentElement.dataset.zzkReservationAttemptId
+        : "";
+    if (attemptId && currentAttemptId && currentAttemptId !== attemptId) {
+      return;
+    }
+
+    delete document.documentElement.dataset.zzkReservationAttemptId;
+    delete document.documentElement.dataset.zzkReservationAttemptAt;
   }
 
   function isCompleteReservationPayloadContext(payloadContext) {
@@ -8779,6 +8820,7 @@
           lastReservationContext: state.lastReservationContext,
           lastReservationAttemptId: state.lastReservationAttemptId,
           pendingReservationAttemptCount: state.pendingReservationAttempts.size,
+          pendingReservationAttemptIds: Array.from(state.pendingReservationAttempts.keys()),
           lastKnownReservationOwnerName: state.lastKnownReservationOwnerName,
           pendingSlackModalContext: state.pendingSlackModalContext,
           pendingSlackModalRequiresNonEditPage:

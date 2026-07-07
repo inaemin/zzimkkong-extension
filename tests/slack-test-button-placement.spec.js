@@ -157,6 +157,126 @@ test("slack modal opens on reservation success without legacy slack test trigger
   expect(modalState.textareaHeight).toBeLessThan(210);
 });
 
+test("reservation success consumes pending attempt id and clears document dataset", async ({ page }) => {
+  await page.goto("https://example.com/guest/test-map", { waitUntil: "domcontentloaded" });
+
+  await page.setContent(`
+    <main>
+      <form id="reservation-form" style="display:block; width:560px;">
+        <label for="reservation-date">날짜</label>
+        <input id="reservation-date" name="date" type="date" value="2026-03-02" />
+
+        <label for="start-time">시작시간</label>
+        <input id="start-time" name="startTime" type="time" value="12:20" />
+
+        <label for="end-time">종료시간</label>
+        <input id="end-time" name="endTime" type="time" value="13:20" />
+
+        <label for="room-select">공간 선택</label>
+        <select id="room-select" name="spaceId">
+          <option value="5" selected>12층 보이저</option>
+        </select>
+
+        <label for="purpose">사용목적</label>
+        <textarea id="purpose" name="purpose">attempt cleanup 검증</textarea>
+
+        <div id="form-action-row" style="display:flex; gap:8px; margin-top:12px;">
+          <button id="form-reserve-submit" type="button">예약하기</button>
+        </div>
+      </form>
+    </main>
+  `);
+
+  await injectContentScriptBundle(page);
+  await page.waitForTimeout(700);
+  await page.click("#form-reserve-submit");
+
+  const before = await page.evaluate(() => ({
+    datasetAttemptId: document.documentElement.dataset.zzkReservationAttemptId || "",
+    pendingAttemptCount: window.__zzkTestApi?.getStateSnapshot?.().pendingReservationAttemptCount ?? 0,
+  }));
+
+  await page.evaluate((payload) => {
+    window.postMessage(
+      {
+        source: "zzk-page-reservation-hook",
+        type: "ZZK_RESERVATION_NETWORK_EVENT",
+        payload,
+      },
+      "*"
+    );
+  }, DEFAULT_RESERVATION_SUCCESS_PAYLOAD);
+  await page.waitForSelector("#zzk-slack-copy-modal", { timeout: 3000 });
+
+  const after = await page.evaluate(() => ({
+    datasetAttemptId: document.documentElement.dataset.zzkReservationAttemptId || "",
+    datasetAttemptAt: document.documentElement.dataset.zzkReservationAttemptAt || "",
+    pendingAttemptCount: window.__zzkTestApi?.getStateSnapshot?.().pendingReservationAttemptCount ?? 0,
+    lastReservationAttemptId: window.__zzkTestApi?.getStateSnapshot?.().lastReservationAttemptId || "",
+  }));
+
+  expect(before.datasetAttemptId).toMatch(/^zzk-/);
+  expect(before.pendingAttemptCount).toBe(1);
+  expect(after.datasetAttemptId).toBe("");
+  expect(after.datasetAttemptAt).toBe("");
+  expect(after.pendingAttemptCount).toBe(0);
+  expect(after.lastReservationAttemptId).toBe("");
+});
+
+test("pending reservation attempt pruning keeps newest ten attempts", async ({ page }) => {
+  await page.goto("https://example.com/guest/test-map", { waitUntil: "domcontentloaded" });
+
+  await page.setContent(`
+    <main>
+      <form id="reservation-form" style="display:block; width:560px;">
+        <label for="reservation-date">날짜</label>
+        <input id="reservation-date" name="date" type="date" value="2026-03-02" />
+
+        <label for="start-time">시작시간</label>
+        <input id="start-time" name="startTime" type="time" value="12:20" />
+
+        <label for="end-time">종료시간</label>
+        <input id="end-time" name="endTime" type="time" value="13:20" />
+
+        <label for="room-select">공간 선택</label>
+        <select id="room-select" name="spaceId">
+          <option value="5" selected>12층 보이저</option>
+        </select>
+
+        <label for="purpose">사용목적</label>
+        <textarea id="purpose" name="purpose">attempt pruning 검증</textarea>
+
+        <div id="form-action-row" style="display:flex; gap:8px; margin-top:12px;">
+          <button id="form-reserve-submit" type="button">예약하기</button>
+        </div>
+      </form>
+    </main>
+  `);
+
+  await injectContentScriptBundle(page);
+  await page.waitForTimeout(700);
+
+  const snapshots = [];
+  for (let index = 0; index < 11; index += 1) {
+    await page.click("#form-reserve-submit");
+    snapshots.push(await page.evaluate(() => window.__zzkTestApi?.getStateSnapshot?.()));
+    await page.waitForTimeout(5);
+  }
+
+  const firstAttemptId = snapshots[0].lastReservationAttemptId;
+  const latestSnapshot = snapshots[snapshots.length - 1];
+  const datasetAttemptId = await page.evaluate(
+    () => document.documentElement.dataset.zzkReservationAttemptId || "",
+  );
+
+  expect(firstAttemptId).toMatch(/^zzk-/);
+  expect(latestSnapshot.pendingReservationAttemptCount).toBe(10);
+  expect(latestSnapshot.pendingReservationAttemptIds).toHaveLength(10);
+  expect(latestSnapshot.pendingReservationAttemptIds).not.toContain(firstAttemptId);
+  expect(latestSnapshot.pendingReservationAttemptIds).toContain(latestSnapshot.lastReservationAttemptId);
+  expect(datasetAttemptId).toBe(latestSnapshot.lastReservationAttemptId);
+});
+
 test("slack modal suppression resets radar launcher to closed state", async ({ page }) => {
   await page.goto("https://example.com/guest/test-map", { waitUntil: "domcontentloaded" });
 

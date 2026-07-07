@@ -7,9 +7,9 @@ async function injectPageNetworkHookBundle(page) {
   await page.addScriptTag({ path: path.resolve(process.cwd(), "src/page-network-hook.js") });
 }
 
-async function collectReservationHookMessages(page, action) {
-  return await page.evaluate(async (actionSource) => {
-    const actionFn = new Function(`return (${actionSource})();`);
+async function collectReservationHookMessages(page, action, actionArgument = null) {
+  return await page.evaluate(async ({ actionSource, argument }) => {
+    const actionFn = new Function("argument", `return (${actionSource})(argument);`);
     const messages = [];
     const handleMessage = (event) => {
       const data = event.data;
@@ -26,13 +26,13 @@ async function collectReservationHookMessages(page, action) {
 
     window.addEventListener("message", handleMessage);
     try {
-      await actionFn();
+      await actionFn(argument);
       await new Promise((resolve) => window.setTimeout(resolve, 120));
       return messages;
     } finally {
       window.removeEventListener("message", handleMessage);
     }
-  }, action.toString());
+  }, { actionSource: action.toString(), argument: actionArgument });
 }
 
 test("page network hook emits ownerNameCandidate from reservation request body", async ({ page }) => {
@@ -154,6 +154,87 @@ test("page network hook includes reservationAttemptId from document dataset", as
     reservationAttemptId: "attempt-xhr-2",
   });
 });
+
+const roomIdBodyCases = [
+  {
+    name: "JSON spaceId",
+    bodyType: "json-space-id",
+    headers: { "content-type": "application/json" },
+  },
+  {
+    name: "FormData roomId",
+    bodyType: "form-room-id",
+    headers: {},
+  },
+  {
+    name: "URLSearchParams space_id",
+    bodyType: "params-space-id",
+    headers: {},
+  },
+];
+
+for (const { name, bodyType, headers } of roomIdBodyCases) {
+  test(`page network hook preserves room id from ${name} reservation body`, async ({ page }) => {
+    await page.goto("https://example.com/guest/test-map", { waitUntil: "domcontentloaded" });
+
+    await page.route("**/api/guests/maps/abc/reservations", async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: "{}",
+      });
+    });
+
+    await injectPageNetworkHookBundle(page);
+
+    const messages = await collectReservationHookMessages(
+      page,
+      async ({ requestBodyType, requestHeaders }) => {
+        let body;
+        if (requestBodyType === "json-space-id") {
+          body = JSON.stringify({
+            date: "2026-03-02",
+            startTime: "10:00",
+            endTime: "10:30",
+            description: "space id json",
+            spaceId: "263",
+          });
+        } else if (requestBodyType === "form-room-id") {
+          body = new FormData();
+          body.set("date", "2026-03-02");
+          body.set("startTime", "10:00");
+          body.set("endTime", "10:30");
+          body.set("description", "room id formdata");
+          body.set("roomId", "263");
+        } else {
+          body = new URLSearchParams({
+            date: "2026-03-02",
+            startTime: "10:00",
+            endTime: "10:30",
+            description: "space id params",
+            space_id: "263",
+          });
+        }
+
+        await fetch("/api/guests/maps/abc/reservations", {
+          method: "POST",
+          headers: requestHeaders,
+          body,
+        });
+      },
+      { requestBodyType: bodyType, requestHeaders: headers },
+    );
+
+    expect(messages).toHaveLength(1);
+    expect(messages[0].requestContext).toMatchObject({
+      date: "2026-03-02",
+      startTime: "10:00",
+      endTime: "10:30",
+      roomId: 263,
+    });
+    expect(messages[0].requestContext.roomName).not.toBe("263");
+  });
+}
 
 test("page network hook emits changed guest API path when reservation attempt is present", async ({ page }) => {
   await page.goto("https://example.com/guest/test-map", { waitUntil: "domcontentloaded" });
