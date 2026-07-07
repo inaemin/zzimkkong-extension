@@ -1,0 +1,30 @@
+{
+  "manifest_version": 3,
+  "name": "찜꽁 레이더",
+  "version": "0.1.0",
+  "description": "찜꽁에서 시간대별 회의실 현황을 레이더로 한눈에 보고, 예약까지 빠르게 완료하세요.",
+  "icons": {
+    "16": "icons/icon16.png",
+    "24": "icons/icon24.png",
+    "32": "icons/icon32.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  },
+  "background": {
+    "service_worker": "src/background.js"
+  },
+  "content_scripts": [
+    {
+      "matches": ["https://zzimkkong.com/*"],
+      "js": ["src/constants/debug.js", "src/utils/shared.js", "src/utils/storage.js", "src/constants/runtime.js", "src/utils/date-time.js", "src/utils/routes.js", "src/features/slack/shared.js", "src/features/slack/workflow.js", "src/features/slack/success-flow.js", "src/features/host-sync/shared.js", "src/services/guest-data/normalizers.js", "src/services/guest-data/shared.js", "src/features/radar/shared.js", "src/features/radar/workflow.js", "src/features/radar/form-sync.js", "src/content.js"],
+      "run_at": "document_idle"
+    }
+  ],
+  "web_accessible_resources": [
+    {
+      "resources": ["src/page-hook/shared.js", "src/page-network-hook.js", "src/page-network-restore.js", "assets/basecoat-dialog.css"],
+      "matches": ["https://zzimkkong.com/*"]
+    }
+  ],
+  "host_permissions": ["https://zzimkkong.com/*", "https://k8s.zzimkkong.com/*"]
+}
