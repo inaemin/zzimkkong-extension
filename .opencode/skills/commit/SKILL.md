@@ -32,6 +32,13 @@ Create well-formatted git commits following conventional commit standards, with 
 - Use the imperative/summary style without a trailing period.
 - Do not translate commit types such as `feat`, `fix`, `docs`, or `chore`.
 
+## Attribution Rules
+
+- Do not add AI/tool attribution footers.
+- Do not add `Ultraworked with ...` lines.
+- Do not add `Co-authored-by: Sisyphus ...` trailers.
+- Keep commit messages focused on the repository change only.
+
 ## Types
 
 - feat: 새 기능 추가
