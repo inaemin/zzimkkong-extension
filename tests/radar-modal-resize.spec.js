@@ -561,17 +561,25 @@ test("pinned columns are opaque so timeline blocks do not show through", async (
     );
     const roomStyle = window.getComputedStyle(roomName);
     const floorStyle = window.getComputedStyle(floorName);
+    // 배경은 셀 자체가 아니라 pseudo element 가 그린다.
+    const roomBefore = window.getComputedStyle(roomName, "::before");
+    const floorBefore = window.getComputedStyle(floorName, "::before");
     return {
       roomPosition: roomStyle.position,
       floorPosition: floorStyle.position,
-      roomBackground: roomStyle.backgroundColor,
-      floorBackground: floorStyle.backgroundColor,
+      roomBackground: roomBefore.backgroundColor,
+      floorBackground: floorBefore.backgroundColor,
+      roomBeforeContent: roomBefore.content,
+      floorBeforeContent: floorBefore.content,
       roomDisplay: roomStyle.display,
     };
   });
 
   expect(result.roomPosition).toBe("sticky");
   expect(result.floorPosition).toBe("sticky");
+  // pseudo element 가 실제로 존재해야 한다.
+  expect(result.roomBeforeContent).not.toBe("none");
+  expect(result.floorBeforeContent).not.toBe("none");
   // 투명이면 스크롤된 타임블록이 글자 뒤로 비쳐 보인다.
   expect(result.roomBackground).not.toBe("rgba(0, 0, 0, 0)");
   expect(result.floorBackground).not.toBe("rgba(0, 0, 0, 0)");

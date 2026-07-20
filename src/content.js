@@ -2447,8 +2447,32 @@
 
     // 너비가 적용된 뒤에야 스크롤 가능 여부를 알 수 있으므로 레이아웃 확정 후 실행한다.
     window.requestAnimationFrame(() => {
+      syncMapCalendarAxisRowHeight(overlay);
       applyMapCalendarCurrentTimeScroll(overlay);
     });
+  }
+
+  function syncMapCalendarAxisRowHeight(
+    overlay = document.getElementById(MAP_CALENDAR_OVERLAY_ID),
+  ) {
+    if (!(overlay instanceof HTMLElement)) {
+      return;
+    }
+
+    const gridWrap = overlay.querySelector(".zzk-map-calendar-grid-wrap");
+    const axisRow = overlay.querySelector(".zzk-map-calendar-axis-row");
+    if (!(gridWrap instanceof HTMLElement) || !(axisRow instanceof HTMLElement)) {
+      return;
+    }
+
+    // 헤더 높이는 폰트/줄바꿈에 따라 달라지므로 실제 DOM 에서 측정한다.
+    const axisHeight =
+      axisRow.getBoundingClientRect().bottom - gridWrap.getBoundingClientRect().top;
+    if (!Number.isFinite(axisHeight) || axisHeight <= 0) {
+      return;
+    }
+
+    gridWrap.style.setProperty("--zzk-axis-row-height", `${Math.round(axisHeight)}px`);
   }
 
   function buildEditLockedRoomConstraint(rooms) {
@@ -3665,26 +3689,42 @@
         z-index: 1;
         pointer-events: none;
         display: flex;
+        /*
+         * 이 레이어는 grid-area 1/1 로 헤더(축) 행까지 덮는다.
+         * 그대로 두면 정시 세로선이 헤더 위로 삐죽 튀어나와 보이므로
+         * 헤더 높이만큼 위쪽을 잘라내 타임블록 영역에서만 보이게 한다.
+         * (height 를 줄이지 않고 clip 만 해서 트랙 자체는 전체 높이를 유지한다.)
+         */
+        clip-path: inset(var(--zzk-axis-row-height, 0px) 0 0 0);
       }
 
       #${MAP_CALENDAR_OVERLAY_ID} .zzk-map-calendar-divider-layer {
         position: relative;
-        z-index: 1;
+        /* 고정 열(z-index 4) 위에 그려야 세로 구분선이 끊기지 않는다. */
+        z-index: 5;
         pointer-events: none;
       }
 
       #${MAP_CALENDAR_OVERLAY_ID} .zzk-map-calendar-divider-track {
-        position: absolute;
+        /*
+         * sticky 로 붙여야 가로 스크롤 시에도 고정 열과 함께 제자리에 남는다.
+         * absolute 로 두면 grid-wrap 과 같이 왼쪽으로 밀려나 사라진다.
+         */
+        position: sticky;
         top: 0;
         bottom: 0;
         left: calc(var(--zzk-floor-col-width) + (var(--zzk-row-gap) * 0.5));
+        height: 100%;
         width: 1px;
+        background: var(--zzk-section-divider-color);
         /*
-         * 층 / 회의실 열이 sticky 로 고정되면서 이 세로선이 행 사이 gap 에만
-         * 토막으로 드러난다. 고정 열 뒤에 완전히 가려지도록 숨긴다.
+         * 층 / 회의실 사이 세로 구분선. 셀마다 그리면 행 사이 gap 에서 끊겨
+         * 토막처럼 보이므로, 고정 열 배경(pseudo element) 보다 위에 그려
+         * 위아래를 완전히 관통하는 한 줄로 유지한다.
          */
-        background: transparent;
+        z-index: 5;
       }
+
 
       #${MAP_CALENDAR_OVERLAY_ID} .zzk-map-calendar-hour-boundary-track {
         display: grid;
@@ -3708,10 +3748,7 @@
         justify-self: stretch;
         width: 100%;
         border-radius: 1px;
-        /*
-         * 정시 세로 구분선은 헤더 위로 삐죽 튀어나와 보여 가로줄만 남긴다.
-         */
-        background: transparent;
+        background: var(--zzk-section-divider-color);
         pointer-events: none;
         z-index: 0;
       }
@@ -3823,21 +3860,7 @@
         position: sticky;
         left: 0;
         z-index: 4;
-        background: #ffffff;
         box-sizing: border-box;
-        /*
-         * 층 열과 회의실 열 사이 이음새, 그리고 행 사이 gap 을 함께 가린다.
-         * 왼쪽으로도 번지게 해서 카드 안쪽 여백 사이로 타임블록이 비치지 않게 한다.
-         */
-        box-shadow:
-          var(--zzk-row-gap) 0 0 0 #ffffff,
-          -16px 0 0 0 #ffffff,
-          0 -3px 0 0 #ffffff,
-          0 3px 0 0 #ffffff,
-          var(--zzk-row-gap) -3px 0 0 #ffffff,
-          var(--zzk-row-gap) 3px 0 0 #ffffff,
-          -16px -3px 0 0 #ffffff,
-          -16px 3px 0 0 #ffffff;
       }
 
 
@@ -3852,20 +3875,38 @@
         position: sticky;
         left: calc(var(--zzk-floor-col-width) + var(--zzk-row-gap));
         z-index: 4;
-        background: #ffffff;
         min-height: 100%;
         box-sizing: border-box;
-        /*
-         * 행 사이 gap(4px)까지 흰색으로 덮어야 스크롤된 타임블록과
-         * 세로 구분선이 틈으로 비치지 않는다.
-         * 위아래로 gap 의 절반씩 번지게 해서 인접한 행과 이어 붙인다.
-         */
-        box-shadow:
-          calc(var(--zzk-row-gap) + var(--zzk-timeline-side-margin)) 0 0 0 #ffffff,
-          0 -3px 0 0 #ffffff,
-          0 3px 0 0 #ffffff,
-          calc(var(--zzk-row-gap) + var(--zzk-timeline-side-margin)) -3px 0 0 #ffffff,
-          calc(var(--zzk-row-gap) + var(--zzk-timeline-side-margin)) 3px 0 0 #ffffff;
+      }
+
+      /*
+       * 고정 열(층 / 회의실)의 배경은 pseudo element 로 그린다.
+       * 셀 자체 배경만으로는 행 사이 gap 과 열 사이 gap 이 뚫려 있어
+       * 스크롤된 타임블록과 정시 세로선이 그 틈으로 비친다.
+       * 실제 셀보다 상하좌우로 넉넉히 번지게 해서 고정 열 영역 전체를 덮고,
+       * 가로선(층 경계선 / 헤더 구분선)만 그 위에 보이도록 한다.
+       */
+      #${MAP_CALENDAR_OVERLAY_ID} .zzk-map-calendar-floor-name::before,
+      #${MAP_CALENDAR_OVERLAY_ID} .zzk-map-calendar-room-name::before {
+        content: "";
+        position: absolute;
+        top: -4px;
+        bottom: -4px;
+        background: #ffffff;
+        z-index: -1;
+        pointer-events: none;
+      }
+
+      /* 층 열: 카드 안쪽 여백까지 왼쪽으로, 열 사이 gap 까지 오른쪽으로 덮는다. */
+      #${MAP_CALENDAR_OVERLAY_ID} .zzk-map-calendar-floor-name::before {
+        left: calc(var(--zzk-timeline-side-margin) * -1 - 16px);
+        right: calc(var(--zzk-row-gap) * -1);
+      }
+
+      /* 회의실 열: 타임라인과 맞닿는 쪽 여백까지 덮는다. */
+      #${MAP_CALENDAR_OVERLAY_ID} .zzk-map-calendar-room-name::before {
+        left: calc(var(--zzk-row-gap) * -1);
+        right: calc((var(--zzk-row-gap) + var(--zzk-timeline-side-margin)) * -1);
       }
 
       #${MAP_CALENDAR_OVERLAY_ID} .zzk-map-calendar-axis-row .zzk-map-calendar-floor-name.axis,
