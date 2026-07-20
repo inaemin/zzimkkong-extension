@@ -180,7 +180,7 @@ test("room tags stay hidden when metadata tags are empty", async ({ page }) => {
   });
 });
 
-test("window-tagged rooms show 창 badges and legend", async ({ page }) => {
+test("window-tagged rooms show 창 badges without a legend entry", async ({ page }) => {
   await mountGuestMap(page, {
     spaces: [
       {
@@ -235,8 +235,9 @@ test("window-tagged rooms show 창 badges and legend", async ({ page }) => {
   });
 
   expect(snapshot.hasPanelHost).toBeFalsy();
-  expect(snapshot.overlayLegendHidden).toBeFalsy();
-  expect(snapshot.overlayLegendText).toContain("창문 있는 회의실");
+  // 범례에서는 태그 항목을 노출하지 않는다. 회의실 이름 옆 배지만 남긴다.
+  expect(snapshot.overlayLegendHidden).toBeTruthy();
+  expect(snapshot.overlayLegendText).toBe("");
   expect(snapshot.overlayBadges).toContain("창");
 });
 

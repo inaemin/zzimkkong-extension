@@ -35,6 +35,10 @@
   const PENDING_EDIT_SUBMIT_STORAGE_KEY = "zzk-pending-edit-submit-v1";
   const MAP_CALENDAR_ALWAYS_OPEN_STORAGE_KEY = "zzk-map-calendar-always-open-v3";
   const MAP_CALENDAR_SPACE_TAB_STORAGE_KEY = "zzk-map-calendar-space-tab-v1";
+  const MAP_CALENDAR_WIDTH_STORAGE_KEY = "zzk-map-calendar-width-v1";
+  const MAP_CALENDAR_MIN_WIDTH = 480;
+  const MAP_CALENDAR_VIEWPORT_MARGIN = 24;
+  const MAP_CALENDAR_CURRENT_TIME_SCROLL_LEAD_MINUTES = 30;
   const MAP_CALENDAR_SPACE_TAB_MEETING = "meeting";
   const MAP_CALENDAR_SPACE_TAB_PAIR = "pair";
   const API_BASE_URL = "https://k8s.zzimkkong.com";
@@ -58,7 +62,7 @@
   const CALENDAR_SIDE_MARGIN = CALENDAR_SLOT_GAP;
   const DRAG_SAFE_TOP = 56;
   const NAV_SAFE_Z_INDEX = 2147483647;
-  const ROOM_TAG_METADATA = [{ key: "window", label: "창", description: "창문 있는 회의실" }];
+  const ROOM_TAG_METADATA = [{ key: "window", label: "창", description: "창문 있음" }];
   const ROOM_TAG_METADATA_BY_KEY = new Map(ROOM_TAG_METADATA.map((entry) => [normalizeRoomTagKey(entry.key), entry]));
   const TARGET_ROOM_METADATA = [
     { name: "금성", floor: "11층", kind: MAP_CALENDAR_SPACE_TAB_MEETING, tags: ["window"] },
@@ -132,6 +136,10 @@
     PENDING_EDIT_SUBMIT_STORAGE_KEY,
     MAP_CALENDAR_ALWAYS_OPEN_STORAGE_KEY,
     MAP_CALENDAR_SPACE_TAB_STORAGE_KEY,
+    MAP_CALENDAR_WIDTH_STORAGE_KEY,
+    MAP_CALENDAR_MIN_WIDTH,
+    MAP_CALENDAR_VIEWPORT_MARGIN,
+    MAP_CALENDAR_CURRENT_TIME_SCROLL_LEAD_MINUTES,
     MAP_CALENDAR_SPACE_TAB_MEETING,
     MAP_CALENDAR_SPACE_TAB_PAIR,
     API_BASE_URL,

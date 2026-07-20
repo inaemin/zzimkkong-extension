@@ -39,7 +39,14 @@
     getDebugEvents,
     clearDebugEvents,
   } = globalThis.__zzkSharedUtils;
-  const { readStoredBoolean, writeStoredBoolean, readStoredText, writeStoredText } = globalThis.__zzkStorageUtils;
+  const {
+    readStoredBoolean,
+    writeStoredBoolean,
+    readStoredText,
+    writeStoredText,
+    readStoredNumber,
+    writeStoredNumber,
+  } = globalThis.__zzkStorageUtils;
   const {
     normalizeDateString,
     isDateString,
@@ -125,6 +132,10 @@
     PENDING_EDIT_SUBMIT_STORAGE_KEY,
     MAP_CALENDAR_ALWAYS_OPEN_STORAGE_KEY,
     MAP_CALENDAR_SPACE_TAB_STORAGE_KEY,
+    MAP_CALENDAR_WIDTH_STORAGE_KEY,
+    MAP_CALENDAR_MIN_WIDTH,
+    MAP_CALENDAR_VIEWPORT_MARGIN,
+    MAP_CALENDAR_CURRENT_TIME_SCROLL_LEAD_MINUTES,
     MAP_CALENDAR_SPACE_TAB_MEETING,
     MAP_CALENDAR_SPACE_TAB_PAIR,
     API_BASE_URL,
@@ -197,6 +208,8 @@
       ),
     ),
     mapCalendarCollapsed: false,
+    mapCalendarWidth: readStoredNumber(MAP_CALENDAR_WIDTH_STORAGE_KEY, null),
+    mapCalendarCurrentTimeScrollDate: null,
     mapCalendarOffset: { x: 0, y: 0 },
     slotSelection: null,
     slotHover: null,
@@ -929,7 +942,7 @@
       return;
     }
 
-    renderRoomTagLegend(legend, rooms);
+    renderRoomTagLegend(legend);
   }
 
   function isScheduleCacheStale(date) {
@@ -1265,9 +1278,15 @@
         return orderA - orderB;
       });
     const selectionDate = scheduleData.date || "";
+    const previousRenderedScheduleDate = state.lastRenderedScheduleDate;
     state.lastRenderedScheduleDate = isDateString(selectionDate)
       ? selectionDate
       : null;
+    state.mapCalendarTimelineSnapshot = Array.isArray(timeline) ? timeline : [];
+    if (state.lastRenderedScheduleDate !== previousRenderedScheduleDate) {
+      // 날짜가 바뀌면 현재 시각 스크롤을 다시 한 번 맞춰준다.
+      state.mapCalendarCurrentTimeScrollDate = null;
+    }
     state.lastRenderedScheduleTab = renderedTab;
     const earliestSelectableMinute = shouldAllowPastReservationDate(selectionDate)
       ? 0
@@ -1356,6 +1375,14 @@
       passive: true,
     });
     shell.appendChild(card);
+
+    const resizeHandle = document.createElement("div");
+    resizeHandle.className = "zzk-map-calendar-resize-handle";
+    resizeHandle.setAttribute("role", "separator");
+    resizeHandle.setAttribute("aria-orientation", "vertical");
+    resizeHandle.setAttribute("aria-label", "레이더 너비 조절");
+    card.appendChild(resizeHandle);
+    bindMapCalendarResizeHandle(resizeHandle, card);
 
     const header = document.createElement("div");
     header.className = "zzk-map-calendar-header";
@@ -1852,7 +1879,7 @@
       controlRow.appendChild(dateControlRow);
       const dateTagLegend = document.createElement("div");
       dateTagLegend.className = "zzk-room-tag-legend";
-      renderRoomTagLegend(dateTagLegend, rooms);
+      renderRoomTagLegend(dateTagLegend);
       controlRow.appendChild(dateTagLegend);
       syncMapCalendarDateNavState();
 
@@ -1915,6 +1942,7 @@
 
     if (state.mapCalendarCollapsed) {
       card.classList.add("collapsed");
+      applyMapCalendarWidth(overlay);
       return;
     }
 
@@ -1924,6 +1952,7 @@
       empty.textContent = `표시할 ${tabLabel} 일정이 없습니다.`;
       body.appendChild(empty);
       syncMapCalendarBodyScrollState(body);
+      applyMapCalendarWidth(overlay);
       if (preservedBodyScroll.left !== 0) {
         body.scrollLeft = preservedBodyScroll.left;
       }
@@ -2408,12 +2437,42 @@
     });
 
     syncMapCalendarBodyScrollState(body);
+    applyMapCalendarWidth(overlay);
     if (preservedBodyScroll.left !== 0) {
       body.scrollLeft = preservedBodyScroll.left;
     }
     if (preservedBodyScroll.top !== 0) {
       body.scrollTop = preservedBodyScroll.top;
     }
+
+    // 너비가 적용된 뒤에야 스크롤 가능 여부를 알 수 있으므로 레이아웃 확정 후 실행한다.
+    window.requestAnimationFrame(() => {
+      syncMapCalendarAxisRowHeight(overlay);
+      applyMapCalendarCurrentTimeScroll(overlay);
+    });
+  }
+
+  function syncMapCalendarAxisRowHeight(
+    overlay = document.getElementById(MAP_CALENDAR_OVERLAY_ID),
+  ) {
+    if (!(overlay instanceof HTMLElement)) {
+      return;
+    }
+
+    const gridWrap = overlay.querySelector(".zzk-map-calendar-grid-wrap");
+    const axisRow = overlay.querySelector(".zzk-map-calendar-axis-row");
+    if (!(gridWrap instanceof HTMLElement) || !(axisRow instanceof HTMLElement)) {
+      return;
+    }
+
+    // 헤더 높이는 폰트/줄바꿈에 따라 달라지므로 실제 DOM 에서 측정한다.
+    const axisHeight =
+      axisRow.getBoundingClientRect().bottom - gridWrap.getBoundingClientRect().top;
+    if (!Number.isFinite(axisHeight) || axisHeight <= 0) {
+      return;
+    }
+
+    gridWrap.style.setProperty("--zzk-axis-row-height", `${Math.round(axisHeight)}px`);
   }
 
   function buildEditLockedRoomConstraint(rooms) {
@@ -3009,12 +3068,15 @@
         backdrop-filter: blur(7px);
         color: #0f172a;
         font-family: "SUIT Variable", "Pretendard", "Noto Sans KR", "Apple SD Gothic Neo", sans-serif;
-        padding: 10px;
+        padding: 10px 10px 10px 14px;
         display: flex;
         flex-direction: column;
         min-height: 0;
+        position: relative;
+        box-sizing: border-box;
         width: max-content;
-        max-width: calc(100vw - 24px);
+        min-width: ${MAP_CALENDAR_MIN_WIDTH}px;
+        max-width: calc(100vw - ${MAP_CALENDAR_VIEWPORT_MARGIN}px);
         max-height: calc(100vh - 24px);
         pointer-events: auto;
         overflow: hidden;
@@ -3505,6 +3567,43 @@
         background: rgba(226, 232, 240, 0.95);
       }
 
+      #${MAP_CALENDAR_OVERLAY_ID} .zzk-map-calendar-resize-handle {
+        position: absolute;
+        left: 0;
+        top: 0;
+        bottom: 0;
+        width: 10px;
+        cursor: ew-resize;
+        z-index: 6;
+        touch-action: none;
+        border-top-left-radius: 18px;
+        border-bottom-left-radius: 18px;
+      }
+
+      #${MAP_CALENDAR_OVERLAY_ID} .zzk-map-calendar-resize-handle::after {
+        content: "";
+        position: absolute;
+        left: 3px;
+        top: 50%;
+        transform: translateY(-50%);
+        width: 4px;
+        height: 44px;
+        border-radius: 999px;
+        background: rgba(15, 23, 42, 0.18);
+        transition: background 120ms ease;
+      }
+
+      #${MAP_CALENDAR_OVERLAY_ID} .zzk-map-calendar-resize-handle:hover::after,
+      #${MAP_CALENDAR_OVERLAY_ID} .zzk-map-calendar-resize-handle.is-resizing::after {
+        background: rgba(2, 132, 199, 0.75);
+      }
+
+      @media (prefers-reduced-motion: reduce) {
+        #${MAP_CALENDAR_OVERLAY_ID} .zzk-map-calendar-resize-handle::after {
+          transition: none;
+        }
+      }
+
       #${MAP_CALENDAR_OVERLAY_ID} .zzk-map-calendar-body {
         flex: 1 1 auto;
         min-height: 0;
@@ -3590,22 +3689,42 @@
         z-index: 1;
         pointer-events: none;
         display: flex;
+        /*
+         * 이 레이어는 grid-area 1/1 로 헤더(축) 행까지 덮는다.
+         * 그대로 두면 정시 세로선이 헤더 위로 삐죽 튀어나와 보이므로
+         * 헤더 높이만큼 위쪽을 잘라내 타임블록 영역에서만 보이게 한다.
+         * (height 를 줄이지 않고 clip 만 해서 트랙 자체는 전체 높이를 유지한다.)
+         */
+        clip-path: inset(var(--zzk-axis-row-height, 0px) 0 0 0);
       }
 
       #${MAP_CALENDAR_OVERLAY_ID} .zzk-map-calendar-divider-layer {
         position: relative;
-        z-index: 1;
+        /* 고정 열(z-index 4) 위에 그려야 세로 구분선이 끊기지 않는다. */
+        z-index: 5;
         pointer-events: none;
       }
 
       #${MAP_CALENDAR_OVERLAY_ID} .zzk-map-calendar-divider-track {
-        position: absolute;
+        /*
+         * sticky 로 붙여야 가로 스크롤 시에도 고정 열과 함께 제자리에 남는다.
+         * absolute 로 두면 grid-wrap 과 같이 왼쪽으로 밀려나 사라진다.
+         */
+        position: sticky;
         top: 0;
         bottom: 0;
         left: calc(var(--zzk-floor-col-width) + (var(--zzk-row-gap) * 0.5));
+        height: 100%;
         width: 1px;
-        background: rgba(15, 23, 42, 0.2);
+        background: var(--zzk-section-divider-color);
+        /*
+         * 층 / 회의실 사이 세로 구분선. 셀마다 그리면 행 사이 gap 에서 끊겨
+         * 토막처럼 보이므로, 고정 열 배경(pseudo element) 보다 위에 그려
+         * 위아래를 완전히 관통하는 한 줄로 유지한다.
+         */
+        z-index: 5;
       }
+
 
       #${MAP_CALENDAR_OVERLAY_ID} .zzk-map-calendar-hour-boundary-track {
         display: grid;
@@ -3646,10 +3765,22 @@
         grid-template-columns: var(--zzk-floor-col-width) var(--zzk-room-col-width) 1fr;
         align-items: center;
         gap: var(--zzk-row-gap);
-        border-bottom: var(--zzk-section-divider);
         padding-bottom: 4px;
         margin-bottom: 2px;
         position: relative;
+      }
+
+      /* 고정 열 배경 위에 그려야 헤더 구분선이 토막나지 않는다. */
+      #${MAP_CALENDAR_OVERLAY_ID} .zzk-map-calendar-axis-row::after {
+        content: "";
+        position: absolute;
+        bottom: 0;
+        left: 0;
+        right: 0;
+        height: 1px;
+        background: var(--zzk-section-divider-color);
+        pointer-events: none;
+        z-index: 6;
       }
 
       #${MAP_CALENDAR_OVERLAY_ID} .zzk-map-calendar-floor-group {
@@ -3661,8 +3792,23 @@
       }
 
       #${MAP_CALENDAR_OVERLAY_ID} .zzk-map-calendar-floor-group.floor-boundary {
-        border-top: var(--zzk-section-divider);
+        /*
+         * border-top 은 sticky 로 고정된 층/회의실 열 배경에 덮여 토막으로 보인다.
+         * 고정 열보다 위(z-index)에 선을 그려서 끊김 없이 이어지게 한다.
+         */
         padding-top: 4px;
+      }
+
+      #${MAP_CALENDAR_OVERLAY_ID} .zzk-map-calendar-floor-group.floor-boundary::before {
+        content: "";
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        height: 1px;
+        background: var(--zzk-section-divider-color);
+        pointer-events: none;
+        z-index: 6;
       }
 
       #${MAP_CALENDAR_OVERLAY_ID} .zzk-map-calendar-floor-rooms {
@@ -3710,14 +3856,66 @@
         align-items: center;
         min-height: 100%;
         padding-right: 4px;
+        /* 가로 스크롤 시 층 열은 왼쪽에 고정된다. */
+        position: sticky;
+        left: 0;
+        z-index: 4;
+        box-sizing: border-box;
       }
 
+
       #${MAP_CALENDAR_OVERLAY_ID} .zzk-map-calendar-room-name {
-        display: inline-flex;
+        /* flex(=inline-flex 아님)로 셀 전체를 채워야 스크롤된 타임블록을 가릴 수 있다. */
+        display: flex;
         align-items: center;
         gap: 4px;
         min-width: 0;
         padding-left: 4px;
+        /* 회의실 열은 층 열 바로 오른쪽에 고정된다. */
+        position: sticky;
+        left: calc(var(--zzk-floor-col-width) + var(--zzk-row-gap));
+        z-index: 4;
+        min-height: 100%;
+        box-sizing: border-box;
+      }
+
+      /*
+       * 고정 열(층 / 회의실)의 배경은 pseudo element 로 그린다.
+       * 셀 자체 배경만으로는 행 사이 gap 과 열 사이 gap 이 뚫려 있어
+       * 스크롤된 타임블록과 정시 세로선이 그 틈으로 비친다.
+       * 실제 셀보다 상하좌우로 넉넉히 번지게 해서 고정 열 영역 전체를 덮고,
+       * 가로선(층 경계선 / 헤더 구분선)만 그 위에 보이도록 한다.
+       */
+      #${MAP_CALENDAR_OVERLAY_ID} .zzk-map-calendar-floor-name::before,
+      #${MAP_CALENDAR_OVERLAY_ID} .zzk-map-calendar-room-name::before {
+        content: "";
+        position: absolute;
+        /*
+         * 위로만 번지게 해서 행 사이 gap 을 덮는다.
+         * 아래로도 번지게 하면 마지막 행 밑으로 넘쳐 세로 스크롤이 생긴다.
+         */
+        top: -4px;
+        bottom: 0;
+        background: #ffffff;
+        z-index: -1;
+        pointer-events: none;
+      }
+
+      /* 층 열: 카드 안쪽 여백까지 왼쪽으로, 열 사이 gap 까지 오른쪽으로 덮는다. */
+      #${MAP_CALENDAR_OVERLAY_ID} .zzk-map-calendar-floor-name::before {
+        left: calc(var(--zzk-timeline-side-margin) * -1 - 16px);
+        right: calc(var(--zzk-row-gap) * -1);
+      }
+
+      /* 회의실 열: 타임라인과 맞닿는 쪽 여백까지 덮는다. */
+      #${MAP_CALENDAR_OVERLAY_ID} .zzk-map-calendar-room-name::before {
+        left: calc(var(--zzk-row-gap) * -1);
+        right: calc((var(--zzk-row-gap) + var(--zzk-timeline-side-margin)) * -1);
+      }
+
+      #${MAP_CALENDAR_OVERLAY_ID} .zzk-map-calendar-axis-row .zzk-map-calendar-floor-name.axis,
+      #${MAP_CALENDAR_OVERLAY_ID} .zzk-map-calendar-axis-row .zzk-map-calendar-room-name.axis {
+        z-index: 5;
       }
 
       #${MAP_CALENDAR_OVERLAY_ID} .zzk-map-calendar-floor-name.axis,
@@ -3982,6 +4180,268 @@
     }
 
     openMapCalendarModal();
+  }
+
+  function bindMapCalendarResizeHandle(handle, card) {
+    if (!(handle instanceof HTMLElement) || !(card instanceof HTMLElement)) {
+      return;
+    }
+    if (handle.dataset.zzkResizeBound === "true") {
+      return;
+    }
+
+    handle.dataset.zzkResizeBound = "true";
+
+    handle.addEventListener("pointerdown", (event) => {
+      if (event.button !== 0) {
+        return;
+      }
+
+      event.preventDefault();
+      event.stopPropagation();
+
+      const startX = event.clientX;
+      const startWidth = card.getBoundingClientRect().width;
+      let latestWidth = clampMapCalendarWidth(startWidth) ?? startWidth;
+
+      try {
+        handle.setPointerCapture(event.pointerId);
+      } catch (error) {
+        // 포인터 캡처 실패는 드래그 자체를 막지 않는다.
+      }
+
+      const handleMove = (moveEvent) => {
+        // 모달이 오른쪽에 고정되어 있어 핸들을 오른쪽으로 끌면 너비가 줄어든다.
+        const nextWidth = clampMapCalendarWidth(
+          startWidth - (moveEvent.clientX - startX),
+        );
+        if (nextWidth === null) {
+          return;
+        }
+
+        latestWidth = nextWidth;
+        card.style.width = `${nextWidth}px`;
+      };
+
+      const handleUp = () => {
+        window.removeEventListener("pointermove", handleMove);
+        window.removeEventListener("pointerup", handleUp);
+        window.removeEventListener("pointercancel", handleUp);
+        handle.classList.remove("is-resizing");
+
+        try {
+          handle.releasePointerCapture(event.pointerId);
+        } catch (error) {
+          // 이미 해제되었을 수 있다.
+        }
+
+        persistMapCalendarWidth(latestWidth);
+        // 너비가 바뀌면 가로 스크롤 가능 여부도 달라지므로 다시 맞춰준다.
+        state.mapCalendarCurrentTimeScrollDate = null;
+        applyMapCalendarCurrentTimeScroll();
+      };
+
+      handle.classList.add("is-resizing");
+      // 핸들이 10px 로 좁아 드래그 중 포인터가 쉽게 벗어난다.
+      // setPointerCapture 가 실패하는 환경에서도 드래그가 끊기지 않도록
+      // 이동/종료 이벤트는 window 에서 받는다.
+      window.addEventListener("pointermove", handleMove);
+      window.addEventListener("pointerup", handleUp);
+      window.addEventListener("pointercancel", handleUp);
+    });
+  }
+
+  function getMapCalendarWidthBounds() {
+    const viewportWidth = Number.isFinite(window.innerWidth)
+      ? window.innerWidth
+      : 0;
+    const max = Math.max(
+      MAP_CALENDAR_MIN_WIDTH,
+      viewportWidth - MAP_CALENDAR_VIEWPORT_MARGIN,
+    );
+
+    return { min: MAP_CALENDAR_MIN_WIDTH, max };
+  }
+
+  function clampMapCalendarWidth(value) {
+    const numericValue = typeof value === "string" ? Number(value) : value;
+    if (typeof numericValue !== "number" || !Number.isFinite(numericValue)) {
+      return null;
+    }
+
+    const { min, max } = getMapCalendarWidthBounds();
+    return Math.min(max, Math.max(min, Math.round(numericValue)));
+  }
+
+  function applyMapCalendarWidth(
+    overlay = document.getElementById(MAP_CALENDAR_OVERLAY_ID),
+  ) {
+    if (!(overlay instanceof HTMLElement)) {
+      return;
+    }
+
+    const card = overlay.querySelector(".zzk-map-calendar-card");
+    if (!(card instanceof HTMLElement)) {
+      return;
+    }
+
+    const width = clampMapCalendarWidth(state.mapCalendarWidth);
+    if (width === null) {
+      // 저장된 값이 없거나 깨졌으면 기존 max-content 레이아웃을 그대로 둔다.
+      card.style.removeProperty("width");
+      return;
+    }
+
+    card.style.width = `${width}px`;
+  }
+
+  function persistMapCalendarWidth(width) {
+    const clamped = clampMapCalendarWidth(width);
+    if (clamped === null) {
+      return;
+    }
+
+    state.mapCalendarWidth = clamped;
+    writeStoredNumber(MAP_CALENDAR_WIDTH_STORAGE_KEY, clamped);
+  }
+
+  function computeMapCalendarCurrentTimeScrollLeft({
+    timeline,
+    trackStartOffset,
+    slotStride,
+    viewportWidth,
+    maxScrollLeft,
+    isToday,
+    currentMinute,
+  }) {
+    if (isToday !== true) {
+      return null;
+    }
+    if (!Array.isArray(timeline) || timeline.length === 0) {
+      return null;
+    }
+    if (!Number.isFinite(maxScrollLeft) || maxScrollLeft <= 0) {
+      return null;
+    }
+    if (!Number.isFinite(slotStride) || slotStride <= 0) {
+      return null;
+    }
+    if (!Number.isFinite(currentMinute)) {
+      return null;
+    }
+
+    // 타임라인 시작 이전(예: 새벽)이면 시작 시각으로 끌어올린다.
+    // 그러면 자연스럽게 첫 슬롯(=맨 처음)을 가리키게 된다.
+    const timelineStartMinute = Number(timeline[0]?.startMinute);
+    const effectiveMinute = Number.isFinite(timelineStartMinute)
+      ? Math.max(timelineStartMinute, currentMinute)
+      : currentMinute;
+
+    const leadMinute =
+      effectiveMinute - MAP_CALENDAR_CURRENT_TIME_SCROLL_LEAD_MINUTES;
+
+    let targetIndex = timeline.findIndex(
+      (slot) => Number(slot?.endMinute) > leadMinute,
+    );
+    if (targetIndex < 0) {
+      targetIndex = timeline.length - 1;
+    }
+
+    // 첫 슬롯이면 트랙 시작 오프셋을 더하지 않고 맨 처음을 그대로 보여준다.
+    if (targetIndex <= 0) {
+      return 0;
+    }
+
+    const baseOffset = Number.isFinite(trackStartOffset) ? trackStartOffset : 0;
+    const targetLeft = baseOffset + targetIndex * slotStride;
+
+    return Math.min(maxScrollLeft, Math.max(0, Math.round(targetLeft)));
+  }
+
+  function applyMapCalendarCurrentTimeScroll(
+    overlay = document.getElementById(MAP_CALENDAR_OVERLAY_ID),
+  ) {
+    if (!(overlay instanceof HTMLElement)) {
+      return;
+    }
+
+    const body = overlay.querySelector(".zzk-map-calendar-body");
+    if (!(body instanceof HTMLElement)) {
+      return;
+    }
+
+    const timeline = state.mapCalendarTimelineSnapshot;
+    if (!Array.isArray(timeline) || timeline.length === 0) {
+      return;
+    }
+
+    const renderedDate = state.lastRenderedScheduleDate;
+    if (!isDateString(renderedDate)) {
+      return;
+    }
+
+    // 이미 이 날짜에 대해 한 번 맞춰줬다면 사용자의 스크롤 위치를 존중한다.
+    if (state.mapCalendarCurrentTimeScrollDate === renderedDate) {
+      return;
+    }
+
+    const maxScrollLeft = body.scrollWidth - body.clientWidth;
+    if (maxScrollLeft <= 0) {
+      // 가로 스크롤이 없으면 아무 것도 하지 않는다.
+      return;
+    }
+
+    const metrics = measureMapCalendarTrackMetrics(overlay);
+    if (!metrics) {
+      return;
+    }
+
+    const scrollLeft = computeMapCalendarCurrentTimeScrollLeft({
+      timeline,
+      trackStartOffset: metrics.trackStartOffset,
+      slotStride: metrics.slotStride,
+      viewportWidth: body.clientWidth,
+      maxScrollLeft,
+      isToday: renderedDate === getTodayDateInKST(),
+      currentMinute: getCurrentMinuteOfDayInKST(),
+    });
+
+    state.mapCalendarCurrentTimeScrollDate = renderedDate;
+
+    if (scrollLeft === null) {
+      return;
+    }
+
+    body.scrollLeft = scrollLeft;
+  }
+
+  function measureMapCalendarTrackMetrics(overlay) {
+    // 찜꽁 화면 구조 변경에 대비해 값을 하드코딩하지 않고 실제 DOM에서 측정한다.
+    const slotCells = overlay.querySelectorAll(
+      ".zzk-map-calendar-axis-row .zzk-map-calendar-slots .zzk-map-calendar-hour-label",
+    );
+    if (slotCells.length < 2) {
+      return null;
+    }
+
+    const gridWrap = overlay.querySelector(".zzk-map-calendar-grid-wrap");
+    if (!(gridWrap instanceof HTMLElement)) {
+      return null;
+    }
+
+    const wrapLeft = gridWrap.getBoundingClientRect().left;
+    const firstLeft = slotCells[0].getBoundingClientRect().left;
+    const secondLeft = slotCells[1].getBoundingClientRect().left;
+    const slotStride = secondLeft - firstLeft;
+
+    if (!Number.isFinite(slotStride) || slotStride <= 0) {
+      return null;
+    }
+
+    return {
+      trackStartOffset: firstLeft - wrapLeft,
+      slotStride,
+    };
   }
 
   function applyMapCalendarOverlayOffset(
@@ -4579,22 +5039,6 @@
     }, []);
   }
 
-  function getVisibleRoomTags(rooms) {
-    if (!Array.isArray(rooms) || rooms.length === 0) {
-      return [];
-    }
-
-    const visibleTagMap = new Map();
-    rooms.forEach((room) => {
-      getRoomTags(room).forEach((tag) => {
-        if (!visibleTagMap.has(tag.key)) {
-          visibleTagMap.set(tag.key, tag);
-        }
-      });
-    });
-    return Array.from(visibleTagMap.values());
-  }
-
   function formatPlainRoomLabel(roomName) {
     return typeof roomName === "string" ? roomName.trim() : "";
   }
@@ -4628,33 +5072,14 @@
     });
   }
 
-  function renderRoomTagLegend(container, rooms) {
+  function renderRoomTagLegend(container) {
     if (!(container instanceof HTMLElement)) {
       return;
     }
 
+    // 회의실 이름 옆 배지만으로 충분해 범례에서는 태그 항목을 노출하지 않는다.
     container.textContent = "";
-    const visibleTags = getVisibleRoomTags(rooms);
-    container.hidden = visibleTags.length === 0;
-    if (visibleTags.length === 0) {
-      return;
-    }
-
-    visibleTags.forEach((tag) => {
-      const item = document.createElement("span");
-      item.className = "zzk-room-tag-legend-item";
-
-      const badge = document.createElement("span");
-      badge.className = "zzk-room-tag-badge";
-      badge.setAttribute("data-label", tag.label);
-      badge.setAttribute("aria-label", tag.label);
-
-      const text = document.createElement("span");
-      text.textContent = tag.description;
-
-      item.append(badge, text);
-      container.appendChild(item);
-    });
+    container.hidden = true;
   }
 
   function formatMapCalendarRoomLabel(roomName) {
@@ -8752,6 +9177,10 @@
 
   if (location.hostname === "example.com") {
     globalThis.__zzkTestApi = {
+      clampMapCalendarWidth,
+      getMapCalendarWidthBounds,
+      computeMapCalendarCurrentTimeScrollLeft,
+      getCurrentMinuteOfDayInKST,
       syncGuestUi() {
         if (!isGuestPage()) {
           return false;
