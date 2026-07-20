@@ -98,10 +98,60 @@
     }
   }
 
+  function readStoredNumber(storageKey, fallbackValue = null) {
+    const normalizedFallback = Number.isFinite(fallbackValue) ? fallbackValue : null;
+
+    if (typeof storageKey !== "string" || storageKey === "") {
+      return normalizedFallback;
+    }
+
+    let rawValue = null;
+    try {
+      rawValue = window.localStorage.getItem(storageKey);
+    } catch (error) {
+      reportStorageFailure("read-failed", storageKey, error);
+      return normalizedFallback;
+    }
+
+    if (typeof rawValue !== "string" || rawValue.trim() === "") {
+      return normalizedFallback;
+    }
+
+    const parsed = Number(rawValue);
+    if (!Number.isFinite(parsed)) {
+      return normalizedFallback;
+    }
+
+    return parsed;
+  }
+
+  function writeStoredNumber(storageKey, value) {
+    if (typeof storageKey !== "string" || storageKey === "") {
+      return;
+    }
+
+    if (!Number.isFinite(value)) {
+      try {
+        window.localStorage.removeItem(storageKey);
+      } catch (error) {
+        reportStorageFailure("remove-failed", storageKey, error);
+      }
+      return;
+    }
+
+    try {
+      window.localStorage.setItem(storageKey, String(value));
+    } catch (error) {
+      reportStorageFailure("write-failed", storageKey, error);
+    }
+  }
+
   globalThis.__zzkStorageUtils = {
     readStoredBoolean,
     writeStoredBoolean,
     readStoredText,
     writeStoredText,
+    readStoredNumber,
+    writeStoredNumber,
   };
 })();
