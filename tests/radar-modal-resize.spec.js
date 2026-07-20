@@ -215,7 +215,11 @@ test("clampMapCalendarWidth keeps widths inside the supported range", async ({ p
   // 숫자로 해석 가능한 값은 clamp 되어 살아남는다.
   expect(result.negative).toBe(result.bounds.min);
   expect(result.zero).toBe(result.bounds.min);
-  expect(result.stringNumeric).toBe(result.bounds.max === 640 ? 640 : result.stringNumeric);
+  const expectedFromString = Math.min(
+    result.bounds.max,
+    Math.max(result.bounds.min, 640),
+  );
+  expect(result.stringNumeric).toBe(expectedFromString);
   expect(Number.isFinite(result.stringNumeric)).toBe(true);
 });
 
@@ -409,13 +413,44 @@ test("first-time users with no stored width get the default layout", async ({ pa
   expect(result.width).toBeGreaterThan(0);
 });
 
-test("corrupt or out-of-range stored widths fall back to the default layout", async ({ page }) => {
-  for (const badValue of ["not-a-number", "NaN", "", "1e9999", "-320"]) {
+test("corrupt stored widths fall back to the default layout", async ({ page }) => {
+  // 숫자로 해석되지 않는 값들. 인라인 너비를 강제하지 않고 기본 레이아웃을 써야 한다.
+  for (const badValue of ["not-a-number", "NaN", "", "1e9999"]) {
     await mountGuestMap(page);
     await injectContentScriptBundle(page, async () => {
       await page.evaluate(
         ({ key, value }) => window.localStorage.setItem(key, value),
         { key: WIDTH_STORAGE_KEY, value: badValue }
+      );
+    });
+    await openRadar(page);
+
+    const result = await page.evaluate(() => {
+      const card = document.querySelector("#zzk-map-calendar-overlay .zzk-map-calendar-card");
+      return {
+        width: card.getBoundingClientRect().width,
+        inlineWidth: card.style.width,
+      };
+    });
+
+    // 저장값을 못 읽었으므로 인라인 너비가 붙지 않는다.
+    expect(result.inlineWidth, `stored value: ${badValue}`).toBe("");
+    expect(result.width, `stored value: ${badValue}`).toBeGreaterThan(0);
+  }
+});
+
+test("out-of-range stored widths are clamped into the supported range", async ({ page }) => {
+  // 숫자로 해석되는 값들. 폴백이 아니라 clamp 경로다.
+  for (const [outOfRange, expectBound] of [
+    ["-320", "min"],
+    ["100", "min"],
+    ["99999", "max"],
+  ]) {
+    await mountGuestMap(page);
+    await injectContentScriptBundle(page, async () => {
+      await page.evaluate(
+        ({ key, value }) => window.localStorage.setItem(key, value),
+        { key: WIDTH_STORAGE_KEY, value: outOfRange }
       );
     });
     await openRadar(page);
@@ -430,11 +465,8 @@ test("corrupt or out-of-range stored widths fall back to the default layout", as
       };
     });
 
-    // 깨진 값이어도 항상 사용 가능한 너비로 열린다.
-    expect(result.width, `stored value: ${badValue}`).toBeGreaterThanOrEqual(
-      Math.min(result.min, 1) - 1
-    );
-    expect(result.width, `stored value: ${badValue}`).toBeLessThanOrEqual(result.max + 1);
+    const expected = expectBound === "min" ? result.min : result.max;
+    expect(Math.abs(result.width - expected), `stored value: ${outOfRange}`).toBeLessThan(2);
   }
 });
 

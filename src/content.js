@@ -4224,9 +4224,9 @@
       };
 
       const handleUp = () => {
-        handle.removeEventListener("pointermove", handleMove);
-        handle.removeEventListener("pointerup", handleUp);
-        handle.removeEventListener("pointercancel", handleUp);
+        window.removeEventListener("pointermove", handleMove);
+        window.removeEventListener("pointerup", handleUp);
+        window.removeEventListener("pointercancel", handleUp);
         handle.classList.remove("is-resizing");
 
         try {
@@ -4242,9 +4242,12 @@
       };
 
       handle.classList.add("is-resizing");
-      handle.addEventListener("pointermove", handleMove);
-      handle.addEventListener("pointerup", handleUp);
-      handle.addEventListener("pointercancel", handleUp);
+      // 핸들이 10px 로 좁아 드래그 중 포인터가 쉽게 벗어난다.
+      // setPointerCapture 가 실패하는 환경에서도 드래그가 끊기지 않도록
+      // 이동/종료 이벤트는 window 에서 받는다.
+      window.addEventListener("pointermove", handleMove);
+      window.addEventListener("pointerup", handleUp);
+      window.addEventListener("pointercancel", handleUp);
     });
   }
 
