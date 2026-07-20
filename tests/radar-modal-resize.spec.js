@@ -718,6 +718,38 @@ test("row gaps in the pinned columns are painted over, not see-through", async (
   expect(leaks).toEqual([]);
 });
 
+test("the radar body does not grow a vertical scrollbar when rows fit", async ({ page }) => {
+  await mountAndOpenRadar(page, {
+    seedStorage: async () => {
+      await page.evaluate(
+        ({ key, value }) => window.localStorage.setItem(key, String(value)),
+        { key: WIDTH_STORAGE_KEY, value: 620 }
+      );
+    },
+  });
+
+  const result = await page.evaluate(() => {
+    const body = document.querySelector("#zzk-map-calendar-overlay .zzk-map-calendar-body");
+    const grid = document.querySelector("#zzk-map-calendar-overlay .zzk-map-calendar-grid");
+    const gridWrap = document.querySelector(
+      "#zzk-map-calendar-overlay .zzk-map-calendar-grid-wrap"
+    );
+    return {
+      verticalDelta: body.scrollHeight - body.clientHeight,
+      scrollable: body.classList.contains("zzk-map-calendar-body-scrollable"),
+      overflowY: window.getComputedStyle(body).overflowY,
+      gridHeight: grid.getBoundingClientRect().height,
+      gridWrapHeight: gridWrap.getBoundingClientRect().height,
+    };
+  });
+
+  // 실제 콘텐츠는 넘치지 않는데 고정 열 배경이 아래로 번져 스크롤이 생기면 안 된다.
+  expect(result.verticalDelta).toBe(0);
+  expect(result.scrollable).toBe(false);
+  expect(result.overflowY).toBe("hidden");
+  expect(Math.abs(result.gridHeight - result.gridWrapHeight)).toBeLessThan(2);
+});
+
 test("the axis header labels also stay pinned while scrolling", async ({ page }) => {
   await mountAndOpenRadar(page, {
     seedStorage: async () => {
@@ -823,6 +855,60 @@ test("computeMapCalendarCurrentTimeScrollLeft only targets today", async ({ page
 
   // 타임라인이 비어 있으면 안전하게 빠져나온다.
   expect(result.emptyTimeline).toBeNull();
+});
+
+test("before the timeline starts, today's scroll stays at the very beginning", async ({ page }) => {
+  await mountGuestMap(page);
+  await injectContentScriptBundle(page);
+
+  const result = await page.evaluate(() => {
+    const api = window.__zzkTestApi;
+    // 실제 찜꽁처럼 09:00~18:00 만 있는 타임라인
+    const timeline = [];
+    for (let minute = 9 * 60; minute < 18 * 60; minute += 10) {
+      timeline.push({
+        startMinute: minute,
+        endMinute: minute + 10,
+        isHourMark: minute % 60 === 0,
+      });
+    }
+
+    const baseArgs = {
+      timeline,
+      trackStartOffset: 153,
+      slotStride: 11,
+      viewportWidth: 594,
+      maxScrollLeft: 182,
+      isToday: true,
+    };
+
+    return {
+      midnight: api.computeMapCalendarCurrentTimeScrollLeft({
+        ...baseArgs,
+        currentMinute: 2,
+      }),
+      dawn: api.computeMapCalendarCurrentTimeScrollLeft({
+        ...baseArgs,
+        currentMinute: 6 * 60,
+      }),
+      justBeforeOpen: api.computeMapCalendarCurrentTimeScrollLeft({
+        ...baseArgs,
+        currentMinute: 8 * 60 + 40,
+      }),
+      afterOpen: api.computeMapCalendarCurrentTimeScrollLeft({
+        ...baseArgs,
+        currentMinute: 13 * 60,
+      }),
+    };
+  });
+
+  // 00:02, 06:00, 08:40 모두 타임라인(09:00) 시작 전이므로 맨 처음이어야 한다.
+  expect(result.midnight).toBe(0);
+  expect(result.dawn).toBe(0);
+  expect(result.justBeforeOpen).toBe(0);
+
+  // 영업 시간 안이면 현재 시각 쪽으로 스크롤한다.
+  expect(result.afterOpen).toBeGreaterThan(0);
 });
 
 test("current-time scroll leaves a little context before the current slot", async ({ page }) => {

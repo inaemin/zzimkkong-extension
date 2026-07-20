@@ -3890,8 +3890,12 @@
       #${MAP_CALENDAR_OVERLAY_ID} .zzk-map-calendar-room-name::before {
         content: "";
         position: absolute;
+        /*
+         * 위로만 번지게 해서 행 사이 gap 을 덮는다.
+         * 아래로도 번지게 하면 마지막 행 밑으로 넘쳐 세로 스크롤이 생긴다.
+         */
         top: -4px;
-        bottom: -4px;
+        bottom: 0;
         background: #ffffff;
         z-index: -1;
         pointer-events: none;
@@ -4323,14 +4327,26 @@
       return null;
     }
 
+    // 타임라인 시작 이전(예: 새벽)이면 시작 시각으로 끌어올린다.
+    // 그러면 자연스럽게 첫 슬롯(=맨 처음)을 가리키게 된다.
+    const timelineStartMinute = Number(timeline[0]?.startMinute);
+    const effectiveMinute = Number.isFinite(timelineStartMinute)
+      ? Math.max(timelineStartMinute, currentMinute)
+      : currentMinute;
+
     const leadMinute =
-      currentMinute - MAP_CALENDAR_CURRENT_TIME_SCROLL_LEAD_MINUTES;
+      effectiveMinute - MAP_CALENDAR_CURRENT_TIME_SCROLL_LEAD_MINUTES;
 
     let targetIndex = timeline.findIndex(
       (slot) => Number(slot?.endMinute) > leadMinute,
     );
     if (targetIndex < 0) {
       targetIndex = timeline.length - 1;
+    }
+
+    // 첫 슬롯이면 트랙 시작 오프셋을 더하지 않고 맨 처음을 그대로 보여준다.
+    if (targetIndex <= 0) {
+      return 0;
     }
 
     const baseOffset = Number.isFinite(trackStartOffset) ? trackStartOffset : 0;
