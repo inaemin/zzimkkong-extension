@@ -34,11 +34,28 @@ jobs:
           node-version: 24
           cache: npm
 
+      - name: Verify tag matches manifest version
+        if: github.event_name == 'push'
+        env:
+          TAG_NAME: ${{ github.ref_name }}
+        run: |
+          manifest_version=$(jq -r '.version' manifest.json)
+          tag_version="${TAG_NAME#v}"
+
+          if [ "$manifest_version" != "$tag_version" ]; then
+            echo "Tag version ($tag_version) does not match manifest.json version ($manifest_version)." >&2
+            echo "Update manifest.json before tagging, otherwise the wrong version is uploaded." >&2
+            exit 1
+          fi
+
+          echo "Publishing version $manifest_version"
+
       - name: Install dependencies
         run: npm ci
 
       - name: Install Playwright browsers
-        run: npm run pw:install
+        # playwright.config.js 는 channel: "chrome" 만 쓰므로 chrome 만 받는다.
+        run: npx playwright install --with-deps chrome
 
       - name: Run tests
         run: npm run pw:test
@@ -88,10 +105,10 @@ jobs:
             -d "refresh_token=${CHROME_WEBSTORE_REFRESH_TOKEN}" \
             -d "grant_type=refresh_token")
 
-          access_token=$(python -c 'import json,sys; data=json.load(sys.stdin); print(data.get("access_token", ""))' <<< "$token_response")
+          access_token=$(jq -r '.access_token // empty' <<< "$token_response")
           if [ -z "$access_token" ]; then
             echo "Failed to obtain Chrome Web Store access token" >&2
-            python -c 'import json,sys; data=json.load(sys.stdin); print(data.get("error", "unknown_error")); print(data.get("error_description", ""))' <<< "$token_response" >&2
+            jq -r '.error // "unknown_error", .error_description // ""' <<< "$token_response" >&2
             exit 1
           fi
           echo "::add-mask::$access_token"
@@ -120,7 +137,9 @@ jobs:
           publish_response_file=$(mktemp)
           publish_status=$(curl -sS -o "$publish_response_file" -w "%{http_code}" \
             -H "Authorization: Bearer ${access_token}" \
+            -H "Content-Type: application/json" \
             -X POST \
+            -d '{}' \
             "$publish_url")
 
           echo "Publish response status: $publish_status"
