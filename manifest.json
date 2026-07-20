@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "찜꽁 레이더",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "찜꽁에서 시간대별 회의실 현황을 레이더로 한눈에 보고, 예약까지 빠르게 완료하세요.",
   "icons": {
     "16": "icons/icon16.png",
