@@ -14,6 +14,8 @@ on:
 
 permissions:
   contents: read
+  # google-github-actions/auth 가 Workload Identity Federation 을 쓸 때 필요하다.
+  id-token: write
 
 concurrency:
   group: chrome-web-store-publish
@@ -70,21 +72,16 @@ jobs:
           path: dist/*.zip
           if-no-files-found: error
 
-      - name: Upload package and optionally publish to Chrome Web Store
+      - name: Verify Chrome Web Store secrets
         env:
           CHROME_EXTENSION_ID: ${{ secrets.CHROME_EXTENSION_ID }}
           CHROME_WEBSTORE_PUBLISHER_ID: ${{ secrets.CHROME_WEBSTORE_PUBLISHER_ID }}
-          CHROME_WEBSTORE_CLIENT_ID: ${{ secrets.CHROME_WEBSTORE_CLIENT_ID }}
-          CHROME_WEBSTORE_CLIENT_SECRET: ${{ secrets.CHROME_WEBSTORE_CLIENT_SECRET }}
-          CHROME_WEBSTORE_REFRESH_TOKEN: ${{ secrets.CHROME_WEBSTORE_REFRESH_TOKEN }}
-          SHOULD_PUBLISH: ${{ github.event_name == 'push' || inputs.publish == true }}
+          GCP_SERVICE_ACCOUNT_KEY: ${{ secrets.GCP_SERVICE_ACCOUNT_KEY }}
         run: |
           required=(
             CHROME_EXTENSION_ID
             CHROME_WEBSTORE_PUBLISHER_ID
-            CHROME_WEBSTORE_CLIENT_ID
-            CHROME_WEBSTORE_CLIENT_SECRET
-            CHROME_WEBSTORE_REFRESH_TOKEN
+            GCP_SERVICE_ACCOUNT_KEY
           )
           for name in "${required[@]}"; do
             if [ -z "${!name}" ]; then
@@ -93,25 +90,33 @@ jobs:
             fi
           done
 
+      - name: Authenticate to Google Cloud
+        id: auth
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.GCP_SERVICE_ACCOUNT_KEY }}
+          # 서비스 계정 키를 access token 으로 교환한다. JWT 서명은 액션이 처리한다.
+          token_format: access_token
+          access_token_scopes: https://www.googleapis.com/auth/chromewebstore
+
+      - name: Upload package and optionally publish to Chrome Web Store
+        env:
+          CHROME_EXTENSION_ID: ${{ secrets.CHROME_EXTENSION_ID }}
+          CHROME_WEBSTORE_PUBLISHER_ID: ${{ secrets.CHROME_WEBSTORE_PUBLISHER_ID }}
+          ACCESS_TOKEN: ${{ steps.auth.outputs.access_token }}
+          SHOULD_PUBLISH: ${{ github.event_name == 'push' || inputs.publish == true }}
+        run: |
+          if [ -z "$ACCESS_TOKEN" ]; then
+            echo "Failed to obtain Chrome Web Store access token" >&2
+            exit 1
+          fi
+          access_token="$ACCESS_TOKEN"
+
           zip_file=$(ls dist/*.zip | head -n 1)
           if [ -z "$zip_file" ]; then
             echo "No extension zip found in dist/" >&2
             exit 1
           fi
-
-          token_response=$(curl -sS -X POST "https://oauth2.googleapis.com/token" \
-            -d "client_id=${CHROME_WEBSTORE_CLIENT_ID}" \
-            -d "client_secret=${CHROME_WEBSTORE_CLIENT_SECRET}" \
-            -d "refresh_token=${CHROME_WEBSTORE_REFRESH_TOKEN}" \
-            -d "grant_type=refresh_token")
-
-          access_token=$(jq -r '.access_token // empty' <<< "$token_response")
-          if [ -z "$access_token" ]; then
-            echo "Failed to obtain Chrome Web Store access token" >&2
-            jq -r '.error // "unknown_error", .error_description // ""' <<< "$token_response" >&2
-            exit 1
-          fi
-          echo "::add-mask::$access_token"
 
           upload_url="https://chromewebstore.googleapis.com/upload/v2/publishers/${CHROME_WEBSTORE_PUBLISHER_ID}/items/${CHROME_EXTENSION_ID}:upload"
           response_file=$(mktemp)
