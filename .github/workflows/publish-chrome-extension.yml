@@ -14,8 +14,6 @@ on:
 
 permissions:
   contents: read
-  # google-github-actions/auth 가 Workload Identity Federation 을 쓸 때 필요하다.
-  id-token: write
 
 concurrency:
   group: chrome-web-store-publish
@@ -90,27 +88,73 @@ jobs:
             fi
           done
 
-      - name: Authenticate to Google Cloud
-        id: auth
-        uses: google-github-actions/auth@v2
-        with:
-          credentials_json: ${{ secrets.GCP_SERVICE_ACCOUNT_KEY }}
-          # 서비스 계정 키를 access token 으로 교환한다. JWT 서명은 액션이 처리한다.
-          token_format: access_token
-          access_token_scopes: https://www.googleapis.com/auth/chromewebstore
-
       - name: Upload package and optionally publish to Chrome Web Store
         env:
           CHROME_EXTENSION_ID: ${{ secrets.CHROME_EXTENSION_ID }}
           CHROME_WEBSTORE_PUBLISHER_ID: ${{ secrets.CHROME_WEBSTORE_PUBLISHER_ID }}
-          ACCESS_TOKEN: ${{ steps.auth.outputs.access_token }}
+          GCP_SERVICE_ACCOUNT_KEY: ${{ secrets.GCP_SERVICE_ACCOUNT_KEY }}
           SHOULD_PUBLISH: ${{ github.event_name == 'push' || inputs.publish == true }}
         run: |
-          if [ -z "$ACCESS_TOKEN" ]; then
+          # 서비스 계정 키로 JWT 를 직접 서명해 access token 을 받는다.
+          # google-github-actions/auth 의 token_format: access_token 은 IAM Credentials
+          # API 로 자기 자신을 impersonate 하려 해서 serviceAccountTokenCreator 권한을
+          # 추가로 요구한다. 키가 이미 있으므로 그 우회는 불필요하다.
+          access_token=$(node -e '
+            const crypto = require("node:crypto");
+
+            const key = JSON.parse(process.env.GCP_SERVICE_ACCOUNT_KEY);
+            const now = Math.floor(Date.now() / 1000);
+            const base64url = (input) =>
+              Buffer.from(input).toString("base64url");
+
+            const header = base64url(
+              JSON.stringify({ alg: "RS256", typ: "JWT", kid: key.private_key_id }),
+            );
+            const claims = base64url(
+              JSON.stringify({
+                iss: key.client_email,
+                scope: "https://www.googleapis.com/auth/chromewebstore",
+                aud: key.token_uri,
+                iat: now,
+                exp: now + 3600,
+              }),
+            );
+
+            const signature = crypto
+              .createSign("RSA-SHA256")
+              .update(`${header}.${claims}`)
+              .sign(key.private_key)
+              .toString("base64url");
+
+            const body = new URLSearchParams({
+              grant_type: "urn:ietf:params:oauth:grant-type:jwt-bearer",
+              assertion: `${header}.${claims}.${signature}`,
+            });
+
+            fetch(key.token_uri, {
+              method: "POST",
+              headers: { "Content-Type": "application/x-www-form-urlencoded" },
+              body,
+            })
+              .then(async (response) => {
+                const data = await response.json();
+                if (!response.ok || !data.access_token) {
+                  console.error(JSON.stringify(data));
+                  process.exit(1);
+                }
+                process.stdout.write(data.access_token);
+              })
+              .catch((error) => {
+                console.error(error.message);
+                process.exit(1);
+              });
+          ')
+
+          if [ -z "$access_token" ]; then
             echo "Failed to obtain Chrome Web Store access token" >&2
             exit 1
           fi
-          access_token="$ACCESS_TOKEN"
+          echo "::add-mask::$access_token"
 
           zip_file=$(ls dist/*.zip | head -n 1)
           if [ -z "$zip_file" ]; then
