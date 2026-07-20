@@ -62,7 +62,7 @@
   const CALENDAR_SIDE_MARGIN = CALENDAR_SLOT_GAP;
   const DRAG_SAFE_TOP = 56;
   const NAV_SAFE_Z_INDEX = 2147483647;
-  const ROOM_TAG_METADATA = [{ key: "window", label: "창", description: "창문 있는 회의실" }];
+  const ROOM_TAG_METADATA = [{ key: "window", label: "창", description: "창문 있음" }];
   const ROOM_TAG_METADATA_BY_KEY = new Map(ROOM_TAG_METADATA.map((entry) => [normalizeRoomTagKey(entry.key), entry]));
   const TARGET_ROOM_METADATA = [
     { name: "금성", floor: "11층", kind: MAP_CALENDAR_SPACE_TAB_MEETING, tags: ["window"] },

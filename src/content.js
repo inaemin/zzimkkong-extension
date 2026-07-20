@@ -942,7 +942,7 @@
       return;
     }
 
-    renderRoomTagLegend(legend, rooms);
+    renderRoomTagLegend(legend);
   }
 
   function isScheduleCacheStale(date) {
@@ -1879,7 +1879,7 @@
       controlRow.appendChild(dateControlRow);
       const dateTagLegend = document.createElement("div");
       dateTagLegend.className = "zzk-room-tag-legend";
-      renderRoomTagLegend(dateTagLegend, rooms);
+      renderRoomTagLegend(dateTagLegend);
       controlRow.appendChild(dateTagLegend);
       syncMapCalendarDateNavState();
 
@@ -3679,7 +3679,11 @@
         bottom: 0;
         left: calc(var(--zzk-floor-col-width) + (var(--zzk-row-gap) * 0.5));
         width: 1px;
-        background: rgba(15, 23, 42, 0.2);
+        /*
+         * 층 / 회의실 열이 sticky 로 고정되면서 이 세로선이 행 사이 gap 에만
+         * 토막으로 드러난다. 고정 열 뒤에 완전히 가려지도록 숨긴다.
+         */
+        background: transparent;
       }
 
       #${MAP_CALENDAR_OVERLAY_ID} .zzk-map-calendar-hour-boundary-track {
@@ -3704,7 +3708,10 @@
         justify-self: stretch;
         width: 100%;
         border-radius: 1px;
-        background: var(--zzk-section-divider-color);
+        /*
+         * 정시 세로 구분선은 헤더 위로 삐죽 튀어나와 보여 가로줄만 남긴다.
+         */
+        background: transparent;
         pointer-events: none;
         z-index: 0;
       }
@@ -3721,10 +3728,22 @@
         grid-template-columns: var(--zzk-floor-col-width) var(--zzk-room-col-width) 1fr;
         align-items: center;
         gap: var(--zzk-row-gap);
-        border-bottom: var(--zzk-section-divider);
         padding-bottom: 4px;
         margin-bottom: 2px;
         position: relative;
+      }
+
+      /* 고정 열 배경 위에 그려야 헤더 구분선이 토막나지 않는다. */
+      #${MAP_CALENDAR_OVERLAY_ID} .zzk-map-calendar-axis-row::after {
+        content: "";
+        position: absolute;
+        bottom: 0;
+        left: 0;
+        right: 0;
+        height: 1px;
+        background: var(--zzk-section-divider-color);
+        pointer-events: none;
+        z-index: 6;
       }
 
       #${MAP_CALENDAR_OVERLAY_ID} .zzk-map-calendar-floor-group {
@@ -3736,8 +3755,23 @@
       }
 
       #${MAP_CALENDAR_OVERLAY_ID} .zzk-map-calendar-floor-group.floor-boundary {
-        border-top: var(--zzk-section-divider);
+        /*
+         * border-top 은 sticky 로 고정된 층/회의실 열 배경에 덮여 토막으로 보인다.
+         * 고정 열보다 위(z-index)에 선을 그려서 끊김 없이 이어지게 한다.
+         */
         padding-top: 4px;
+      }
+
+      #${MAP_CALENDAR_OVERLAY_ID} .zzk-map-calendar-floor-group.floor-boundary::before {
+        content: "";
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        height: 1px;
+        background: var(--zzk-section-divider-color);
+        pointer-events: none;
+        z-index: 6;
       }
 
       #${MAP_CALENDAR_OVERLAY_ID} .zzk-map-calendar-floor-rooms {
@@ -3791,14 +3825,21 @@
         z-index: 4;
         background: #ffffff;
         box-sizing: border-box;
-        /* 층 열과 회의실 열 사이 이음새, 그리고 행 사이 gap 을 함께 가린다. */
+        /*
+         * 층 열과 회의실 열 사이 이음새, 그리고 행 사이 gap 을 함께 가린다.
+         * 왼쪽으로도 번지게 해서 카드 안쪽 여백 사이로 타임블록이 비치지 않게 한다.
+         */
         box-shadow:
           var(--zzk-row-gap) 0 0 0 #ffffff,
+          -16px 0 0 0 #ffffff,
           0 -3px 0 0 #ffffff,
           0 3px 0 0 #ffffff,
           var(--zzk-row-gap) -3px 0 0 #ffffff,
-          var(--zzk-row-gap) 3px 0 0 #ffffff;
+          var(--zzk-row-gap) 3px 0 0 #ffffff,
+          -16px -3px 0 0 #ffffff,
+          -16px 3px 0 0 #ffffff;
       }
+
 
       #${MAP_CALENDAR_OVERLAY_ID} .zzk-map-calendar-room-name {
         /* flex(=inline-flex 아님)로 셀 전체를 채워야 스크롤된 타임블록을 가릴 수 있다. */
@@ -3815,7 +3856,8 @@
         min-height: 100%;
         box-sizing: border-box;
         /*
-         * 행 사이 gap(4px)까지 흰색으로 덮어야 스크롤된 타임블록이 틈으로 비치지 않는다.
+         * 행 사이 gap(4px)까지 흰색으로 덮어야 스크롤된 타임블록과
+         * 세로 구분선이 틈으로 비치지 않는다.
          * 위아래로 gap 의 절반씩 번지게 해서 인접한 행과 이어 붙인다.
          */
         box-shadow:
@@ -3823,8 +3865,7 @@
           0 -3px 0 0 #ffffff,
           0 3px 0 0 #ffffff,
           calc(var(--zzk-row-gap) + var(--zzk-timeline-side-margin)) -3px 0 0 #ffffff,
-          calc(var(--zzk-row-gap) + var(--zzk-timeline-side-margin)) 3px 0 0 #ffffff,
-          inset -1px 0 0 0 rgba(15, 23, 42, 0.08);
+          calc(var(--zzk-row-gap) + var(--zzk-timeline-side-margin)) 3px 0 0 #ffffff;
       }
 
       #${MAP_CALENDAR_OVERLAY_ID} .zzk-map-calendar-axis-row .zzk-map-calendar-floor-name.axis,
@@ -4938,22 +4979,6 @@
     }, []);
   }
 
-  function getVisibleRoomTags(rooms) {
-    if (!Array.isArray(rooms) || rooms.length === 0) {
-      return [];
-    }
-
-    const visibleTagMap = new Map();
-    rooms.forEach((room) => {
-      getRoomTags(room).forEach((tag) => {
-        if (!visibleTagMap.has(tag.key)) {
-          visibleTagMap.set(tag.key, tag);
-        }
-      });
-    });
-    return Array.from(visibleTagMap.values());
-  }
-
   function formatPlainRoomLabel(roomName) {
     return typeof roomName === "string" ? roomName.trim() : "";
   }
@@ -4987,33 +5012,14 @@
     });
   }
 
-  function renderRoomTagLegend(container, rooms) {
+  function renderRoomTagLegend(container) {
     if (!(container instanceof HTMLElement)) {
       return;
     }
 
+    // 회의실 이름 옆 배지만으로 충분해 범례에서는 태그 항목을 노출하지 않는다.
     container.textContent = "";
-    const visibleTags = getVisibleRoomTags(rooms);
-    container.hidden = visibleTags.length === 0;
-    if (visibleTags.length === 0) {
-      return;
-    }
-
-    visibleTags.forEach((tag) => {
-      const item = document.createElement("span");
-      item.className = "zzk-room-tag-legend-item";
-
-      const badge = document.createElement("span");
-      badge.className = "zzk-room-tag-badge";
-      badge.setAttribute("data-label", tag.label);
-      badge.setAttribute("aria-label", tag.label);
-
-      const text = document.createElement("span");
-      text.textContent = tag.description;
-
-      item.append(badge, text);
-      container.appendChild(item);
-    });
+    container.hidden = true;
   }
 
   function formatMapCalendarRoomLabel(roomName) {
