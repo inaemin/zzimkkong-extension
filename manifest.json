@@ -15,16 +15,16 @@
   },
   "content_scripts": [
     {
-      "matches": ["https://zzimkkong.com/*"],
-      "js": ["src/constants/debug.js", "src/utils/shared.js", "src/utils/storage.js", "src/constants/runtime.js", "src/utils/date-time.js", "src/utils/routes.js", "src/features/slack/shared.js", "src/features/slack/workflow.js", "src/features/slack/success-flow.js", "src/features/host-sync/shared.js", "src/services/guest-data/normalizers.js", "src/services/guest-data/shared.js", "src/features/radar/shared.js", "src/features/radar/workflow.js", "src/features/radar/form-sync.js", "src/content.js"],
+      "matches": ["https://zzimkkong.com/*", "https://techcourse-lms-plus-web.woowahan.com/*"],
+      "js": ["src/constants/debug.js", "src/utils/shared.js", "src/utils/storage.js", "src/constants/runtime.js", "src/utils/date-time.js", "src/utils/routes.js", "src/features/slack/shared.js", "src/features/slack/workflow.js", "src/features/slack/success-flow.js", "src/features/host-sync/shared.js", "src/services/guest-data/normalizers.js", "src/services/guest-data/shared.js", "src/services/lms-data/normalizers.js", "src/services/lms-data/shared.js", "src/features/radar/shared.js", "src/features/radar/workflow.js", "src/features/radar/form-sync.js", "src/content.js"],
       "run_at": "document_idle"
     }
   ],
   "web_accessible_resources": [
     {
       "resources": ["src/page-hook/shared.js", "src/page-network-hook.js", "src/page-network-restore.js", "assets/basecoat-dialog.css"],
-      "matches": ["https://zzimkkong.com/*"]
+      "matches": ["https://zzimkkong.com/*", "https://techcourse-lms-plus-web.woowahan.com/*"]
     }
   ],
-  "host_permissions": ["https://zzimkkong.com/*", "https://k8s.zzimkkong.com/*"]
+  "host_permissions": ["https://zzimkkong.com/*", "https://k8s.zzimkkong.com/*", "https://techcourse-lms-plus-web.woowahan.com/*", "https://techcourse-lms-plus-api.woowahan.com/*"]
 }

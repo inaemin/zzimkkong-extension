@@ -4,11 +4,14 @@ if (typeof importScripts === "function") {
   importScripts("constants/debug.js");
   importScripts("constants/runtime.js");
   importScripts("services/guest-data/normalizers.js");
+  importScripts("services/lms-data/normalizers.js");
 }
 const DEBUG_MODE = globalThis.__zzkDebugConfig?.DEBUG_MODE === true;
 const {
   API_BASE_URL,
+  LMS_API_BASE_URL,
   TIME_STEP_MINUTES,
+  LMS_TIME_STEP_MINUTES,
   KST_DATE_PARTS_FORMATTER,
   KST_TIME_PARTS_FORMATTER,
   TARGET_ROOM_SET,
@@ -17,6 +20,7 @@ const {
   normalizeTargetRoomName,
   normalizeFetchRoomType: normalizeRoomType,
 } = globalThis.__zzkSharedConstants;
+const SERVICE_KIND_LMS = "lms";
 const MESSAGE_TYPE_FETCH_AVAILABILITY = "ZZK_FETCH_AVAILABILITY";
 const MESSAGE_TYPE_FETCH_DAILY_SCHEDULE = "ZZK_FETCH_DAILY_SCHEDULE";
 const guestDataNormalizers = globalThis.__zzkGuestDataNormalizers.createGuestDataNormalizers({
@@ -31,6 +35,20 @@ const guestDataNormalizers = globalThis.__zzkGuestDataNormalizers.createGuestDat
   minuteToHourMinute,
   timePartsFormatter: KST_TIME_PARTS_FORMATTER,
 });
+const lmsDataNormalizers = globalThis.__zzkLmsDataNormalizers.createLmsDataNormalizers({
+  getProperty,
+  normalizeTargetRoomName,
+  normalizeRoomType,
+  getRoomTypeForRoomName: getRoomTypeByName,
+  excludedRoomSet: EXCLUDED_CREW_ROOM_SET,
+  timelineSlotMinutes: LMS_TIME_STEP_MINUTES,
+  minuteToHourMinute,
+});
+
+// 두 서비스가 동시에 운영 중이라, 요청한 탭이 어느 서비스인지 payload로 받아 분기한다.
+function isLmsPayload(payload) {
+  return getProperty(payload, "serviceKind") === SERVICE_KIND_LMS;
+}
 
 function debugLog(scope, message, detail) {
   if (!DEBUG_MODE || typeof console === "undefined" || typeof console.log !== "function") {
@@ -95,6 +113,10 @@ function getProperty(source, key) {
 }
 
 async function loadAvailability(payload) {
+  if (isLmsPayload(payload)) {
+    return loadLmsAvailability(payload);
+  }
+
   const date = sanitizeDate(getProperty(payload, "date"), {
     allowPastDate: getProperty(payload, "allowPastDate") === true,
   });
@@ -158,6 +180,10 @@ async function loadAvailability(payload) {
 }
 
 async function loadDailySchedule(payload) {
+  if (isLmsPayload(payload)) {
+    return loadLmsDailySchedule(payload);
+  }
+
   const date = sanitizeDate(getProperty(payload, "date"), {
     allowPastDate: getProperty(payload, "allowPastDate") === true,
   });
@@ -234,6 +260,126 @@ async function loadMapContext(payload, roomType = null) {
   };
 }
 
+// 개편 서비스(techcourse-lms-plus)에는 공유 맵 개념이 없어 /api/spaces 하나로 공간을 받는다.
+async function loadLmsSpaceContext(roomType = null) {
+  const spacesResponse = await fetchJson(`${LMS_API_BASE_URL}/api/spaces`);
+  const spaces = lmsDataNormalizers.normalizeSpaces(spacesResponse);
+
+  return {
+    mapId: null,
+    mapName: "회의실",
+    targetRooms: lmsDataNormalizers.buildTargetRooms(spaces, roomType),
+  };
+}
+
+async function fetchLmsReservationsForRoom(roomId, date) {
+  const response = await fetchJson(
+    `${LMS_API_BASE_URL}/api/space-reservations?${new URLSearchParams({
+      date,
+      spaceId: String(roomId),
+    }).toString()}`
+  );
+
+  const reservationsValue = Array.isArray(response)
+    ? response
+    : getProperty(response, "reservations");
+  return lmsDataNormalizers.normalizeReservations(reservationsValue);
+}
+
+// 개편 서비스에는 availability 엔드포인트가 없어 예약 목록과의 겹침으로 직접 계산한다.
+async function loadLmsAvailability(payload) {
+  const date = sanitizeDate(getProperty(payload, "date"), {
+    allowPastDate: getProperty(payload, "allowPastDate") === true,
+  });
+  const startTime = sanitizeTime(getProperty(payload, "startTime"));
+  const endTime = sanitizeTime(getProperty(payload, "endTime"));
+
+  if (startTime >= endTime) {
+    throw new Error("종료 시간은 시작 시간보다 늦어야 합니다.");
+  }
+
+  const roomType = normalizeRoomType(getProperty(payload, "roomType"));
+  const startMinute = lmsDataNormalizers.parseTimeToMinute(startTime);
+  const endMinute = lmsDataNormalizers.parseTimeToMinute(endTime);
+  const spaceContext = await loadLmsSpaceContext(roomType);
+
+  const rooms = await Promise.all(
+    spaceContext.targetRooms.map(async (room) => {
+      const reservations = await fetchLmsReservationsForRoom(room.id, date);
+
+      return {
+        id: room.id,
+        name: room.name,
+        color: room.color,
+        floor: room.floor,
+        floorLabel: room.floorLabel,
+        isAvailable: lmsDataNormalizers.isRoomAvailableInWindow(
+          reservations,
+          startMinute,
+          endMinute
+        ),
+      };
+    })
+  );
+
+  const availableCount = rooms.filter((room) => room.isAvailable).length;
+
+  return {
+    mapId: spaceContext.mapId,
+    mapName: spaceContext.mapName,
+    selectedWindow: {
+      date,
+      startTime,
+      endTime,
+    },
+    roomType,
+    counts: {
+      total: rooms.length,
+      available: availableCount,
+      occupied: rooms.length - availableCount,
+    },
+    rooms,
+  };
+}
+
+async function loadLmsDailySchedule(payload) {
+  const date = sanitizeDate(getProperty(payload, "date"), {
+    allowPastDate: getProperty(payload, "allowPastDate") === true,
+  });
+  const roomType = normalizeRoomType(getProperty(payload, "roomType"));
+  const spaceContext = await loadLmsSpaceContext(roomType);
+
+  const rooms = await Promise.all(
+    spaceContext.targetRooms.map(async (room) => ({
+      id: room.id,
+      name: room.name,
+      color: room.color,
+      floor: room.floor,
+      floorLabel: room.floorLabel,
+      windowStartMinute: room.windowStartMinute,
+      windowEndMinute: room.windowEndMinute,
+      reservations: await fetchLmsReservationsForRoom(room.id, date),
+    }))
+  );
+
+  const range = lmsDataNormalizers.computeTimelineRange(rooms);
+  const timeline = lmsDataNormalizers.buildTimelineSlots(
+    range.startMinute,
+    range.endMinute,
+    LMS_TIME_STEP_MINUTES
+  );
+
+  return {
+    mapId: spaceContext.mapId,
+    mapName: spaceContext.mapName,
+    date,
+    roomType,
+    range,
+    timeline,
+    rooms,
+  };
+}
+
 function getRoomTypeByName(name) {
   const normalizedName = normalizeTargetRoomName(name);
   return normalizedName.startsWith("페") ? "pair" : "meeting";
@@ -255,6 +401,9 @@ async function fetchJson(url) {
     headers: {
       accept: "application/json",
     },
+    // 개편 서비스는 세션 쿠키 기반 인증이라 자격 증명을 함께 보낸다.
+    // legacy 찜꽁 API는 인증 없이 열려 있어 기존 동작(omit)을 유지한다.
+    credentials: String(url).startsWith(LMS_API_BASE_URL) ? "include" : "same-origin",
   });
 
   const text = await response.text();

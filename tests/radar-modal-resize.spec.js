@@ -16,6 +16,8 @@ async function injectContentScriptBundle(page, beforeContentScript) {
   await page.addScriptTag({ path: path.resolve(process.cwd(), "src/features/host-sync/shared.js") });
   await page.addScriptTag({ path: path.resolve(process.cwd(), "src/services/guest-data/normalizers.js") });
   await page.addScriptTag({ path: path.resolve(process.cwd(), "src/services/guest-data/shared.js") });
+  await page.addScriptTag({ path: path.resolve(process.cwd(), "src/services/lms-data/normalizers.js") });
+  await page.addScriptTag({ path: path.resolve(process.cwd(), "src/services/lms-data/shared.js") });
   await page.addScriptTag({ path: path.resolve(process.cwd(), "src/features/radar/shared.js") });
   await page.addScriptTag({ path: path.resolve(process.cwd(), "src/features/radar/workflow.js") });
   await page.addScriptTag({ path: path.resolve(process.cwd(), "src/features/radar/form-sync.js") });
@@ -483,17 +485,59 @@ test("narrow widths make the timeline body horizontally scrollable", async ({ pa
   });
 
   const result = await page.evaluate(() => {
-    const body = document.querySelector("#zzk-map-calendar-overlay .zzk-map-calendar-body");
-    const style = window.getComputedStyle(body);
+    // 2-pane 구조: 가로 스크롤은 타임블록 pane 에서 일어난다.
+    const pane = document.querySelector(
+      "#zzk-map-calendar-overlay .zzk-map-calendar-timeline-pane"
+    );
+    const style = window.getComputedStyle(pane);
     return {
       overflowX: style.overflowX,
-      scrollWidth: body.scrollWidth,
-      clientWidth: body.clientWidth,
+      scrollWidth: pane.scrollWidth,
+      clientWidth: pane.clientWidth,
     };
   });
 
   expect(result.overflowX).toMatch(/auto|scroll/);
   expect(result.scrollWidth).toBeGreaterThan(result.clientWidth);
+});
+
+test("가로 스크롤바는 마지막 타임블록 행 아래 빈 공간에 놓여 슬롯 클릭을 방해하지 않는다", async ({ page }) => {
+  await mountAndOpenRadar(page, {
+    seedStorage: async () => {
+      await page.evaluate(
+        ({ key, value }) => window.localStorage.setItem(key, String(value)),
+        { key: WIDTH_STORAGE_KEY, value: 620 }
+      );
+    },
+  });
+
+  const result = await page.evaluate(() => {
+    const overlay = document.getElementById("zzk-map-calendar-overlay");
+    const pane = overlay.querySelector(".zzk-map-calendar-timeline-pane");
+    const grid = overlay.querySelector(".zzk-map-calendar-timeline-grid");
+    const rows = Array.from(
+      overlay.querySelectorAll(".zzk-map-calendar-row.zzk-map-calendar-timeline-row")
+    );
+    const lastRow = rows[rows.length - 1].getBoundingClientRect();
+    const paneRect = pane.getBoundingClientRect();
+    return {
+      hasHScroll: pane.scrollWidth - pane.clientWidth > 2,
+      // 가로 스크롤이 실제로 있을 때만 gutter 클래스가 붙는다.
+      hasGutterClass: pane.classList.contains("zzk-map-calendar-timeline-pane-hscroll"),
+      // pane 하단이 마지막 행 아래로 최소 스크롤바 두께(≈12px)만큼 여유가 있어야
+      // 스크롤바가 마지막 행 위에 겹치지 않는다.
+      slackBelowLastRow: paneRect.bottom - lastRow.bottom,
+      // 그리드(타임블록 콘텐츠)는 마지막 행에서 끝난다. 그 아래 gutter 는 트랙 padding.
+      gridBottomAtLastRow:
+        Math.abs(grid.getBoundingClientRect().bottom - lastRow.bottom) < 2,
+    };
+  });
+
+  expect(result.hasHScroll).toBe(true);
+  expect(result.hasGutterClass).toBe(true);
+  // 마지막 행 아래에 스크롤바가 놓일 빈 공간이 확보돼야 한다.
+  expect(result.slackBelowLastRow).toBeGreaterThanOrEqual(12);
+  expect(result.gridBottomAtLastRow).toBe(true);
 });
 
 test("the timeline body can actually be scrolled horizontally", async ({ page }) => {
@@ -507,10 +551,12 @@ test("the timeline body can actually be scrolled horizontally", async ({ page })
   });
 
   const scrolled = await page.evaluate(() => {
-    const body = document.querySelector("#zzk-map-calendar-overlay .zzk-map-calendar-body");
-    body.scrollLeft = 0;
-    body.scrollLeft = 200;
-    return body.scrollLeft;
+    const pane = document.querySelector(
+      "#zzk-map-calendar-overlay .zzk-map-calendar-timeline-pane"
+    );
+    pane.scrollLeft = 0;
+    pane.scrollLeft = 200;
+    return pane.scrollLeft;
   });
 
   expect(scrolled).toBeGreaterThan(0);
@@ -529,13 +575,15 @@ test("floor and room columns stay pinned while the timeline scrolls", async ({ p
   });
 
   const before = await page.evaluate(() => {
-    const body = document.querySelector("#zzk-map-calendar-overlay .zzk-map-calendar-body");
-    body.scrollLeft = 0;
+    const pane = document.querySelector(
+      "#zzk-map-calendar-overlay .zzk-map-calendar-timeline-pane"
+    );
+    pane.scrollLeft = 0;
     const floorName = document.querySelector(
       "#zzk-map-calendar-overlay .zzk-map-calendar-floor-name:not(.axis)"
     );
     const roomName = document.querySelector(
-      "#zzk-map-calendar-overlay .zzk-map-calendar-row .zzk-map-calendar-room-name"
+      "#zzk-map-calendar-overlay .zzk-map-calendar-label-pane .zzk-map-calendar-room-name"
     );
     return {
       floorLeft: floorName.getBoundingClientRect().left,
@@ -544,19 +592,21 @@ test("floor and room columns stay pinned while the timeline scrolls", async ({ p
   });
 
   const after = await page.evaluate(() => {
-    const body = document.querySelector("#zzk-map-calendar-overlay .zzk-map-calendar-body");
-    body.scrollLeft = 260;
+    const pane = document.querySelector(
+      "#zzk-map-calendar-overlay .zzk-map-calendar-timeline-pane"
+    );
+    pane.scrollLeft = 260;
     const floorName = document.querySelector(
       "#zzk-map-calendar-overlay .zzk-map-calendar-floor-name:not(.axis)"
     );
     const roomName = document.querySelector(
-      "#zzk-map-calendar-overlay .zzk-map-calendar-row .zzk-map-calendar-room-name"
+      "#zzk-map-calendar-overlay .zzk-map-calendar-label-pane .zzk-map-calendar-room-name"
     );
     const slot = document.querySelector(
-      "#zzk-map-calendar-overlay .zzk-map-calendar-row .zzk-map-calendar-slots > *"
+      "#zzk-map-calendar-overlay .zzk-map-calendar-timeline-row .zzk-map-calendar-slots > *"
     );
     return {
-      scrollLeft: body.scrollLeft,
+      scrollLeft: pane.scrollLeft,
       floorLeft: floorName.getBoundingClientRect().left,
       roomLeft: roomName.getBoundingClientRect().left,
       slotLeft: slot.getBoundingClientRect().left,
@@ -574,7 +624,7 @@ test("floor and room columns stay pinned while the timeline scrolls", async ({ p
   expect(after.slotLeft).toBeLessThan(before.roomLeft);
 });
 
-test("pinned columns are opaque so timeline blocks do not show through", async ({ page }) => {
+test("회의실 열과 타임블록 사이에 세로 구분선이 있고, 스크롤해도 고정된다", async ({ page }) => {
   await mountAndOpenRadar(page, {
     seedStorage: async () => {
       await page.evaluate(
@@ -584,42 +634,50 @@ test("pinned columns are opaque so timeline blocks do not show through", async (
     },
   });
 
-  const result = await page.evaluate(() => {
-    const roomName = document.querySelector(
-      "#zzk-map-calendar-overlay .zzk-map-calendar-row .zzk-map-calendar-room-name"
-    );
-    const floorName = document.querySelector(
-      "#zzk-map-calendar-overlay .zzk-map-calendar-floor-name:not(.axis)"
-    );
-    const roomStyle = window.getComputedStyle(roomName);
-    const floorStyle = window.getComputedStyle(floorName);
-    // 배경은 셀 자체가 아니라 pseudo element 가 그린다.
-    const roomBefore = window.getComputedStyle(roomName, "::before");
-    const floorBefore = window.getComputedStyle(floorName, "::before");
+  const geom = await page.evaluate(() => {
+    const overlay = document.getElementById("zzk-map-calendar-overlay");
+    const body = overlay.querySelector(".zzk-map-calendar-body");
+    const pane = overlay.querySelector(".zzk-map-calendar-timeline-pane");
+    const labelPane = overlay.querySelector(".zzk-map-calendar-label-pane");
+    pane.scrollLeft = 0;
+
+    // 회의실↔타임블록 경계는 라벨 pane 의 오른쪽 테두리(border-right)다.
+    const labelPaneStyle = window.getComputedStyle(labelPane);
+    // 층↔회의실 세로 구분선은 라벨 pane 안의 divider-track.
+    const baseDivider = overlay.querySelector(".zzk-map-calendar-divider-track");
+
+    const labelRight0 = labelPane.getBoundingClientRect().right;
+    const timelineLeft0 = pane.getBoundingClientRect().left;
+    const vDelta = body.scrollHeight - body.clientHeight;
+
+    pane.scrollLeft = 260;
+    const labelRightScrolled = labelPane.getBoundingClientRect().right;
+
     return {
-      roomPosition: roomStyle.position,
-      floorPosition: floorStyle.position,
-      roomBackground: roomBefore.backgroundColor,
-      floorBackground: floorBefore.backgroundColor,
-      roomBeforeContent: roomBefore.content,
-      floorBeforeContent: floorBefore.content,
-      roomDisplay: roomStyle.display,
+      hasBoundaryBorder:
+        labelPaneStyle.borderRightWidth !== "0px" &&
+        labelPaneStyle.borderRightStyle === "solid",
+      hasBaseDivider: Boolean(baseDivider),
+      // 라벨 pane 오른쪽 = 타임블록 pane 왼쪽(경계가 맞닿는다).
+      boundaryGap: Math.abs(labelRight0 - timelineLeft0),
+      labelRight0,
+      labelRightScrolled,
+      vDelta,
     };
   });
 
-  expect(result.roomPosition).toBe("sticky");
-  expect(result.floorPosition).toBe("sticky");
-  // pseudo element 가 실제로 존재해야 한다.
-  expect(result.roomBeforeContent).not.toBe("none");
-  expect(result.floorBeforeContent).not.toBe("none");
-  // 투명이면 스크롤된 타임블록이 글자 뒤로 비쳐 보인다.
-  expect(result.roomBackground).not.toBe("rgba(0, 0, 0, 0)");
-  expect(result.floorBackground).not.toBe("rgba(0, 0, 0, 0)");
-  // inline-flex 면 글자 크기로 줄어들어 셀 일부만 덮는다.
-  expect(result.roomDisplay).not.toBe("inline-flex");
+  // 회의실↔타임블록 경계선(라벨 pane 오른쪽 테두리)이 있고, 층↔회의실 구분선도 있다.
+  expect(geom.hasBoundaryBorder).toBe(true);
+  expect(geom.hasBaseDivider).toBe(true);
+  // 라벨 pane 오른쪽과 타임블록 pane 왼쪽이 맞닿아 있다(경계 일치).
+  expect(geom.boundaryGap).toBeLessThan(2);
+  // 가로 스크롤해도 라벨 pane 은 안 움직인다(경계 고정).
+  expect(Math.abs(geom.labelRightScrolled - geom.labelRight0)).toBeLessThan(2);
+  // 세로 스크롤이 생기면 안 된다.
+  expect(geom.vDelta).toBe(0);
 });
 
-test("pinned label cells fully cover their grid cell so nothing leaks around them", async ({
+test("라벨 pane 은 타임블록 스크롤 영역 밖이라 타임블록이 라벨을 침범하지 않는다", async ({
   page,
 }) => {
   await mountAndOpenRadar(page, {
@@ -632,34 +690,35 @@ test("pinned label cells fully cover their grid cell so nothing leaks around the
   });
 
   const result = await page.evaluate(() => {
-    const body = document.querySelector("#zzk-map-calendar-overlay .zzk-map-calendar-body");
-    body.scrollLeft = 300;
+    const overlay = document.getElementById("zzk-map-calendar-overlay");
+    const labelPane = overlay.querySelector(".zzk-map-calendar-label-pane");
+    const pane = overlay.querySelector(".zzk-map-calendar-timeline-pane");
+    // 타임블록을 최대한 스크롤한다.
+    pane.scrollLeft = pane.scrollWidth;
 
-    const row = document.querySelector("#zzk-map-calendar-overlay .zzk-map-calendar-row");
-    const roomName = row.querySelector(".zzk-map-calendar-room-name");
-    const rowRect = row.getBoundingClientRect();
-    const nameRect = roomName.getBoundingClientRect();
-
-    // 회의실 셀은 그리드가 할당한 열 너비를 가득 채워야 한다.
-    const columnWidth = parseFloat(
-      window.getComputedStyle(row).gridTemplateColumns.split(" ")[0]
-    );
+    const paneStyle = window.getComputedStyle(pane);
+    const labelRight = labelPane.getBoundingClientRect().right;
+    const paneLeft = pane.getBoundingClientRect().left;
 
     return {
-      nameWidth: nameRect.width,
-      columnWidth,
-      nameHeight: nameRect.height,
-      rowHeight: rowRect.height,
+      // 라벨 pane 은 스크롤 컨테이너(pane)의 형제라, 타임블록이 그 아래로 못 지나간다.
+      labelPaneIsSibling: labelPane.parentElement === pane.parentElement,
+      paneScrolled: pane.scrollLeft > 0,
+      // 타임블록 pane 이 자기 콘텐츠를 클리핑한다(overflow-x: auto/scroll/hidden).
+      paneClipsX: /auto|scroll|hidden/.test(paneStyle.overflowX),
+      // 타임블록 pane 의 왼쪽 경계가 라벨 pane 오른쪽과 맞닿는다(그 왼쪽은 클리핑됨).
+      boundaryGap: Math.abs(paneLeft - labelRight),
     };
   });
 
-  // 라벨 셀이 열 너비를 거의 다 덮어야 타임블록이 옆으로 새지 않는다.
-  expect(result.nameWidth).toBeGreaterThanOrEqual(result.columnWidth - 1);
-  // 세로로도 행 전체를 덮어야 위아래로 새지 않는다.
-  expect(result.nameHeight).toBeGreaterThanOrEqual(result.rowHeight - 1);
+  expect(result.labelPaneIsSibling).toBe(true);
+  expect(result.paneScrolled).toBe(true);
+  // 스크롤된 타임블록은 pane 경계에서 클리핑되어 라벨 위로 나오지 않는다.
+  expect(result.paneClipsX).toBe(true);
+  expect(result.boundaryGap).toBeLessThan(2);
 });
 
-test("row gaps in the pinned columns are painted over, not see-through", async ({ page }) => {
+test("같은 층 안의 회의실 행들은 세로 간격 없이 바짝 붙는다", async ({ page }) => {
   await mountAndOpenRadar(page, {
     seedStorage: async () => {
       await page.evaluate(
@@ -669,86 +728,65 @@ test("row gaps in the pinned columns are painted over, not see-through", async (
     },
   });
 
-  // 고정 열 영역의 행 사이 틈 좌표를 모은다.
-  const probes = await page.evaluate(() => {
+  // 같은 층 그룹(.zzk-map-calendar-floor-rooms) 안의 연속 행 사이 세로 간격을 잰다.
+  const gaps = await page.evaluate(() => {
     const overlay = document.getElementById("zzk-map-calendar-overlay");
-    const body = overlay.querySelector(".zzk-map-calendar-body");
-    body.scrollLeft = 300;
-
-    const overlayRect = overlay.getBoundingClientRect();
-    const rows = Array.from(overlay.querySelectorAll(".zzk-map-calendar-row"));
-    const points = [];
-
-    for (let index = 0; index < rows.length - 1; index += 1) {
-      const current = rows[index].getBoundingClientRect();
-      const next = rows[index + 1].getBoundingClientRect();
-      const gapHeight = next.top - current.bottom;
-      // 층 경계(구분선이 있는 큰 간격)는 원래 선이 그려지므로 제외한다.
-      if (gapHeight <= 0.5 || gapHeight > 6) {
-        continue;
+    const result = [];
+    overlay.querySelectorAll(".zzk-map-calendar-floor-rooms").forEach((group) => {
+      const rows = Array.from(group.querySelectorAll(".zzk-map-calendar-row"));
+      for (let index = 0; index < rows.length - 1; index += 1) {
+        const current = rows[index].getBoundingClientRect();
+        const next = rows[index + 1].getBoundingClientRect();
+        result.push(Math.round((next.top - current.bottom) * 100) / 100);
       }
-
-      const roomName = rows[index].querySelector(".zzk-map-calendar-room-name");
-      const nameRect = roomName.getBoundingClientRect();
-
-      // 고정 열 너비 전체를 훑어야 어디로 새는지 잡을 수 있다.
-      const y = Math.round(current.bottom + gapHeight / 2 - overlayRect.top);
-      const startX = Math.round(nameRect.left - overlayRect.left);
-      const endX = Math.round(nameRect.right - overlayRect.left);
-      for (let x = startX + 2; x < endX - 1; x += 4) {
-        points.push({ x, y });
-      }
-    }
-
-    return points;
+    });
+    return result;
   });
 
-  expect(probes.length).toBeGreaterThan(0);
-
-  // 실제로 렌더된 픽셀을 확인한다. box-shadow 는 hit-test 대상이 아니라 DOM 질의로는 못 잡는다.
-  const shot = await page.locator("#zzk-map-calendar-overlay").screenshot();
-
-  // PNG 를 직접 파싱하는 대신 브라우저에 되돌려 픽셀을 읽는다.
-  const leaks = await page.evaluate(
-    async ({ base64, points }) => {
-      const image = new Image();
-      await new Promise((resolve, reject) => {
-        image.onload = resolve;
-        image.onerror = reject;
-        image.src = `data:image/png;base64,${base64}`;
-      });
-
-      const canvas = document.createElement("canvas");
-      canvas.width = image.naturalWidth;
-      canvas.height = image.naturalHeight;
-      const context = canvas.getContext("2d");
-      context.drawImage(image, 0, 0);
-
-      const scale = image.naturalWidth / document.getElementById("zzk-map-calendar-overlay").getBoundingClientRect().width;
-
-      const found = [];
-      for (const point of points) {
-        const px = Math.round(point.x * scale);
-        const py = Math.round(point.y * scale);
-        if (px < 0 || py < 0 || px >= canvas.width || py >= canvas.height) {
-          continue;
-        }
-        const [r, g, b] = context.getImageData(px, py, 1, 1).data;
-        // 타임블록은 옅은 초록/빨강 계열이라 채널 간 차이가 생긴다.
-        // 흰 배경과 회색 구분선은 채널 값이 서로 거의 같다.
-        const maxChannel = Math.max(r, g, b);
-        const minChannel = Math.min(r, g, b);
-        if (maxChannel - minChannel > 4) {
-          found.push({ point, rgb: [r, g, b] });
-        }
-      }
-      return found;
-    },
-    { base64: shot.toString("base64"), points: probes }
-  );
-
-  expect(leaks).toEqual([]);
+  // 최소 하나 이상의 행 쌍이 있어야 하고, 모두 간격이 0(±1px 렌더 오차) 이어야 한다.
+  expect(gaps.length).toBeGreaterThan(0);
+  for (const gap of gaps) {
+    expect(Math.abs(gap)).toBeLessThanOrEqual(1);
+  }
 });
+
+test("정시 세로선이 층/회의실 세로선처럼 헤더 맨 위까지 올라온다", async ({ page }) => {
+  await mountAndOpenRadar(page, {
+    seedStorage: async () => {
+      await page.evaluate(
+        ({ key, value }) => window.localStorage.setItem(key, String(value)),
+        { key: WIDTH_STORAGE_KEY, value: 620 }
+      );
+    },
+  });
+
+  const geom = await page.evaluate(() => {
+    const overlay = document.getElementById("zzk-map-calendar-overlay");
+    const gridWrap = overlay.querySelector(".zzk-map-calendar-grid-wrap");
+    const cs = getComputedStyle(gridWrap);
+    const axisHeight = parseFloat(cs.getPropertyValue("--zzk-axis-row-height"));
+    const clipTop = parseFloat(cs.getPropertyValue("--zzk-hour-boundary-clip-top"));
+
+    // 층/회의실 세로 구분선(divider-track)의 top 위치.
+    const gridWrapTop = gridWrap.getBoundingClientRect().top;
+    const dividerTrack = overlay.querySelector(".zzk-map-calendar-divider-track");
+    const dividerTop = dividerTrack
+      ? dividerTrack.getBoundingClientRect().top - gridWrapTop
+      : null;
+
+    return { axisHeight, clipTop, dividerTop };
+  });
+
+  expect(Number.isFinite(geom.clipTop)).toBe(true);
+  expect(Number.isFinite(geom.axisHeight)).toBe(true);
+  // 헤더 맨 위까지 올라오려면 위쪽을 자르지 않아야 한다(clip top = 0).
+  expect(geom.clipTop).toBe(0);
+  // 층/회의실 세로선도 헤더 맨 위(≈0)에서 시작하므로 같은 높이다.
+  if (Number.isFinite(geom.dividerTop)) {
+    expect(Math.abs(geom.dividerTop - geom.clipTop)).toBeLessThanOrEqual(2);
+  }
+});
+
 
 test("the radar body does not grow a vertical scrollbar when rows fit", async ({ page }) => {
   await mountAndOpenRadar(page, {
@@ -761,25 +799,62 @@ test("the radar body does not grow a vertical scrollbar when rows fit", async ({
   });
 
   const result = await page.evaluate(() => {
-    const body = document.querySelector("#zzk-map-calendar-overlay .zzk-map-calendar-body");
-    const grid = document.querySelector("#zzk-map-calendar-overlay .zzk-map-calendar-grid");
-    const gridWrap = document.querySelector(
-      "#zzk-map-calendar-overlay .zzk-map-calendar-grid-wrap"
-    );
+    const overlay = document.getElementById("zzk-map-calendar-overlay");
+    const body = overlay.querySelector(".zzk-map-calendar-body");
+    const pane = overlay.querySelector(".zzk-map-calendar-timeline-pane");
+    const hasHScroll = pane.classList.contains("zzk-map-calendar-timeline-pane-hscroll");
+    const gutter = hasHScroll
+      ? parseFloat(getComputedStyle(body).getPropertyValue("--zzk-hscroll-gutter")) || 0
+      : 0;
     return {
-      verticalDelta: body.scrollHeight - body.clientHeight,
+      // 세로 스크롤(콘텐츠 넘침)은 없어야 한다. 가로 스크롤 gutter 는 콘텐츠 넘침이
+      // 아니므로 제외하고 본다.
+      verticalDelta: body.scrollHeight - body.clientHeight - gutter,
       scrollable: body.classList.contains("zzk-map-calendar-body-scrollable"),
       overflowY: window.getComputedStyle(body).overflowY,
-      gridHeight: grid.getBoundingClientRect().height,
-      gridWrapHeight: gridWrap.getBoundingClientRect().height,
     };
   });
 
-  // 실제 콘텐츠는 넘치지 않는데 고정 열 배경이 아래로 번져 스크롤이 생기면 안 된다.
+  // 실제 콘텐츠는 넘치지 않는데 고정 열 배경이 아래로 번져 세로 스크롤이 생기면 안 된다.
+  // (가로 스크롤바 gutter 를 제외하면 세로 넘침은 0 이어야 한다.)
   expect(result.verticalDelta).toBe(0);
   expect(result.scrollable).toBe(false);
   expect(result.overflowY).toBe("hidden");
-  expect(Math.abs(result.gridHeight - result.gridWrapHeight)).toBeLessThan(2);
+});
+
+test("가로 스크롤바는 타임블록 pane 에만 생기고 라벨 pane 아래로 번지지 않는다", async ({ page }) => {
+  await mountAndOpenRadar(page, {
+    seedStorage: async () => {
+      await page.evaluate(
+        ({ key, value }) => window.localStorage.setItem(key, String(value)),
+        { key: WIDTH_STORAGE_KEY, value: 620 }
+      );
+    },
+  });
+
+  const result = await page.evaluate(() => {
+    const overlay = document.getElementById("zzk-map-calendar-overlay");
+    const body = overlay.querySelector(".zzk-map-calendar-body");
+    const labelPane = overlay.querySelector(".zzk-map-calendar-label-pane");
+    const pane = overlay.querySelector(".zzk-map-calendar-timeline-pane");
+    return {
+      // 가로 스크롤은 타임블록 pane 에서만 일어난다.
+      paneHScroll: pane.scrollWidth - pane.clientWidth > 2,
+      labelPaneOverflowX: window.getComputedStyle(labelPane).overflowX,
+      bodyOverflowX: window.getComputedStyle(body).overflowX,
+      // body 는 가로 스크롤을 갖지 않는다(라벨 아래로 스크롤바가 안 번진다).
+      bodyHScroll: body.scrollWidth - body.clientWidth > 2,
+      verticalDelta: body.scrollHeight - body.clientHeight,
+    };
+  });
+
+  expect(result.paneHScroll).toBe(true);
+  // 라벨 pane 과 body 는 가로 스크롤이 없다 → 스크롤바가 라벨 아래로 안 번진다.
+  expect(result.labelPaneOverflowX).not.toMatch(/auto|scroll/);
+  expect(result.bodyOverflowX).not.toMatch(/auto|scroll/);
+  expect(result.bodyHScroll).toBe(false);
+  // 세로 스크롤은 생기면 안 된다.
+  expect(result.verticalDelta).toBe(0);
 });
 
 test("the axis header labels also stay pinned while scrolling", async ({ page }) => {
@@ -978,6 +1053,53 @@ test("current-time scroll leaves a little context before the current slot", asyn
   expect(result.scrollLeft).toBeGreaterThan(0);
 });
 
+test("좁은 모달에서 15:02 는 14:30 슬롯으로 스크롤한다(끝까지 밀리지 않음)", async ({ page }) => {
+  await mountGuestMap(page);
+  await injectContentScriptBundle(page);
+
+  const result = await page.evaluate(() => {
+    const api = window.__zzkTestApi;
+    // 07:00~23:00, 30분 단위 (lms+ 와 동일)
+    const timeline = [];
+    for (let minute = 7 * 60; minute < 23 * 60; minute += 30) {
+      timeline.push({ startMinute: minute, endMinute: minute + 30, isHourMark: minute % 60 === 0 });
+    }
+
+    // 실제 lms+ 지오메트리와 비슷하게: sticky 열 153px, 슬롯 22px.
+    const trackStartOffset = 153;
+    const slotStride = 22;
+    // 좁은 모달: 약 7시간(14슬롯)만 보임 → maxScroll 이 실제로 존재.
+    const trackWidth = timeline.length * slotStride; // 32*22 = 704
+    const viewportSlotWidth = 14 * slotStride; // 약 14슬롯
+    const maxScrollLeft = trackWidth - viewportSlotWidth;
+
+    const scrollLeft = api.computeMapCalendarCurrentTimeScrollLeft({
+      timeline,
+      trackStartOffset,
+      slotStride,
+      viewportWidth: viewportSlotWidth,
+      maxScrollLeft,
+      isToday: true,
+      currentMinute: 15 * 60 + 2,
+    });
+
+    // 15:02 - 30분 lead = 14:32 → 첫 endMinute>14:32 슬롯은 14:30(index 15).
+    const targetIndex = timeline.findIndex((s) => s.endMinute > 15 * 60 + 2 - 30);
+    return {
+      scrollLeft,
+      maxScrollLeft,
+      expectedSlotIndex: targetIndex,
+      // scrollLeft 에서 왼쪽 끝에 오는 슬롯 인덱스
+      leftmostIndexAtScroll: Math.round(scrollLeft / slotStride),
+    };
+  });
+
+  // 끝까지(maxScroll) 밀리면 안 된다.
+  expect(result.scrollLeft).toBeLessThan(result.maxScrollLeft);
+  // 왼쪽 끝에 14:30 슬롯(index 15)이 와야 한다.
+  expect(result.leftmostIndexAtScroll).toBe(result.expectedSlotIndex);
+});
+
 test("today's radar scrolls the timeline near the current time on open", async ({ page }) => {
   const today = await page.evaluate(() => {
     const parts = new Intl.DateTimeFormat("en-CA", {
@@ -1005,11 +1127,13 @@ test("today's radar scrolls the timeline near the current time on open", async (
   await page.waitForTimeout(400);
 
   const result = await page.evaluate(() => {
-    const body = document.querySelector("#zzk-map-calendar-overlay .zzk-map-calendar-body");
+    const pane = document.querySelector(
+      "#zzk-map-calendar-overlay .zzk-map-calendar-timeline-pane"
+    );
     return {
-      scrollLeft: body.scrollLeft,
-      scrollWidth: body.scrollWidth,
-      clientWidth: body.clientWidth,
+      scrollLeft: pane.scrollLeft,
+      scrollWidth: pane.scrollWidth,
+      clientWidth: pane.clientWidth,
       currentMinute: window.__zzkTestApi.getCurrentMinuteOfDayInKST?.() ?? null,
     };
   });

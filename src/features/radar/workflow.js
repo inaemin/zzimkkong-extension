@@ -11,6 +11,7 @@
       SLACK_MODAL_TRIGGER_ID,
       DEBUG_MODE,
       MAP_CALENDAR_ALWAYS_OPEN_STORAGE_KEY,
+      NAV_SAFE_Z_INDEX,
       TARGET_ROOM_NAMES,
       findGuestReservationTabContainer,
       findGuestReservationTabStyleSource,
@@ -22,6 +23,8 @@
       buildSlackReservationContext,
       showSlackCopyModal,
       isGuestPage,
+      isRadarSupportedPage,
+      isLmsService,
       isGuestReservationEditPage,
       shouldDelayGuestMapCalendarUi,
       isMapCalendarModalOpenRequested,
@@ -81,8 +84,12 @@
       return null;
     }
 
+    // lms+ 플로팅 런처는 아이콘만 노출한다(텍스트 라벨 숨김).
+    const isFloating = launcher.dataset.zzkMountType === "lms-floating";
+
     let label = launcher.querySelector(".zzk-map-calendar-radar-label");
     if (label instanceof HTMLSpanElement) {
+      label.style.display = isFloating ? "none" : "";
       return label;
     }
 
@@ -90,6 +97,7 @@
     const icon = createMapCalendarLauncherIcon();
     label = document.createElement("span");
     label.className = "zzk-map-calendar-radar-label";
+    label.style.display = isFloating ? "none" : "";
     launcher.append(icon, label);
     return label;
   }
@@ -165,7 +173,7 @@
   }
 
   function ensureMapCalendarLauncher() {
-    if (!isGuestPage() || !(document.body instanceof HTMLBodyElement)) {
+    if (!isRadarSupportedPage() || !(document.body instanceof HTMLBodyElement)) {
       return;
     }
 
@@ -198,6 +206,16 @@
           removeMapCalendarOverlay();
         }
       });
+    }
+
+    // 개편 서비스(lms+)는 호스트 폼에 인라인으로 붙일 자리가 없어, 화면 오른쪽 하단에
+    // 40x40 원형 아이콘 버튼(플로팅)으로 띄우고 토글로 열고 닫는다.
+    if (typeof isLmsService === "function" && isLmsService()) {
+      styleLmsFloatingLauncher(launcher);
+      ensureMapCalendarLauncherContent(launcher);
+      updateMapCalendarLauncherState(launcher);
+      scheduleAutoOpenMapCalendarLauncher(launcher);
+      return;
     }
 
     mountMapCalendarLauncher(launcher);
@@ -247,6 +265,40 @@
 
     updateMapCalendarLauncherState(launcher);
     scheduleAutoOpenMapCalendarLauncher(launcher);
+  }
+
+  // lms+ 전용 플로팅 런처: 오른쪽 하단 고정, 40x40 원형, 아이콘만.
+  function styleLmsFloatingLauncher(launcher) {
+    if (launcher.parentElement !== document.body) {
+      document.body.appendChild(launcher);
+    }
+    launcher.dataset.zzkMountType = "lms-floating";
+    launcher.className = "zzk-map-calendar-radar-launcher-floating";
+    launcher.style.setProperty("position", "fixed", "important");
+    launcher.style.setProperty("right", "24px", "important");
+    launcher.style.setProperty("bottom", "24px", "important");
+    launcher.style.setProperty("left", "auto", "important");
+    launcher.style.setProperty("top", "auto", "important");
+    launcher.style.setProperty("width", "40px", "important");
+    launcher.style.setProperty("height", "40px", "important");
+    launcher.style.setProperty("min-width", "40px", "important");
+    launcher.style.setProperty("min-height", "40px", "important");
+    launcher.style.setProperty("padding", "0", "important");
+    launcher.style.setProperty("margin", "0", "important");
+    launcher.style.setProperty("border-radius", "999px", "important");
+    launcher.style.setProperty("display", "inline-flex", "important");
+    launcher.style.setProperty("align-items", "center", "important");
+    launcher.style.setProperty("justify-content", "center", "important");
+    launcher.style.setProperty("gap", "0", "important");
+    launcher.style.setProperty("cursor", "pointer", "important");
+    launcher.style.setProperty("pointer-events", "auto", "important");
+    launcher.style.setProperty("z-index", String(NAV_SAFE_Z_INDEX), "important");
+    launcher.style.setProperty("transform", "none", "important");
+    launcher.style.setProperty(
+      "transition",
+      "background-color 140ms ease, color 140ms ease, border-color 140ms ease, box-shadow 140ms ease, transform 140ms ease",
+      "important",
+    );
   }
 
   function mountMapCalendarLauncher(launcher) {
@@ -425,7 +477,7 @@
   }
 
   function scheduleAutoOpenMapCalendarLauncher(launcher) {
-    if (!(launcher instanceof HTMLButtonElement) || !isGuestPage()) {
+    if (!(launcher instanceof HTMLButtonElement) || !isRadarSupportedPage()) {
       return;
     }
 
@@ -460,7 +512,7 @@
 
     state.lastAutoOpenPath = currentPath;
     window.setTimeout(() => {
-      if (!isGuestPage() || location.pathname !== currentPath) {
+      if (!isRadarSupportedPage() || location.pathname !== currentPath) {
         return;
       }
 
@@ -494,6 +546,16 @@
       return;
     }
 
+    // lms+ 플로팅 런처는 오버레이(모달)와 z-index 가 같으므로, 항상 body 의 마지막
+    // 자식으로 두어 열린 모달 위에 겹쳐 클릭 가능하게 유지한다.
+    if (
+      launcher.dataset.zzkMountType === "lms-floating" &&
+      document.body instanceof HTMLBodyElement &&
+      document.body.lastElementChild !== launcher
+    ) {
+      document.body.appendChild(launcher);
+    }
+
     const label = ensureMapCalendarLauncherContent(launcher);
     if (!(label instanceof HTMLSpanElement)) {
       return;
@@ -521,7 +583,8 @@
     launcher.dataset.zzkToggleState = isOpen ? "open" : "closed";
     launcher.style.setProperty("border-style", "solid", "important");
     launcher.style.setProperty("border-width", "1px", "important");
-    if (isGuestReservationEditPage()) {
+    const isFloatingLauncher = launcher.dataset.zzkMountType === "lms-floating";
+    if (isGuestReservationEditPage() && !isFloatingLauncher) {
       launcher.style.setProperty("border-radius", "999px", "important");
       launcher.style.setProperty("padding", "8px 14px", "important");
       launcher.style.setProperty("min-height", "36px", "important");
@@ -642,7 +705,7 @@
   }
 
   function openMapCalendarModal() {
-    if (!isGuestPage() || !state.scheduleOverlayEnabled) {
+    if (!isRadarSupportedPage() || !state.scheduleOverlayEnabled) {
       updateMapCalendarLauncherState();
       return;
     }

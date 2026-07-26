@@ -37,11 +37,54 @@
       resolveReservationAttemptForPayload,
       shouldIgnoreAmbiguousReservationSuccess,
       consumeReservationAttempt,
+      isLmsService,
+      buildLmsSlackReservationContext,
     } = deps;
     const BLANK_GUEST_RECOVERY_STABLE_DELAY_MS = 700;
 
+    // 개편 서비스(lms+) 예약 생성 성공 처리: 응답 body 로 Slack 모달을 띄운다.
+    function handleLmsReservationSuccess(payload) {
+      if (!payload || typeof payload !== "object") {
+        return;
+      }
+      // 정상적으로 예약된 경우(2xx)만 처리한다.
+      const status = Number(payload.status);
+      if (!(payload.ok === true && Number.isInteger(status) && status >= 200 && status < 300)) {
+        return;
+      }
+      // 현재 lms+ 지원 범위는 예약 "생성"(POST)만이다. 수정(PUT/PATCH) 성공은
+      // 아직 Slack 모달 대상이 아니므로 여기서 걸러낸다(추후 확장 시 이 가드를 넓힌다).
+      const method = normalizeReservationMutationMethod(payload.method);
+      if (method !== "POST") {
+        return;
+      }
+      const responseBody = payload.responseBody;
+      if (!responseBody || typeof responseBody !== "object") {
+        return;
+      }
+
+      const context = buildLmsSlackReservationContext(responseBody);
+      if (!context) {
+        return;
+      }
+      context.mutationMethod = method;
+
+      // 같은 예약에 대해 모달이 중복으로 뜨지 않게 지문으로 디듀프한다.
+      const fingerprint = createSlackMessageFingerprint(context, payload);
+      if (shouldSkipSlackCopyModal(fingerprint)) {
+        pushDebugEvent("slack-success", "lms-deduped-success", { fingerprint });
+        return;
+      }
+
+      pushDebugEvent("slack-success", "lms-open-modal", {
+        fingerprint,
+        spaceName: responseBody.spaceName,
+      });
+      showSlackCopyModal(context);
+    }
+
     function handleReservationNetworkMessage(event) {
-      if (!isGuestReservationFlowPage() || event.source !== window) {
+      if (event.source !== window) {
         return;
       }
 
@@ -52,6 +95,23 @@
         data.source !== "zzk-page-reservation-hook" ||
         data.type !== PAGE_RESERVATION_EVENT_TYPE
       ) {
+        return;
+      }
+
+      // 개편 서비스(lms+)는 legacy 게스트 페이지 흐름과 무관하게,
+      // 예약 생성 응답 body 로 바로 Slack 모달을 띄운다.
+      if (typeof isLmsService === "function" && isLmsService()) {
+        if (isTrustedReservationNetworkMessage(event, data.payload)) {
+          handleLmsReservationSuccess(data.payload);
+        } else {
+          pushDebugEvent("slack-success", "lms-ignored-untrusted", {
+            origin: event.origin,
+          });
+        }
+        return;
+      }
+
+      if (!isGuestReservationFlowPage()) {
         return;
       }
 
@@ -588,7 +648,11 @@
         return true;
       }
 
-      return origin === "https://k8s.zzimkkong.com";
+      // legacy 찜꽁 API와 개편 서비스(techcourse-lms-plus) API를 모두 허용한다.
+      return (
+        origin === "https://k8s.zzimkkong.com" ||
+        origin === "https://techcourse-lms-plus-api.woowahan.com"
+      );
     }
 
     function isReservationMutationRequest(urlValue, methodValue) {
