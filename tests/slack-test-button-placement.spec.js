@@ -42,6 +42,8 @@ async function injectContentScriptBundle(page, beforeContentScript) {
   await page.addScriptTag({ path: path.resolve(process.cwd(), "src/features/host-sync/shared.js") });
   await page.addScriptTag({ path: path.resolve(process.cwd(), "src/services/guest-data/normalizers.js") });
   await page.addScriptTag({ path: path.resolve(process.cwd(), "src/services/guest-data/shared.js") });
+  await page.addScriptTag({ path: path.resolve(process.cwd(), "src/services/lms-data/normalizers.js") });
+  await page.addScriptTag({ path: path.resolve(process.cwd(), "src/services/lms-data/shared.js") });
   await page.addScriptTag({ path: path.resolve(process.cwd(), "src/features/radar/shared.js") });
   await page.addScriptTag({ path: path.resolve(process.cwd(), "src/features/radar/workflow.js") });
   await page.addScriptTag({ path: path.resolve(process.cwd(), "src/features/radar/form-sync.js") });
@@ -2757,6 +2759,11 @@ test("edit page radar locks selection to current room and grays out other rooms"
 
     const suseongRow = findRowByRoom("수성");
     const geumseongRow = findRowByRoom("금성");
+    // 2-pane 구조: 회의실 이름은 라벨 행에, 슬롯은 연결된 타임라인 행에 있다.
+    const suseongTimelineRow =
+      suseongRow instanceof HTMLElement ? suseongRow.__zzkTimelineRow || suseongRow : null;
+    const geumseongTimelineRow =
+      geumseongRow instanceof HTMLElement ? geumseongRow.__zzkTimelineRow || geumseongRow : null;
     const overlayDateRow = document.querySelector(
       "#zzk-map-calendar-overlay .zzk-map-calendar-date-row"
     );
@@ -2825,22 +2832,22 @@ test("edit page radar locks selection to current room and grays out other rooms"
       suseongDisabled:
         suseongRow instanceof HTMLElement && suseongRow.classList.contains("room-locked-disabled"),
       suseongFreeSlotCount:
-        suseongRow instanceof HTMLElement
-          ? suseongRow.querySelectorAll(".zzk-map-calendar-slot.free").length
+        suseongTimelineRow instanceof HTMLElement
+          ? suseongTimelineRow.querySelectorAll(".zzk-map-calendar-slot.free").length
           : 0,
       suseongLockedSlotCount:
-        suseongRow instanceof HTMLElement
-          ? suseongRow.querySelectorAll(".zzk-map-calendar-slot.room-locked-disabled").length
+        suseongTimelineRow instanceof HTMLElement
+          ? suseongTimelineRow.querySelectorAll(".zzk-map-calendar-slot.room-locked-disabled").length
           : 0,
       geumseongFreeSlotCount:
-        geumseongRow instanceof HTMLElement
-          ? geumseongRow.querySelectorAll(".zzk-map-calendar-slot.free").length
+        geumseongTimelineRow instanceof HTMLElement
+          ? geumseongTimelineRow.querySelectorAll(".zzk-map-calendar-slot.free").length
           : 0,
       geumseongDisabled:
         geumseongRow instanceof HTMLElement && geumseongRow.classList.contains("room-locked-disabled"),
       geumseongLockedSlotCount:
-        geumseongRow instanceof HTMLElement
-          ? geumseongRow.querySelectorAll(".zzk-map-calendar-slot.room-locked-disabled").length
+        geumseongTimelineRow instanceof HTMLElement
+          ? geumseongTimelineRow.querySelectorAll(".zzk-map-calendar-slot.room-locked-disabled").length
           : 0,
       hasOverlayDateRow: overlayDateRow instanceof HTMLElement,
       hasOverlayDateInput: overlayDateInput instanceof HTMLInputElement,
@@ -2899,7 +2906,9 @@ test("edit page radar locks selection to current room and grays out other rooms"
   expect(snapshot.rowBoundaryCellCount).toBe(0);
   expect(snapshot.maxBoundaryCoverageDiff).not.toBeNull();
   expect(snapshot.maxBoundaryCoverageDiff).toBeLessThanOrEqual(1);
-  expect(snapshot.firstRowGap).toBeGreaterThan(0);
+  // 회의실 행 사이 세로 간격은 제거되어 0(±1px 렌더 오차) 이다.
+  expect(snapshot.firstRowGap).not.toBeNull();
+  expect(Math.abs(snapshot.firstRowGap)).toBeLessThanOrEqual(1);
   expect(snapshot.trackSpanDiff).not.toBeNull();
   expect(snapshot.trackSpanDiff).toBeLessThanOrEqual(8);
   expect(snapshot.hasTimeContext).toBeFalsy();

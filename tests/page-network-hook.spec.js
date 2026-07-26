@@ -705,3 +705,69 @@ test("page network restore bridge restores page-context hook", async ({ page }) 
     sendRestored: true,
   });
 });
+
+test("lms+ 예약 생성 POST 성공 시 응답 body 를 이벤트에 담아 emit 한다", async ({ page }) => {
+  await page.goto("https://techcourse-lms-plus-web.woowahan.com/space-reservations", {
+    waitUntil: "domcontentloaded",
+  });
+
+  const reservationResponse = {
+    date: "2099-01-02",
+    endTime: "21:00:00",
+    floor: 12,
+    id: 175,
+    mine: true,
+    purpose: "학습",
+    reserverName: "애니(민인애)",
+    spaceId: 5,
+    spaceName: "보이저",
+    startTime: "20:00:00",
+  };
+  await page.route(
+    "https://techcourse-lms-plus-api.woowahan.com/api/space-reservations",
+    async (route) => {
+      await route.fulfill({
+        status: 201,
+        contentType: "application/json",
+        body: JSON.stringify(reservationResponse),
+      });
+    },
+  );
+
+  await injectPageNetworkHookBundle(page);
+
+  const messages = await collectReservationHookMessages(page, async () => {
+    // 페이지 앱이 원본 응답을 소비할 수 있는지도 함께 확인한다.
+    const res = await fetch(
+      "https://techcourse-lms-plus-api.woowahan.com/api/space-reservations",
+      {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          spaceId: 5,
+          date: "2099-01-02",
+          startTime: "20:00:00",
+          endTime: "21:00:00",
+          purpose: "학습",
+        }),
+      },
+    );
+    window.__zzkConsumedBody = await res.json();
+  });
+
+  const withBody = messages.find((m) => m && m.responseBody);
+  expect(withBody).toBeTruthy();
+  expect(withBody.method).toBe("POST");
+  expect(withBody.responseBody).toMatchObject({
+    spaceName: "보이저",
+    floor: 12,
+    reserverName: "애니(민인애)",
+    startTime: "20:00:00",
+    endTime: "21:00:00",
+    purpose: "학습",
+  });
+
+  // 원본 응답도 페이지 앱이 정상적으로 읽을 수 있어야 한다(clone 사용).
+  const consumed = await page.evaluate(() => window.__zzkConsumedBody);
+  expect(consumed).toMatchObject({ id: 175, spaceName: "보이저" });
+});

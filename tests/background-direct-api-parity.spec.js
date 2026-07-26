@@ -7,6 +7,8 @@ const SCRIPT_ORDER_FOR_DIRECT_GUEST_DATA = [
   "src/utils/date-time.js",
   "src/services/guest-data/normalizers.js",
   "src/services/guest-data/shared.js",
+  "src/services/lms-data/normalizers.js",
+  "src/services/lms-data/shared.js",
 ];
 
 const API_ORIGIN = "https://k8s.zzimkkong.com";

@@ -24,6 +24,8 @@ test("manifest content script order preserves global bootstrap dependencies", as
     "src/features/host-sync/shared.js",
     "src/services/guest-data/normalizers.js",
     "src/services/guest-data/shared.js",
+    "src/services/lms-data/normalizers.js",
+    "src/services/lms-data/shared.js",
     "src/features/radar/shared.js",
     "src/features/radar/workflow.js",
     "src/features/radar/form-sync.js",
@@ -129,6 +131,11 @@ const bootstrapConsumerCases = [
     scriptPath: "src/services/guest-data/shared.js",
     exportedGlobal: "__zzkGuestDataShared",
     missing: ["__zzkSharedConstants", "__zzkDateTimeUtils", "__zzkGuestDataNormalizers"],
+  },
+  {
+    scriptPath: "src/services/lms-data/shared.js",
+    exportedGlobal: "__zzkLmsDataShared",
+    missing: ["__zzkSharedConstants", "__zzkDateTimeUtils", "__zzkLmsDataNormalizers"],
   },
   {
     scriptPath: "src/page-network-hook.js",
