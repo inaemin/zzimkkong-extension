@@ -1,0 +1,249 @@
+(() => {
+  if (globalThis.__zzkLmsDataNormalizers) {
+    return;
+  }
+
+  // 개편 서비스(techcourse-lms-plus) 응답을 레이더가 쓰는 공통 형태로 바꾼다.
+  // legacy(guest-data) 정규화기와 출력 계약이 같아야 content.js가 분기 없이 렌더링한다.
+  function createLmsDataNormalizers(deps) {
+    const {
+      getProperty,
+      normalizeTargetRoomName,
+      normalizeRoomType,
+      getRoomTypeForRoomName,
+      excludedRoomSet,
+      timelineSlotMinutes,
+      minuteToHourMinute,
+    } = deps;
+
+    function normalizeSpaces(spacesResponse) {
+      if (Array.isArray(spacesResponse)) {
+        return spacesResponse;
+      }
+      const nestedSpaces = getProperty(spacesResponse, "spaces");
+      return Array.isArray(nestedSpaces) ? nestedSpaces : [];
+    }
+
+    // "HH:MM:SS" / "HH:MM" -> 분. 개편 API는 이미 KST 벽시계 시각을 주므로
+    // legacy처럼 ISO 문자열을 타임존 변환할 필요가 없다.
+    function parseTimeToMinute(value) {
+      if (typeof value !== "string") {
+        return null;
+      }
+
+      const match = value.trim().match(/^(\d{1,2}):(\d{2})(?::(\d{2}))?$/);
+      if (!match) {
+        return null;
+      }
+
+      const hour = Number(match[1]);
+      const minute = Number(match[2]);
+      if (!Number.isInteger(hour) || !Number.isInteger(minute)) {
+        return null;
+      }
+      if (hour < 0 || hour > 24 || minute < 0 || minute > 59) {
+        return null;
+      }
+
+      return hour * 60 + minute;
+    }
+
+    function normalizeFloorLabel(floorValue) {
+      const floor = Number(floorValue);
+      return Number.isInteger(floor) ? `${floor}층` : "";
+    }
+
+    function buildTargetRooms(spaces, roomType = null) {
+      const normalizedRoomType = normalizeRoomType(roomType);
+
+      return spaces
+        .filter((space) => getProperty(space, "active") !== false)
+        .map((space) => {
+          const id = Number(getProperty(space, "id"));
+          const rawName = getProperty(space, "name");
+          const name =
+            typeof rawName === "string" && rawName.trim() !== ""
+              ? rawName.trim()
+              : `공간 ${id}`;
+          const floor = Number(getProperty(space, "floor"));
+
+          return {
+            id,
+            name,
+            // 개편 API는 색상을 주지 않으므로 legacy와 같은 기본 회색을 쓴다.
+            color: "#9CA3AF",
+            floor: Number.isInteger(floor) ? floor : null,
+            floorLabel: normalizeFloorLabel(getProperty(space, "floor")),
+            windowStartMinute: parseTimeToMinute(getProperty(space, "openTime")),
+            windowEndMinute: parseTimeToMinute(getProperty(space, "closeTime")),
+            reservationUnitMinutes: Number(getProperty(space, "reservationUnitMinutes")) || null,
+            maxReservationMinutes: Number(getProperty(space, "maxReservationMinutes")) || null,
+          };
+        })
+        .filter((room) => {
+          if (!Number.isInteger(room.id)) {
+            return false;
+          }
+          const normalizedName = normalizeTargetRoomName(room.name);
+          if (excludedRoomSet instanceof Set && excludedRoomSet.has(normalizedName)) {
+            return false;
+          }
+          if (!normalizedRoomType) {
+            return true;
+          }
+          return getRoomTypeForRoomName(room.name) === normalizedRoomType;
+        })
+        .sort((a, b) => {
+          // 개편 서비스는 서버가 내려준 floor를 1순위 정렬 기준으로 삼는다.
+          const floorA = Number.isInteger(a.floor) ? a.floor : Number.MAX_SAFE_INTEGER;
+          const floorB = Number.isInteger(b.floor) ? b.floor : Number.MAX_SAFE_INTEGER;
+          if (floorA !== floorB) {
+            return floorA - floorB;
+          }
+          return a.name.localeCompare(b.name, "ko-KR") || a.id - b.id;
+        });
+    }
+
+    function normalizeReservations(reservationsValue) {
+      if (!Array.isArray(reservationsValue)) {
+        return [];
+      }
+
+      return reservationsValue
+        .map((reservation) => {
+          const startMinute = parseTimeToMinute(getProperty(reservation, "startTime"));
+          const endMinute = parseTimeToMinute(getProperty(reservation, "endTime"));
+
+          if (!Number.isInteger(startMinute) || !Number.isInteger(endMinute)) {
+            return null;
+          }
+
+          const rawPurpose = getProperty(reservation, "purpose");
+          const purpose =
+            typeof rawPurpose === "string" && rawPurpose.trim() !== "" ? rawPurpose.trim() : "";
+          const rawOwner = getProperty(reservation, "reserverName");
+          const owner =
+            typeof rawOwner === "string" && rawOwner.trim() !== "" ? rawOwner.trim() : "";
+
+          return {
+            id: Number(getProperty(reservation, "id")),
+            title: purpose || "예약",
+            owner,
+            mine: getProperty(reservation, "mine") === true,
+            startMinute,
+            endMinute,
+            startTime: minuteToHourMinute(startMinute),
+            endTime: minuteToHourMinute(endMinute),
+          };
+        })
+        .filter((reservation) => reservation != null)
+        .sort((a, b) => a.startMinute - b.startMinute);
+    }
+
+    // 개편 서비스에는 legacy의 /spaces/availability 대응 API가 없어서
+    // 예약 목록과 요청 구간의 겹침으로 예약 가능 여부를 직접 판정한다.
+    function isRoomAvailableInWindow(reservations, startMinute, endMinute) {
+      if (!Array.isArray(reservations)) {
+        return true;
+      }
+
+      return !reservations.some(
+        (reservation) =>
+          Number.isInteger(reservation?.startMinute) &&
+          Number.isInteger(reservation?.endMinute) &&
+          reservation.startMinute < endMinute &&
+          reservation.endMinute > startMinute,
+      );
+    }
+
+    function computeTimelineRange(rooms) {
+      const fallbackStartMinute = 7 * 60;
+      const fallbackEndMinute = 23 * 60;
+
+      const startCandidates = rooms
+        .map((room) => room.windowStartMinute)
+        .filter((minute) => Number.isInteger(minute));
+      const endCandidates = rooms
+        .map((room) => room.windowEndMinute)
+        .filter((minute) => Number.isInteger(minute));
+
+      const rawStartMinute =
+        startCandidates.length > 0 ? Math.min(...startCandidates) : fallbackStartMinute;
+      const rawEndMinute =
+        endCandidates.length > 0 ? Math.max(...endCandidates) : fallbackEndMinute;
+
+      const startMinute = Math.max(
+        0,
+        Math.floor(rawStartMinute / timelineSlotMinutes) * timelineSlotMinutes,
+      );
+      let endMinute = Math.min(
+        24 * 60,
+        Math.ceil(rawEndMinute / timelineSlotMinutes) * timelineSlotMinutes,
+      );
+
+      if (endMinute <= startMinute) {
+        endMinute = Math.min(24 * 60, startMinute + timelineSlotMinutes);
+      }
+
+      return {
+        startMinute,
+        endMinute,
+        slotMinutes: timelineSlotMinutes,
+        startTime: minuteToHourMinute(startMinute),
+        endTime: minuteToHourMinute(endMinute),
+      };
+    }
+
+    function buildTimelineSlots(startMinute, endMinute, slotMinutes) {
+      const slots = [];
+
+      for (let minute = startMinute; minute < endMinute; minute += slotMinutes) {
+        slots.push({
+          startMinute: minute,
+          endMinute: minute + slotMinutes,
+          label: minuteToHourMinute(minute),
+          isHourMark: minute % 60 === 0,
+        });
+      }
+
+      return slots;
+    }
+
+    function normalizeQuota(quotaResponse) {
+      if (quotaResponse == null || typeof quotaResponse !== "object") {
+        return null;
+      }
+
+      const toMinutes = (key) => {
+        const value = Number(getProperty(quotaResponse, key));
+        return Number.isFinite(value) ? value : null;
+      };
+
+      return {
+        unlimited: getProperty(quotaResponse, "unlimited") === true,
+        dailyLimitMinutes: toMinutes("dailyLimitMinutes"),
+        dailyUsedMinutes: toMinutes("dailyUsedMinutes"),
+        dailyRemainingMinutes: toMinutes("dailyRemainingMinutes"),
+        monthlyLimitMinutes: toMinutes("monthlyLimitMinutes"),
+        monthlyUsedMinutes: toMinutes("monthlyUsedMinutes"),
+        monthlyRemainingMinutes: toMinutes("monthlyRemainingMinutes"),
+      };
+    }
+
+    return {
+      normalizeSpaces,
+      buildTargetRooms,
+      normalizeReservations,
+      isRoomAvailableInWindow,
+      parseTimeToMinute,
+      normalizeFloorLabel,
+      computeTimelineRange,
+      buildTimelineSlots,
+      normalizeQuota,
+    };
+  }
+
+  globalThis.__zzkLmsDataNormalizers = {
+    createLmsDataNormalizers,
+  };
+})();
