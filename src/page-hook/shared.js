@@ -82,6 +82,8 @@
       "ownername",
       "requester",
       "requestername",
+      "reserver",
+      "reservername",
       "booker",
       "bookername",
       "guest",
@@ -604,6 +606,8 @@
       return null;
     }
 
+    // legacy는 경로에 spaceId가 들어간다. 개편 서비스는 본문의 spaceId를 쓰므로
+    // 여기서는 못 찾고, body 기반 추출 결과와 병합된다.
     const roomMatch = parsed.pathname.match(/\/spaces\/(\d+)\/reserv/i);
     if (!roomMatch) {
       return null;
@@ -688,9 +692,13 @@
   }
 
   function isReservationMutationPath(pathname) {
-    return /\/api\/guests\/maps\/[^/]+(?:\/spaces\/[^/]+)?\/reservations(?:\/[^/]+)?\/?$/i.test(
-      String(pathname || "")
-    );
+    const value = String(pathname || "");
+    // legacy 찜꽁: /api/guests/maps/{mapId}/spaces/{spaceId}/reservations
+    if (/\/api\/guests\/maps\/[^/]+(?:\/spaces\/[^/]+)?\/reservations(?:\/[^/]+)?\/?$/i.test(value)) {
+      return true;
+    }
+    // 개편 서비스: /api/space-reservations/{id}
+    return /\/api\/space-reservations(?:\/\d+)?\/?$/i.test(value);
   }
 
   function shouldEmitReservationMutationEvent(urlValue, methodValue, options = {}) {
@@ -725,7 +733,8 @@
     }
 
     const pathname = parsed.pathname.toLowerCase();
-    return pathname.includes("/api/guests/");
+    // legacy는 /api/guests/ 아래, 개편 서비스는 /api/space-reservations 아래에 예약 API가 있다.
+    return pathname.includes("/api/guests/") || pathname.includes("/api/space-reservations");
   }
 
   function isRecoverableReservationMutationSignalRequest(urlValue, methodValue) {
@@ -799,6 +808,11 @@
 
     if (reservationAttemptId) {
       payload.reservationAttemptId = reservationAttemptId;
+    }
+
+    // 개편 서비스(lms+) 예약 생성 응답 body(spaceName/floor/reserverName/시간/purpose 등).
+    if (options && options.responseBody && typeof options.responseBody === "object") {
+      payload.responseBody = options.responseBody;
     }
 
     return payload;

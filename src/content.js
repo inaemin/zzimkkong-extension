@@ -17,6 +17,7 @@
     "__zzkSlackWorkflow",
     "__zzkSlackSuccessFlow",
     "__zzkGuestDataShared",
+    "__zzkLmsDataShared",
   ];
   const missingBootstrapGlobals = requiredBootstrapGlobals.filter((globalName) => {
     return !globalThis[globalName] || typeof globalThis[globalName] !== "object";
@@ -78,6 +79,9 @@
     isGuestSuccessPage,
     isGuestPage,
     getSharingMapId,
+    isLmsService,
+    isRadarSupportedPage,
+    getServiceKind,
   } = globalThis.__zzkRouteUtils;
   const {
     normalizeSlackFieldText,
@@ -133,6 +137,7 @@
     MAP_CALENDAR_ALWAYS_OPEN_STORAGE_KEY,
     MAP_CALENDAR_SPACE_TAB_STORAGE_KEY,
     MAP_CALENDAR_WIDTH_STORAGE_KEY,
+    MAP_CALENDAR_OFFSET_STORAGE_KEY,
     MAP_CALENDAR_MIN_WIDTH,
     MAP_CALENDAR_VIEWPORT_MARGIN,
     MAP_CALENDAR_CURRENT_TIME_SCROLL_LEAD_MINUTES,
@@ -148,7 +153,9 @@
     DEFAULT_SLACK_REMINDER_LEAD_TIME_MINUTES,
     SLACK_REMINDER_LEAD_TIME_OPTIONS,
     TIME_STEP_MINUTES,
+    LMS_DEFAULT_RESERVATION_MINUTES,
     CALENDAR_SLOT_MIN_WIDTH,
+    LMS_CALENDAR_SLOT_MIN_WIDTH,
     CALENDAR_SLOT_GAP,
     CALENDAR_HOUR_BOUNDARY_LINE_WIDTH,
     CALENDAR_HOUR_BOUNDARY_SIDE_GAP,
@@ -173,6 +180,35 @@
     normalizeMapCalendarSpaceTab,
     normalizeFetchRoomType,
   } = globalThis.__zzkSharedConstants;
+
+  // 드래그로 옮긴 모달 위치({x,y})를 저장소에 JSON 으로 보관한다.
+  function readStoredMapCalendarOffset() {
+    const fallback = { x: 0, y: 0 };
+    const raw = readStoredText(MAP_CALENDAR_OFFSET_STORAGE_KEY, "");
+    if (!raw) {
+      return fallback;
+    }
+    try {
+      const parsed = JSON.parse(raw);
+      const x = Number(parsed?.x);
+      const y = Number(parsed?.y);
+      if (Number.isFinite(x) && Number.isFinite(y)) {
+        return { x, y };
+      }
+    } catch (error) {
+      // 파싱 실패 시 기본 위치를 쓴다.
+    }
+    return fallback;
+  }
+
+  function persistMapCalendarOffset(offset) {
+    const x = Number(offset?.x);
+    const y = Number(offset?.y);
+    if (!Number.isFinite(x) || !Number.isFinite(y)) {
+      return;
+    }
+    writeStoredText(MAP_CALENDAR_OFFSET_STORAGE_KEY, JSON.stringify({ x, y }));
+  }
 
   const state = {
     mounted: false,
@@ -210,7 +246,8 @@
     mapCalendarCollapsed: false,
     mapCalendarWidth: readStoredNumber(MAP_CALENDAR_WIDTH_STORAGE_KEY, null),
     mapCalendarCurrentTimeScrollDate: null,
-    mapCalendarOffset: { x: 0, y: 0 },
+    // 드래그로 옮긴 모달 위치를 저장소에서 복원한다.
+    mapCalendarOffset: readStoredMapCalendarOffset(),
     slotSelection: null,
     slotHover: null,
     appliedSelection: null,
@@ -296,7 +333,7 @@
     installReservationOwnerWatcher();
     installHostTimePickerInteractionWatcher();
 
-    if (isGuestPage()) {
+    if (isRadarSupportedPage()) {
       if (shouldInstallPageReservationNetworkHook()) {
         installPageReservationNetworkHook();
       }
@@ -398,7 +435,7 @@
     if (!(document.body instanceof HTMLBodyElement)) {
       return;
     }
-    if (!isGuestPage()) {
+    if (!isRadarSupportedPage()) {
       restorePageReservationNetworkHook();
       teardownGuestUi({
         preserveReservationContext: isGuestReservationFlowPage(),
@@ -572,7 +609,7 @@
     document.addEventListener(
       "click",
       (event) => {
-        if (!isGuestPage() || state.topNavForwarding) {
+        if (!isRadarSupportedPage() || state.topNavForwarding) {
           return;
         }
         if (!(event instanceof MouseEvent)) {
@@ -651,7 +688,7 @@
   }
 
   async function refreshAvailability() {
-    if (!isGuestPage()) {
+    if (!isRadarSupportedPage()) {
       return;
     }
 
@@ -732,6 +769,7 @@
       const response = await sendMessage({
         type: "ZZK_FETCH_AVAILABILITY",
         payload: {
+          serviceKind: getServiceKind(),
           sharingMapId,
           date,
           startTime,
@@ -1075,7 +1113,7 @@
   }
 
   async function refreshDailySchedule(date) {
-    if (!isGuestPage() || !state.scheduleOverlayEnabled || !date) {
+    if (!isRadarSupportedPage() || !state.scheduleOverlayEnabled || !date) {
       return;
     }
 
@@ -1139,6 +1177,7 @@
       const response = await sendMessage({
         type: "ZZK_FETCH_DAILY_SCHEDULE",
         payload: {
+          serviceKind: getServiceKind(),
           sharingMapId,
           date: normalizedDate,
           roomType: activeTab,
@@ -1171,12 +1210,135 @@
         return;
       }
       renderMapCalendarOverlay(scheduleData);
+    } catch (error) {
+      // 현황을 못 불러와도 모달은 떠 있어야 하므로, 조용히 삼키지 말고 에러 껍데기를 그린다.
+      if (
+        state.activeScheduleDate !== normalizedDate ||
+        state.activeScheduleTab !== activeTab ||
+        getSharingMapId() !== sharingMapId
+      ) {
+        return;
+      }
+      const message = getErrorMessage(error);
+      if (state.elements) {
+        setStatus(message, "error");
+      }
+      renderMapCalendarErrorOverlay(message);
     } finally {
       if (state.scheduleInflightByDate.get(scopeKey) === inflight) {
         state.scheduleInflightByDate.delete(scopeKey);
       }
       setScheduleLoadingDate(normalizedDate, false, activeTab);
     }
+  }
+
+  // 예약 현황을 못 불러와도(예: 인증 실패로 API가 403) 모달 껍데기는 떠야 한다.
+  // 데이터 대신 에러 메시지와 다시 시도 버튼을 담은 최소 모달을 그린다.
+  function renderMapCalendarErrorOverlay(errorMessage) {
+    if (!state.scheduleOverlayEnabled || !isMapCalendarModalOpenRequested()) {
+      return;
+    }
+    if (state.mapCalendarSuppressedBySlack) {
+      return;
+    }
+
+    const modalRoot = document.body;
+    if (!(modalRoot instanceof HTMLBodyElement)) {
+      return;
+    }
+
+    ensureMapCalendarStyle();
+
+    let overlay = document.getElementById(MAP_CALENDAR_OVERLAY_ID);
+    if (!(overlay instanceof HTMLElement) || overlay.parentElement !== modalRoot) {
+      if (overlay instanceof HTMLElement) {
+        overlay.remove();
+      }
+      overlay = document.createElement("section");
+      overlay.id = MAP_CALENDAR_OVERLAY_ID;
+      modalRoot.appendChild(overlay);
+    }
+
+    applyMapCalendarOverlayOffset(overlay);
+    updateMapCalendarLauncherState();
+    document
+      .querySelectorAll(".zzk-map-calendar-date-popover-floating")
+      .forEach((element) => element.remove());
+    overlay.textContent = "";
+
+    const shell = document.createElement("div");
+    shell.className = "zzk-map-calendar-shell";
+    overlay.appendChild(shell);
+
+    const card = document.createElement("div");
+    card.className = "zzk-map-calendar-card";
+    ["pointerdown", "mousedown", "mouseup", "click", "dblclick", "touchstart", "touchend"].forEach(
+      (eventName) => {
+        card.addEventListener(eventName, (event) => event.stopPropagation());
+      },
+    );
+    shell.appendChild(card);
+
+    const header = document.createElement("div");
+    header.className = "zzk-map-calendar-header";
+    card.appendChild(header);
+    bindDraggableHeader({
+      header,
+      element: overlay,
+      getOffset: () => state.mapCalendarOffset,
+      setOffset: (nextOffset) => {
+        state.mapCalendarOffset = nextOffset;
+        persistMapCalendarOffset(nextOffset);
+      },
+      applyOffset: () => {
+        applyMapCalendarOverlayOffset(overlay);
+      },
+    });
+
+    const titleControls = document.createElement("div");
+    titleControls.className = "zzk-map-calendar-title-controls";
+    const title = document.createElement("strong");
+    title.textContent = "예약 현황";
+    titleControls.appendChild(title);
+    header.appendChild(titleControls);
+
+    const headerRight = document.createElement("div");
+    headerRight.className = "zzk-map-calendar-header-right";
+    header.appendChild(headerRight);
+
+    const closeButton = document.createElement("button");
+    closeButton.type = "button";
+    closeButton.className = "zzk-map-calendar-toggle";
+    closeButton.textContent = "닫기";
+    closeButton.setAttribute("aria-label", "레이더 닫기");
+    closeButton.addEventListener("click", () => {
+      state.mapCalendarVisible = false;
+      state.lastAutoOpenPath = null;
+      removeMapCalendarOverlay();
+    });
+    headerRight.appendChild(closeButton);
+
+    const body = document.createElement("div");
+    body.className = "zzk-map-calendar-body zzk-map-calendar-error-body";
+    const errorBox = document.createElement("div");
+    errorBox.className = "zzk-map-calendar-error";
+    const errorText = document.createElement("p");
+    errorText.className = "zzk-map-calendar-error-message";
+    errorText.textContent =
+      errorMessage || "예약 현황을 불러오지 못했습니다.";
+    errorBox.appendChild(errorText);
+
+    const retryButton = document.createElement("button");
+    retryButton.type = "button";
+    retryButton.className = "zzk-map-calendar-error-retry";
+    retryButton.textContent = "다시 시도";
+    retryButton.addEventListener("click", () => {
+      openMapCalendarModal();
+    });
+    errorBox.appendChild(retryButton);
+
+    body.appendChild(errorBox);
+    card.appendChild(body);
   }
 
   function renderMapCalendarOverlay(scheduleData) {
@@ -1228,16 +1390,16 @@
       modalRoot.appendChild(overlay);
     }
 
+    // 리렌더 시 가로 스크롤 위치를 유지하려면, 스크롤이 실제로 일어나는 요소
+    // (2-pane 의 timeline-pane)의 scrollLeft 를 보존해야 한다. body 를 읽으면 항상 0 이라
+    // 리렌더마다 맨 앞으로 튀는 버그가 생긴다.
+    const previousScrollEl = getMapCalendarScrollElement(overlay);
     const previousBody = overlay.querySelector(".zzk-map-calendar-body");
     const preservedBodyScroll = {
       left:
-        previousBody instanceof HTMLElement
-          ? previousBody.scrollLeft
-          : 0,
+        previousScrollEl instanceof HTMLElement ? previousScrollEl.scrollLeft : 0,
       top:
-        previousBody instanceof HTMLElement
-          ? previousBody.scrollTop
-          : 0,
+        previousBody instanceof HTMLElement ? previousBody.scrollTop : 0,
     };
 
     applyMapCalendarOverlayOffset(overlay);
@@ -1394,6 +1556,7 @@
       getOffset: () => state.mapCalendarOffset,
       setOffset: (nextOffset) => {
         state.mapCalendarOffset = nextOffset;
+        persistMapCalendarOffset(nextOffset);
       },
       applyOffset: () => {
         applyMapCalendarOverlayOffset(overlay);
@@ -1970,55 +2133,82 @@
       hasTerminalHourBoundary,
     );
 
+    // 2-pane 구조:
+    //  - gridWrap(flex): [labelPane(고정)] [timelinePane(가로 스크롤)]
+    //  - 라벨 열(층/회의실)은 스크롤 밖 labelPane 에 두어 가로 스크롤바가 라벨 아래로
+    //    번지지 않게 한다. 타임블록/정시 헤더는 timelinePane 안에서만 스크롤된다.
+    //  - 두 pane 의 각 행은 동일한 고정 높이(--zzk-cal-row-h)로 렌더해 세로 정렬을 맞춘다.
     const gridWrap = document.createElement("div");
     gridWrap.className = "zzk-map-calendar-grid-wrap";
-    gridWrap.style.minWidth = `${Math.max(
-      720,
-      CALENDAR_FLOOR_COL_WIDTH +
-        CALENDAR_ROW_GAP +
-        CALENDAR_ROOM_COL_WIDTH +
-        CALENDAR_ROW_GAP +
-        timelineLayout.trackWidth +
-        CALENDAR_SIDE_MARGIN * 2,
-    )}px`;
     body.appendChild(gridWrap);
 
-    const grid = document.createElement("div");
-    grid.className = "zzk-map-calendar-grid";
-    gridWrap.appendChild(grid);
+    const labelPane = document.createElement("div");
+    labelPane.className = "zzk-map-calendar-label-pane";
+    gridWrap.appendChild(labelPane);
 
+    const timelinePane = document.createElement("div");
+    timelinePane.className = "zzk-map-calendar-timeline-pane";
+    gridWrap.appendChild(timelinePane);
+
+    // 타임블록 트랙(스크롤되는 콘텐츠). 정시 헤더/경계선/세로선이 이 안에서 함께 스크롤된다.
+    const timelineTrack = document.createElement("div");
+    timelineTrack.className = "zzk-map-calendar-timeline-track";
+    timelineTrack.style.minWidth = `${Math.max(
+      320,
+      timelineLayout.trackWidth + CALENDAR_SIDE_MARGIN,
+    )}px`;
+    timelinePane.appendChild(timelineTrack);
+
+    // 정시 세로 경계선(hour boundary) 레이어 — 타임블록 트랙 안에 절대배치.
     const boundaryLayer = document.createElement("div");
     boundaryLayer.className = "zzk-map-calendar-hour-boundary-layer";
     const boundaryTrack = document.createElement("div");
     boundaryTrack.className = "zzk-map-calendar-hour-boundary-track";
     boundaryTrack.style.gridTemplateColumns = timelineLayout.templateColumns;
     boundaryLayer.appendChild(boundaryTrack);
-    gridWrap.appendChild(boundaryLayer);
+    timelineTrack.appendChild(boundaryLayer);
     renderMapCalendarHourBoundaryCells(
       boundaryTrack,
       timelineLayout.boundaryColumnStarts,
     );
 
+    // 라벨 pane 의 그리드(층/회의실 열).
+    const labelGrid = document.createElement("div");
+    labelGrid.className = "zzk-map-calendar-grid zzk-map-calendar-label-grid";
+    labelPane.appendChild(labelGrid);
+
+    // 층↔회의실 세로 구분선(라벨 pane 안).
     const dividerLayer = document.createElement("div");
     dividerLayer.className = "zzk-map-calendar-divider-layer";
     const dividerTrack = document.createElement("div");
     dividerTrack.className = "zzk-map-calendar-divider-track";
     dividerLayer.appendChild(dividerTrack);
-    gridWrap.appendChild(dividerLayer);
+    labelPane.appendChild(dividerLayer);
 
-    const axisRow = document.createElement("div");
-    axisRow.className = "zzk-map-calendar-axis-row";
-    grid.appendChild(axisRow);
+    // 타임블록 트랙의 그리드(정시 헤더 + 슬롯 행들).
+    const grid = document.createElement("div");
+    grid.className = "zzk-map-calendar-grid zzk-map-calendar-timeline-grid";
+    timelineTrack.appendChild(grid);
+
+    // 라벨 pane 의 헤더 행(층 / 회의실 제목).
+    const axisLabelRow = document.createElement("div");
+    axisLabelRow.className = "zzk-map-calendar-axis-row zzk-map-calendar-label-row";
+    labelGrid.appendChild(axisLabelRow);
 
     const axisFloor = document.createElement("div");
     axisFloor.className = "zzk-map-calendar-floor-name axis";
     axisFloor.textContent = "층";
-    axisRow.appendChild(axisFloor);
+    axisLabelRow.appendChild(axisFloor);
 
     const axisRoomLabel = document.createElement("div");
     axisRoomLabel.className = "zzk-map-calendar-room-name axis";
     axisRoomLabel.textContent = tabLabel;
-    axisRow.appendChild(axisRoomLabel);
+    axisLabelRow.appendChild(axisRoomLabel);
+
+    // 타임블록 트랙의 헤더 행(정시 라벨).
+    const axisRow = document.createElement("div");
+    axisRow.className = "zzk-map-calendar-axis-row zzk-map-calendar-timeline-row";
+    grid.appendChild(axisRow);
 
     const axisSlots = document.createElement("div");
     axisSlots.className = "zzk-map-calendar-slots";
@@ -2039,57 +2229,69 @@
     });
 
     let currentFloorKey = null;
-    let currentFloorRooms = null;
+    let currentLabelRooms = null;
+    let currentTimelineRooms = null;
     let previousMappedFloorLabel = "";
+
+    // 라벨 pane / 타임블록 pane 에 동일 구조의 층 그룹을 만든다(행 높이가 같아 정렬됨).
+    const makeFloorGroup = (isFloorDivider) => {
+      const group = document.createElement("div");
+      group.className = "zzk-map-calendar-floor-group floor-boundary";
+      if (isFloorDivider) {
+        group.classList.add("floor-divider");
+      }
+      const roomsHost = document.createElement("div");
+      roomsHost.className = "zzk-map-calendar-floor-rooms";
+      return { group, roomsHost };
+    };
 
     rooms.forEach((room) => {
       const floorInfo = resolveMapCalendarRoomFloor(room);
 
       if (
-        !(currentFloorRooms instanceof HTMLElement) ||
+        !(currentTimelineRooms instanceof HTMLElement) ||
         currentFloorKey !== floorInfo.floorKey
       ) {
         currentFloorKey = floorInfo.floorKey;
-
-        const floorGroup = document.createElement("div");
-        floorGroup.className = "zzk-map-calendar-floor-group";
-        if (
+        const isFloorDivider = Boolean(
           floorInfo.floorLabel &&
-          previousMappedFloorLabel &&
-          previousMappedFloorLabel !== floorInfo.floorLabel
-        ) {
-          floorGroup.classList.add("floor-boundary");
-        }
+            previousMappedFloorLabel &&
+            previousMappedFloorLabel !== floorInfo.floorLabel,
+        );
 
+        // 라벨 pane: 층 이름 열 + 회의실 이름 행들.
+        const labelFloor = makeFloorGroup(isFloorDivider);
         const floorName = document.createElement("div");
         floorName.className = "zzk-map-calendar-floor-name";
         floorName.textContent = floorInfo.floorLabel;
-        floorGroup.appendChild(floorName);
+        labelFloor.group.appendChild(floorName);
+        labelFloor.group.appendChild(labelFloor.roomsHost);
+        labelGrid.appendChild(labelFloor.group);
+        currentLabelRooms = labelFloor.roomsHost;
 
-        const floorRooms = document.createElement("div");
-        floorRooms.className = "zzk-map-calendar-floor-rooms";
-        floorGroup.appendChild(floorRooms);
-
-        grid.appendChild(floorGroup);
-        currentFloorRooms = floorRooms;
+        // 타임블록 pane: 같은 층 그룹(슬롯 행들). floor-name 은 없지만 구조/높이를 맞춘다.
+        const timelineFloor = makeFloorGroup(isFloorDivider);
+        timelineFloor.group.classList.add("zzk-map-calendar-floor-group-timeline");
+        timelineFloor.group.appendChild(timelineFloor.roomsHost);
+        grid.appendChild(timelineFloor.group);
+        currentTimelineRooms = timelineFloor.roomsHost;
 
         if (floorInfo.floorLabel) {
           previousMappedFloorLabel = floorInfo.floorLabel;
         }
       }
 
-      const row = document.createElement("div");
-      row.className = "zzk-map-calendar-row";
-      currentFloorRooms.appendChild(row);
-
       const roomSelectionLocked =
         editLockedRoomConstraint != null &&
         !doesRoomMatchEditLockedConstraint(room, editLockedRoomConstraint);
-      if (roomSelectionLocked) {
-        row.classList.add("room-locked-disabled");
-        row.setAttribute("aria-disabled", "true");
-      }
 
+      // 라벨 pane 의 회의실 이름 행.
+      const labelRow = document.createElement("div");
+      labelRow.className = "zzk-map-calendar-row zzk-map-calendar-label-row";
+      if (roomSelectionLocked) {
+        labelRow.classList.add("room-locked-disabled");
+        labelRow.setAttribute("aria-disabled", "true");
+      }
       const roomName = document.createElement("div");
       roomName.className = "zzk-map-calendar-room-name";
       renderRoomLabel(roomName, room, {
@@ -2097,7 +2299,20 @@
         titleMode: "overlay",
       });
       roomName.title = `공간 ID: ${room.id}`;
-      row.appendChild(roomName);
+      labelRow.appendChild(roomName);
+      currentLabelRooms.appendChild(labelRow);
+
+      // 타임블록 pane 의 슬롯 행. hover/selection 은 이 행에 적용된다.
+      const row = document.createElement("div");
+      row.className = "zzk-map-calendar-row zzk-map-calendar-timeline-row";
+      currentTimelineRooms.appendChild(row);
+      if (roomSelectionLocked) {
+        row.classList.add("room-locked-disabled");
+        row.setAttribute("aria-disabled", "true");
+      }
+      // hover 시 라벨 행도 같이 강조하려고 서로 참조를 걸어 둔다.
+      row.__zzkLabelRow = labelRow;
+      labelRow.__zzkTimelineRow = row;
 
       const slots = document.createElement("div");
       slots.className = "zzk-map-calendar-slots";
@@ -2220,6 +2435,10 @@
 
       if (hoverMatchesRoom) {
         row.classList.add("hovered");
+        // 라벨 pane 의 같은 행도 강조해 회의실 이름 셀에도 파란 배경이 보이게 한다.
+        if (row.__zzkLabelRow instanceof HTMLElement) {
+          row.__zzkLabelRow.classList.add("hovered");
+        }
       }
 
       let hoverStartIndex = -1;
@@ -2231,10 +2450,30 @@
         );
 
         if (hoverStartIndex >= 0 && slotMetas[hoverStartIndex].isSelectable) {
-          const hardMaxIndex = Math.min(
-            slotMetas.length - 1,
-            hoverStartIndex + MAX_RESERVATION_BLOCKS - 1,
-          );
+          // lms+ 는 클릭 시 기본 60분(30분 슬롯 2칸)을 선택하므로, hover 미리보기도
+          // 같은 범위(다음 칸이 막혀 있으면 1칸)를 보여줘 클릭 결과와 일치시킨다.
+          // legacy 는 기존대로 연속 선택 가능 구간을 최대 MAX_RESERVATION_BLOCKS 까지 미리보기한다.
+          let hardMaxIndex;
+          if (isLmsService()) {
+            const hoverStartMinute = timeline[hoverStartIndex].startMinute;
+            const hoverTargetEndMinute =
+              hoverStartMinute + LMS_DEFAULT_RESERVATION_MINUTES;
+            let lmsMaxIndex = hoverStartIndex;
+            for (
+              let candidateIndex = hoverStartIndex;
+              candidateIndex < slotMetas.length &&
+              timeline[candidateIndex].endMinute <= hoverTargetEndMinute;
+              candidateIndex += 1
+            ) {
+              lmsMaxIndex = candidateIndex;
+            }
+            hardMaxIndex = Math.min(slotMetas.length - 1, lmsMaxIndex);
+          } else {
+            hardMaxIndex = Math.min(
+              slotMetas.length - 1,
+              hoverStartIndex + MAX_RESERVATION_BLOCKS - 1,
+            );
+          }
 
           for (let index = hoverStartIndex; index <= hardMaxIndex; index += 1) {
             if (!slotMetas[index].isSelectable) {
@@ -2271,6 +2510,8 @@
         } = slotMeta;
         const slotElement = document.createElement("div");
         slotElement.className = "zzk-map-calendar-slot";
+        // 슬롯 시작 시각을 데이터 속성으로 남겨 두면 테스트/디버깅에서 특정 블록을 집기 쉽다.
+        slotElement.dataset.zzkSlotStart = slot.label;
         slotElement.style.gridColumn = String(
           timelineLayout.slotColumnStarts[index],
         );
@@ -2402,10 +2643,30 @@
             return;
           }
 
-          const hardMaxIndex = Math.min(
-            slotMetas.length - 1,
-            index + MAX_RESERVATION_BLOCKS - 1,
-          );
+          // lms+ 는 클릭 한 번에 기본 60분(30분 슬롯 2칸)을 선택하되,
+          // 다음 칸이 예약 등으로 막혀 있으면 30분만 선택한다.
+          // legacy 는 기존대로 연속 선택 가능 구간을 최대 MAX_RESERVATION_BLOCKS 까지 잡는다.
+          const clickStartMinute = timeline[index].startMinute;
+          let hardMaxIndex;
+          if (isLmsService()) {
+            const lmsTargetEndMinute = clickStartMinute + LMS_DEFAULT_RESERVATION_MINUTES;
+            let lmsMaxIndex = index;
+            for (
+              let candidateIndex = index;
+              candidateIndex < slotMetas.length &&
+              timeline[candidateIndex].endMinute <= lmsTargetEndMinute;
+              candidateIndex += 1
+            ) {
+              lmsMaxIndex = candidateIndex;
+            }
+            hardMaxIndex = Math.min(slotMetas.length - 1, lmsMaxIndex);
+          } else {
+            hardMaxIndex = Math.min(
+              slotMetas.length - 1,
+              index + MAX_RESERVATION_BLOCKS - 1,
+            );
+          }
+
           let autoEndIndex = index;
 
           for (
@@ -2436,10 +2697,12 @@
       });
     });
 
+    const scrollEl = getMapCalendarScrollElement(overlay);
     syncMapCalendarBodyScrollState(body);
     applyMapCalendarWidth(overlay);
-    if (preservedBodyScroll.left !== 0) {
-      body.scrollLeft = preservedBodyScroll.left;
+    // 가로 스크롤 위치는 실제 스크롤 요소(timeline-pane)에 복원한다.
+    if (preservedBodyScroll.left !== 0 && scrollEl instanceof HTMLElement) {
+      scrollEl.scrollLeft = preservedBodyScroll.left;
     }
     if (preservedBodyScroll.top !== 0) {
       body.scrollTop = preservedBodyScroll.top;
@@ -2466,13 +2729,18 @@
     }
 
     // 헤더 높이는 폰트/줄바꿈에 따라 달라지므로 실제 DOM 에서 측정한다.
-    const axisHeight =
-      axisRow.getBoundingClientRect().bottom - gridWrap.getBoundingClientRect().top;
+    const gridWrapTop = gridWrap.getBoundingClientRect().top;
+    const axisHeight = axisRow.getBoundingClientRect().bottom - gridWrapTop;
     if (!Number.isFinite(axisHeight) || axisHeight <= 0) {
       return;
     }
 
     gridWrap.style.setProperty("--zzk-axis-row-height", `${Math.round(axisHeight)}px`);
+
+    // 정시 세로선을 층/회의실 사이 세로 구분선(divider-track)과 동일하게
+    // 헤더 맨 위까지 올려 보이게 한다. divider-track 이 top:0 으로 헤더를 관통하므로
+    // 정시선도 위쪽을 자르지 않고(0) 같은 높이로 맞춘다.
+    gridWrap.style.setProperty("--zzk-hour-boundary-clip-top", "0px");
   }
 
   function buildEditLockedRoomConstraint(rooms) {
@@ -2895,8 +3163,26 @@
       return;
     }
 
+    const pane = bodyElement.querySelector(".zzk-map-calendar-timeline-pane");
+
     const update = () => {
-      const overflowDelta = bodyElement.scrollHeight - bodyElement.clientHeight;
+      // 가로 스크롤은 timeline-pane 에서만 일어난다. 스크롤바가 마지막 타임블록 행
+      // 위에 겹쳐 클릭을 방해하지 않도록, 가로 스크롤이 실제로 생길 때만 pane 하단에
+      // 스크롤바 전용 공백(gutter)을 확보한다. gutter 는 트랙 padding 으로 들어가
+      // scrollHeight 를 늘리므로, 세로 스크롤 판정에서는 그만큼 빼준다.
+      let hasHScroll = false;
+      let gutter = 0;
+      if (pane instanceof HTMLElement) {
+        hasHScroll = pane.scrollWidth - pane.clientWidth > 2;
+        pane.classList.toggle("zzk-map-calendar-timeline-pane-hscroll", hasHScroll);
+        if (hasHScroll) {
+          const raw = getComputedStyle(bodyElement).getPropertyValue("--zzk-hscroll-gutter");
+          gutter = parseFloat(raw) || 12;
+        }
+      }
+
+      // gutter 만큼의 넘침은 스크롤바 자리이지 실제 콘텐츠 넘침이 아니므로 제외한다.
+      const overflowDelta = bodyElement.scrollHeight - bodyElement.clientHeight - gutter;
       bodyElement.classList.toggle(
         "zzk-map-calendar-body-scrollable",
         overflowDelta > 2,
@@ -2925,6 +3211,11 @@
     const boundaryColumnStarts = [];
     let trackWidth = 0;
 
+    // lms+ 는 30분 슬롯이라 시간당 2칸뿐이므로 클릭하기 좋게 더 넓게 그린다.
+    const slotWidth = isLmsService()
+      ? LMS_CALENDAR_SLOT_MIN_WIDTH
+      : CALENDAR_SLOT_MIN_WIDTH;
+
     const addColumn = (width) => {
       columns.push(width);
       trackWidth += width;
@@ -2937,12 +3228,18 @@
       addColumn(CALENDAR_HOUR_BOUNDARY_SIDE_GAP);
     };
 
+    // 첫 슬롯(보통 07:00) 앞에는 정시 세로 구분선을 그리지 않는다(회의실↔타임블록
+    // 세로 구분선과 겹쳐 이중선처럼 보이므로). 다만 다른 정시들은 앞뒤로 경계 여백을
+    // 갖는데 07:00 만 여백 없이 붙으면 어색하므로, 선 없이 '여백'만 넣어 리듬을 맞춘다.
+    // 여백 폭은 정시 경계 세그먼트(gap + line + gap)와 동일하게 잡는다.
     if (timeline[0]?.isHourMark) {
-      addBoundarySegment();
+      addColumn(
+        CALENDAR_HOUR_BOUNDARY_SIDE_GAP * 2 + CALENDAR_HOUR_BOUNDARY_LINE_WIDTH,
+      );
     }
 
     slotColumnStarts.push(columns.length + 1);
-    addColumn(CALENDAR_SLOT_MIN_WIDTH);
+    addColumn(slotWidth);
 
     for (let index = 1; index < timeline.length; index += 1) {
       if (timeline[index]?.isHourMark) {
@@ -2952,7 +3249,7 @@
       }
 
       slotColumnStarts.push(columns.length + 1);
-      addColumn(CALENDAR_SLOT_MIN_WIDTH);
+      addColumn(slotWidth);
     }
 
     if (hasTerminalHourBoundary) {
@@ -3609,12 +3906,58 @@
         min-height: 0;
         max-height: none;
         position: relative;
-        overflow-x: auto;
+        /* 가로 스크롤은 안쪽 timeline-pane 에서 처리한다. body 는 세로만. */
+        overflow-x: hidden;
         overflow-y: hidden;
+        box-sizing: border-box;
       }
 
       #${MAP_CALENDAR_OVERLAY_ID} .zzk-map-calendar-body.zzk-map-calendar-body-scrollable {
         overflow-y: auto;
+      }
+
+      #${MAP_CALENDAR_OVERLAY_ID} .zzk-map-calendar-body.zzk-map-calendar-error-body {
+        overflow: hidden;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 28px 20px;
+      }
+
+      #${MAP_CALENDAR_OVERLAY_ID} .zzk-map-calendar-error {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 14px;
+        max-width: 320px;
+        text-align: center;
+      }
+
+      #${MAP_CALENDAR_OVERLAY_ID} .zzk-map-calendar-error-message {
+        margin: 0;
+        font-size: 13px;
+        line-height: 1.6;
+        color: #b91c1c;
+        white-space: pre-line;
+        word-break: keep-all;
+      }
+
+      #${MAP_CALENDAR_OVERLAY_ID} .zzk-map-calendar-error-retry {
+        appearance: none;
+        border: 1px solid rgba(2, 132, 199, 0.5);
+        background: #ffffff;
+        color: #0284c7;
+        font-size: 12px;
+        font-weight: 700;
+        padding: 7px 16px;
+        border-radius: 8px;
+        cursor: pointer;
+        transition: background 120ms ease, color 120ms ease;
+      }
+
+      #${MAP_CALENDAR_OVERLAY_ID} .zzk-map-calendar-error-retry:hover {
+        background: #0284c7;
+        color: #ffffff;
       }
 
       #${MAP_CALENDAR_OVERLAY_ID} .zzk-map-calendar-loading-overlay {
@@ -3673,72 +4016,87 @@
         }
       }
 
+      /*
+       * === 2-pane 레이아웃 ===
+       * grid-wrap 을 좌우 flex 로 나눈다.
+       *  - label-pane: 층/회의실 라벨(스크롤 밖, 고정)
+       *  - timeline-pane: 정시 헤더 + 타임블록(가로 스크롤). 스크롤바가 이 pane 아래에만 생긴다.
+       * 두 pane 의 각 행은 같은 고정 높이(--zzk-cal-row-h)로 그려 세로 정렬을 맞춘다.
+       */
       #${MAP_CALENDAR_OVERLAY_ID} .zzk-map-calendar-grid-wrap {
         position: relative;
-        display: grid;
+        display: flex;
+        align-items: stretch;
+        --zzk-cal-row-h: 26px;
+        --zzk-cal-header-h: 24px;
+        --zzk-hscroll-gutter: 12px;
       }
 
-      #${MAP_CALENDAR_OVERLAY_ID} .zzk-map-calendar-grid-wrap > .zzk-map-calendar-grid,
-      #${MAP_CALENDAR_OVERLAY_ID} .zzk-map-calendar-grid-wrap > .zzk-map-calendar-hour-boundary-layer,
-      #${MAP_CALENDAR_OVERLAY_ID} .zzk-map-calendar-grid-wrap > .zzk-map-calendar-divider-layer {
-        grid-area: 1 / 1;
-      }
-
-      #${MAP_CALENDAR_OVERLAY_ID} .zzk-map-calendar-hour-boundary-layer {
+      #${MAP_CALENDAR_OVERLAY_ID} .zzk-map-calendar-label-pane {
+        /* 층 + gap + 회의실 열 고정 너비. */
+        flex: 0 0 calc(
+          var(--zzk-floor-col-width) + var(--zzk-row-gap) + var(--zzk-room-col-width)
+        );
+        width: calc(
+          var(--zzk-floor-col-width) + var(--zzk-row-gap) + var(--zzk-room-col-width)
+        );
         position: relative;
+        z-index: 2;
+        background: #ffffff;
+        /* 라벨 열 고정 폭 밖으로는 어떤 것도(타임블록 등) 넘치지 못하게 잘라낸다. */
+        overflow: hidden;
+        /* 회의실↔타임블록 경계 세로선(오른쪽 테두리). */
+        border-right: 1px solid var(--zzk-section-divider-color);
+      }
+
+      #${MAP_CALENDAR_OVERLAY_ID} .zzk-map-calendar-timeline-pane {
+        flex: 1 1 auto;
+        min-width: 0;
+        overflow-x: auto;
+        overflow-y: hidden;
+      }
+
+      /* 가로 스크롤이 생길 때만 트랙 하단에 스크롤바 전용 공백(gutter)을 둔다.
+         가로 스크롤바가 이 빈 공간에 놓여 마지막 타임블록 행의 클릭을 방해하지 않는다.
+         이 gutter 는 세로 스크롤 판정에서 제외된다(syncMapCalendarBodyScrollState). */
+      #${MAP_CALENDAR_OVERLAY_ID} .zzk-map-calendar-timeline-pane-hscroll
+        .zzk-map-calendar-timeline-track {
+        padding-bottom: var(--zzk-hscroll-gutter, 12px);
+      }
+
+      /* 정시 세로선이 빈 gutter 까지 내려가지 않고 마지막 행에서 멈추게 한다. */
+      #${MAP_CALENDAR_OVERLAY_ID} .zzk-map-calendar-timeline-pane-hscroll
+        .zzk-map-calendar-hour-boundary-layer {
+        bottom: var(--zzk-hscroll-gutter, 12px);
+      }
+
+      #${MAP_CALENDAR_OVERLAY_ID} .zzk-map-calendar-timeline-track {
+        position: relative;
+      }
+
+      /* 정시 세로 경계선 레이어 — 타임블록 트랙 전체에 절대배치. */
+      #${MAP_CALENDAR_OVERLAY_ID} .zzk-map-calendar-hour-boundary-layer {
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
         z-index: 1;
         pointer-events: none;
-        display: flex;
-        /*
-         * 이 레이어는 grid-area 1/1 로 헤더(축) 행까지 덮는다.
-         * 그대로 두면 정시 세로선이 헤더 위로 삐죽 튀어나와 보이므로
-         * 헤더 높이만큼 위쪽을 잘라내 타임블록 영역에서만 보이게 한다.
-         * (height 를 줄이지 않고 clip 만 해서 트랙 자체는 전체 높이를 유지한다.)
-         */
-        clip-path: inset(var(--zzk-axis-row-height, 0px) 0 0 0);
+        /* 정시선이 시각 텍스트 아래까지만 올라오도록 위쪽을 잘라낸다. */
+        clip-path: inset(
+          var(--zzk-hour-boundary-clip-top, var(--zzk-cal-header-h, 24px)) 0 0 0
+        );
       }
-
-      #${MAP_CALENDAR_OVERLAY_ID} .zzk-map-calendar-divider-layer {
-        position: relative;
-        /* 고정 열(z-index 4) 위에 그려야 세로 구분선이 끊기지 않는다. */
-        z-index: 5;
-        pointer-events: none;
-      }
-
-      #${MAP_CALENDAR_OVERLAY_ID} .zzk-map-calendar-divider-track {
-        /*
-         * sticky 로 붙여야 가로 스크롤 시에도 고정 열과 함께 제자리에 남는다.
-         * absolute 로 두면 grid-wrap 과 같이 왼쪽으로 밀려나 사라진다.
-         */
-        position: sticky;
-        top: 0;
-        bottom: 0;
-        left: calc(var(--zzk-floor-col-width) + (var(--zzk-row-gap) * 0.5));
-        height: 100%;
-        width: 1px;
-        background: var(--zzk-section-divider-color);
-        /*
-         * 층 / 회의실 사이 세로 구분선. 셀마다 그리면 행 사이 gap 에서 끊겨
-         * 토막처럼 보이므로, 고정 열 배경(pseudo element) 보다 위에 그려
-         * 위아래를 완전히 관통하는 한 줄로 유지한다.
-         */
-        z-index: 5;
-      }
-
 
       #${MAP_CALENDAR_OVERLAY_ID} .zzk-map-calendar-hour-boundary-track {
         display: grid;
         grid-template-rows: minmax(0, 1fr);
         height: 100%;
-        width: calc(100% - (var(--zzk-floor-col-width) + var(--zzk-row-gap) + var(--zzk-room-col-width) + var(--zzk-row-gap)));
-        margin-left: calc(
-          var(--zzk-floor-col-width) +
-            var(--zzk-row-gap) +
-            var(--zzk-room-col-width) +
-            var(--zzk-row-gap) +
-            var(--zzk-timeline-side-margin)
-        );
-        margin-right: var(--zzk-timeline-side-margin);
+        width: 100%;
+        padding-left: var(--zzk-timeline-side-margin);
+        padding-right: var(--zzk-timeline-side-margin);
+        box-sizing: border-box;
       }
 
       #${MAP_CALENDAR_OVERLAY_ID} .zzk-map-calendar-hour-boundary-cell {
@@ -3757,49 +4115,62 @@
         position: relative;
         z-index: 2;
         display: grid;
-        gap: 4px;
+        gap: 0;
       }
 
+      /* 층↔회의실 세로 구분선(라벨 pane 안, 왼쪽으로 2px 이동). */
+      #${MAP_CALENDAR_OVERLAY_ID} .zzk-map-calendar-divider-layer {
+        position: absolute;
+        top: 0;
+        bottom: 0;
+        left: calc(var(--zzk-floor-col-width) + (var(--zzk-row-gap) * 0.5) - 2px);
+        width: 1px;
+        pointer-events: none;
+        z-index: 5;
+      }
+
+      #${MAP_CALENDAR_OVERLAY_ID} .zzk-map-calendar-divider-track {
+        width: 1px;
+        height: 100%;
+        background: var(--zzk-section-divider-color);
+      }
+
+      /* 헤더(축) 행: 라벨 pane 은 [층][회의실], 타임블록 pane 은 정시 라벨. */
       #${MAP_CALENDAR_OVERLAY_ID} .zzk-map-calendar-axis-row {
+        position: relative;
+        height: var(--zzk-cal-header-h, 24px);
+        box-sizing: border-box;
+        border-bottom: 1px solid var(--zzk-section-divider-color);
+      }
+
+      #${MAP_CALENDAR_OVERLAY_ID} .zzk-map-calendar-axis-row.zzk-map-calendar-label-row {
         display: grid;
-        grid-template-columns: var(--zzk-floor-col-width) var(--zzk-room-col-width) 1fr;
+        grid-template-columns: var(--zzk-floor-col-width) var(--zzk-room-col-width);
         align-items: center;
         gap: var(--zzk-row-gap);
-        padding-bottom: 4px;
-        margin-bottom: 2px;
-        position: relative;
       }
 
-      /* 고정 열 배경 위에 그려야 헤더 구분선이 토막나지 않는다. */
-      #${MAP_CALENDAR_OVERLAY_ID} .zzk-map-calendar-axis-row::after {
-        content: "";
-        position: absolute;
-        bottom: 0;
-        left: 0;
-        right: 0;
-        height: 1px;
-        background: var(--zzk-section-divider-color);
-        pointer-events: none;
-        z-index: 6;
+      #${MAP_CALENDAR_OVERLAY_ID} .zzk-map-calendar-axis-row.zzk-map-calendar-timeline-row {
+        display: block;
       }
 
+      /* 층 그룹: 라벨 pane 은 [층][회의실 행들], 타임블록 pane 은 [슬롯 행들]. */
       #${MAP_CALENDAR_OVERLAY_ID} .zzk-map-calendar-floor-group {
         display: grid;
-        grid-template-columns: var(--zzk-floor-col-width) 1fr;
+        /* 라벨 열은 고정 너비(층 + 회의실). 1fr 을 쓰면 pane 이 무한정 늘어난다. */
+        grid-template-columns: var(--zzk-floor-col-width) var(--zzk-room-col-width);
         align-items: stretch;
-        gap: var(--zzk-row-gap);
+        column-gap: var(--zzk-row-gap);
+        row-gap: 0;
         position: relative;
       }
 
-      #${MAP_CALENDAR_OVERLAY_ID} .zzk-map-calendar-floor-group.floor-boundary {
-        /*
-         * border-top 은 sticky 로 고정된 층/회의실 열 배경에 덮여 토막으로 보인다.
-         * 고정 열보다 위(z-index)에 선을 그려서 끊김 없이 이어지게 한다.
-         */
-        padding-top: 4px;
+      #${MAP_CALENDAR_OVERLAY_ID} .zzk-map-calendar-floor-group.zzk-map-calendar-floor-group-timeline {
+        display: block;
       }
 
-      #${MAP_CALENDAR_OVERLAY_ID} .zzk-map-calendar-floor-group.floor-boundary::before {
+      /* 실제 층이 바뀌는 경계에만 가로 구분선. */
+      #${MAP_CALENDAR_OVERLAY_ID} .zzk-map-calendar-floor-group.floor-divider::before {
         content: "";
         position: absolute;
         top: 0;
@@ -3813,16 +4184,23 @@
 
       #${MAP_CALENDAR_OVERLAY_ID} .zzk-map-calendar-floor-rooms {
         display: grid;
-        gap: 4px;
+        gap: 0;
       }
 
+      /* 행(라벨/타임블록 공통): 같은 고정 높이로 정렬. */
       #${MAP_CALENDAR_OVERLAY_ID} .zzk-map-calendar-row {
-        display: grid;
-        grid-template-columns: var(--zzk-room-col-width) 1fr;
-        align-items: center;
-        gap: var(--zzk-row-gap);
-        border-radius: 6px;
+        height: var(--zzk-cal-row-h, 26px);
+        box-sizing: border-box;
         transition: background-color 120ms ease;
+      }
+
+      #${MAP_CALENDAR_OVERLAY_ID} .zzk-map-calendar-row.zzk-map-calendar-label-row {
+        display: flex;
+        align-items: center;
+      }
+
+      #${MAP_CALENDAR_OVERLAY_ID} .zzk-map-calendar-row.zzk-map-calendar-timeline-row {
+        display: block;
       }
 
       #${MAP_CALENDAR_OVERLAY_ID} .zzk-map-calendar-row.hovered {
@@ -3831,6 +4209,7 @@
 
       #${MAP_CALENDAR_OVERLAY_ID} .zzk-map-calendar-row.hovered .zzk-map-calendar-room-name {
         color: #0f172a;
+        background: #e3f4fd;
       }
 
       #${MAP_CALENDAR_OVERLAY_ID} .zzk-map-calendar-row.room-locked-disabled {
@@ -3854,68 +4233,19 @@
       #${MAP_CALENDAR_OVERLAY_ID} .zzk-map-calendar-floor-name {
         display: flex;
         align-items: center;
+        align-self: stretch;
         min-height: 100%;
         padding-right: 4px;
-        /* 가로 스크롤 시 층 열은 왼쪽에 고정된다. */
-        position: sticky;
-        left: 0;
-        z-index: 4;
         box-sizing: border-box;
       }
 
-
       #${MAP_CALENDAR_OVERLAY_ID} .zzk-map-calendar-room-name {
-        /* flex(=inline-flex 아님)로 셀 전체를 채워야 스크롤된 타임블록을 가릴 수 있다. */
         display: flex;
         align-items: center;
         gap: 4px;
         min-width: 0;
         padding-left: 4px;
-        /* 회의실 열은 층 열 바로 오른쪽에 고정된다. */
-        position: sticky;
-        left: calc(var(--zzk-floor-col-width) + var(--zzk-row-gap));
-        z-index: 4;
-        min-height: 100%;
         box-sizing: border-box;
-      }
-
-      /*
-       * 고정 열(층 / 회의실)의 배경은 pseudo element 로 그린다.
-       * 셀 자체 배경만으로는 행 사이 gap 과 열 사이 gap 이 뚫려 있어
-       * 스크롤된 타임블록과 정시 세로선이 그 틈으로 비친다.
-       * 실제 셀보다 상하좌우로 넉넉히 번지게 해서 고정 열 영역 전체를 덮고,
-       * 가로선(층 경계선 / 헤더 구분선)만 그 위에 보이도록 한다.
-       */
-      #${MAP_CALENDAR_OVERLAY_ID} .zzk-map-calendar-floor-name::before,
-      #${MAP_CALENDAR_OVERLAY_ID} .zzk-map-calendar-room-name::before {
-        content: "";
-        position: absolute;
-        /*
-         * 위로만 번지게 해서 행 사이 gap 을 덮는다.
-         * 아래로도 번지게 하면 마지막 행 밑으로 넘쳐 세로 스크롤이 생긴다.
-         */
-        top: -4px;
-        bottom: 0;
-        background: #ffffff;
-        z-index: -1;
-        pointer-events: none;
-      }
-
-      /* 층 열: 카드 안쪽 여백까지 왼쪽으로, 열 사이 gap 까지 오른쪽으로 덮는다. */
-      #${MAP_CALENDAR_OVERLAY_ID} .zzk-map-calendar-floor-name::before {
-        left: calc(var(--zzk-timeline-side-margin) * -1 - 16px);
-        right: calc(var(--zzk-row-gap) * -1);
-      }
-
-      /* 회의실 열: 타임라인과 맞닿는 쪽 여백까지 덮는다. */
-      #${MAP_CALENDAR_OVERLAY_ID} .zzk-map-calendar-room-name::before {
-        left: calc(var(--zzk-row-gap) * -1);
-        right: calc((var(--zzk-row-gap) + var(--zzk-timeline-side-margin)) * -1);
-      }
-
-      #${MAP_CALENDAR_OVERLAY_ID} .zzk-map-calendar-axis-row .zzk-map-calendar-floor-name.axis,
-      #${MAP_CALENDAR_OVERLAY_ID} .zzk-map-calendar-axis-row .zzk-map-calendar-room-name.axis {
-        z-index: 5;
       }
 
       #${MAP_CALENDAR_OVERLAY_ID} .zzk-map-calendar-floor-name.axis,
@@ -3926,15 +4256,30 @@
       #${MAP_CALENDAR_OVERLAY_ID} .zzk-map-calendar-slots {
         display: grid;
         gap: 0;
+        height: 100%;
+        /* 슬롯(16px)을 행 높이 안에서 세로 가운데 정렬한다. */
+        align-items: center;
+        align-content: center;
         padding-left: var(--zzk-timeline-side-margin);
         padding-right: var(--zzk-timeline-side-margin);
+        box-sizing: border-box;
         position: relative;
+      }
+
+      /* 헤더의 정시 라벨 슬롯은 여백 없이 꽉 채운다. */
+      #${MAP_CALENDAR_OVERLAY_ID} .zzk-map-calendar-axis-row .zzk-map-calendar-slots {
+        height: 100%;
+        padding-top: 0;
+        padding-bottom: 0;
+        align-items: end;
       }
 
       #${MAP_CALENDAR_OVERLAY_ID} .zzk-map-calendar-hour-label {
         font-size: 11px;
         color: #64748b;
         text-align: left;
+        /* 정시 텍스트가 세로 구분선/경계선에 바싹 붙어 잘리지 않도록 살짝 들여쓴다. */
+        padding-left: 2px;
         min-height: 10px;
         position: relative;
         z-index: 1;
@@ -4025,10 +4370,6 @@
           max-height: calc(100vh - 16px);
         }
 
-        #${MAP_CALENDAR_OVERLAY_ID} .zzk-map-calendar-grid {
-          min-width: 620px;
-        }
-
         #${MAP_CALENDAR_OVERLAY_ID} .zzk-map-calendar-header {
           flex-wrap: wrap;
         }
@@ -4084,6 +4425,7 @@
     SLACK_MODAL_TRIGGER_ID,
     DEBUG_MODE,
     MAP_CALENDAR_ALWAYS_OPEN_STORAGE_KEY,
+    NAV_SAFE_Z_INDEX,
     TARGET_ROOM_NAMES,
     findGuestReservationTabContainer,
     findGuestReservationTabStyleSource,
@@ -4096,6 +4438,8 @@
       buildSlackReservationContext(rootOverride),
     showSlackCopyModal: (context) => showSlackCopyModal(context),
     isGuestPage,
+    isRadarSupportedPage,
+    isLmsService,
     isGuestReservationEditPage,
     shouldDelayGuestMapCalendarUi,
     isMapCalendarModalOpenRequested,
@@ -4153,6 +4497,8 @@
     collapseHostTimePickers,
     isHostReservationFormSynced,
     applyPanelDateChange,
+    isLmsService,
+    syncLmsReservationForm,
   });
 
   function setMapCalendarSuppressedBySlack(shouldSuppress) {
@@ -4171,7 +4517,7 @@
     }
 
     if (
-      !isGuestPage() ||
+      !isRadarSupportedPage() ||
       !state.scheduleOverlayEnabled ||
       !isMapCalendarModalOpenRequested()
     ) {
@@ -4347,15 +4693,35 @@
       targetIndex = timeline.length - 1;
     }
 
-    // 첫 슬롯이면 트랙 시작 오프셋을 더하지 않고 맨 처음을 그대로 보여준다.
+    // 첫 슬롯이면 맨 처음을 그대로 보여준다.
     if (targetIndex <= 0) {
       return 0;
     }
 
-    const baseOffset = Number.isFinite(trackStartOffset) ? trackStartOffset : 0;
-    const targetLeft = baseOffset + targetIndex * slotStride;
+    // 층/회의실 열은 sticky 로 고정되어 스크롤을 소비하지 않는다. 따라서 목표 슬롯을
+    // (고정 열 바로 오른쪽) 왼쪽 끝에 두려면 sticky 열 폭(trackStartOffset)을 더하지 않고
+    // 슬롯 인덱스 × 슬롯 폭 만큼만 스크롤해야 한다. 이전에는 trackStartOffset 을 더해
+    // 고정 열 폭만큼 오른쪽으로 밀려(예: lms+ 좁은 모달에서 끝까지) 스크롤되는 버그가 있었다.
+    void trackStartOffset;
+    const targetLeft = targetIndex * slotStride;
 
     return Math.min(maxScrollLeft, Math.max(0, Math.round(targetLeft)));
+  }
+
+  // 가로 스크롤이 실제로 일어나는 요소. 2-pane 구조에서는 timeline-pane 이고,
+  // 아직 렌더 전이면 body 로 대체한다.
+  function getMapCalendarScrollElement(
+    overlay = document.getElementById(MAP_CALENDAR_OVERLAY_ID),
+  ) {
+    if (!(overlay instanceof HTMLElement)) {
+      return null;
+    }
+    const pane = overlay.querySelector(".zzk-map-calendar-timeline-pane");
+    if (pane instanceof HTMLElement) {
+      return pane;
+    }
+    const body = overlay.querySelector(".zzk-map-calendar-body");
+    return body instanceof HTMLElement ? body : null;
   }
 
   function applyMapCalendarCurrentTimeScroll(
@@ -4365,7 +4731,7 @@
       return;
     }
 
-    const body = overlay.querySelector(".zzk-map-calendar-body");
+    const body = getMapCalendarScrollElement(overlay);
     if (!(body instanceof HTMLElement)) {
       return;
     }
@@ -4396,19 +4762,25 @@
       return;
     }
 
+    const isToday = renderedDate === getTodayDateInKST();
     const scrollLeft = computeMapCalendarCurrentTimeScrollLeft({
       timeline,
       trackStartOffset: metrics.trackStartOffset,
       slotStride: metrics.slotStride,
       viewportWidth: body.clientWidth,
       maxScrollLeft,
-      isToday: renderedDate === getTodayDateInKST(),
+      isToday,
       currentMinute: getCurrentMinuteOfDayInKST(),
     });
 
     state.mapCalendarCurrentTimeScrollDate = renderedDate;
 
     if (scrollLeft === null) {
+      // 오늘이 아니면(과거·미래) 맨 처음으로 되돌린다. 이전 날짜의 스크롤 위치가
+      // 재사용된 오버레이에 남아 있을 수 있으므로 명시적으로 0 으로 초기화한다.
+      if (!isToday) {
+        body.scrollLeft = 0;
+      }
       return;
     }
 
@@ -4424,14 +4796,20 @@
       return null;
     }
 
-    const gridWrap = overlay.querySelector(".zzk-map-calendar-grid-wrap");
-    if (!(gridWrap instanceof HTMLElement)) {
+    // 2-pane 구조에서는 스크롤이 timeline-pane 에서 일어나므로, 슬롯 위치를
+    // 스크롤 요소(timeline-pane)의 콘텐츠 좌표 기준으로 잰다.
+    const scrollEl = getMapCalendarScrollElement(overlay);
+    if (!(scrollEl instanceof HTMLElement)) {
       return null;
     }
 
-    const wrapLeft = gridWrap.getBoundingClientRect().left;
-    const firstLeft = slotCells[0].getBoundingClientRect().left;
-    const secondLeft = slotCells[1].getBoundingClientRect().left;
+    // scrollEl 콘텐츠 좌표 = 뷰포트 좌표 - scrollEl 왼쪽 + 현재 scrollLeft.
+    const scrollRectLeft = scrollEl.getBoundingClientRect().left;
+    const toContentX = (viewportLeft) =>
+      viewportLeft - scrollRectLeft + scrollEl.scrollLeft;
+
+    const firstLeft = toContentX(slotCells[0].getBoundingClientRect().left);
+    const secondLeft = toContentX(slotCells[1].getBoundingClientRect().left);
     const slotStride = secondLeft - firstLeft;
 
     if (!Number.isFinite(slotStride) || slotStride <= 0) {
@@ -4439,7 +4817,7 @@
     }
 
     return {
-      trackStartOffset: firstLeft - wrapLeft,
+      trackStartOffset: firstLeft,
       slotStride,
     };
   }
@@ -4994,7 +5372,14 @@
 
   function resolveMapCalendarRoomFloor(room) {
     const roomName = typeof room?.name === "string" ? room.name.trim() : "";
+    // 개편 서비스는 서버가 floor를 내려주므로 그걸 우선 쓰고,
+    // legacy는 하드코딩된 회의실 메타데이터 표에서 층을 찾는다.
+    const serverFloor =
+      typeof room?.floorLabel === "string" && room.floorLabel.trim() !== ""
+        ? room.floorLabel.trim()
+        : "";
     const mappedFloor =
+      serverFloor ||
       MAP_CALENDAR_ROOM_FLOOR_BY_NAME.get(normalizeTargetRoomName(roomName)) ||
       "";
     const floorLabel = mappedFloor || "";
@@ -5335,6 +5720,170 @@
     }
 
     return false;
+  }
+
+  // 개편 서비스(lms+) 예약 폼은 legacy 와 DOM 이 완전히 다르다.
+  //  - 회의실: 이름이 적힌 <button> (선택 시 bg-primary 클래스)
+  //  - 시작 시간: <select>, option value 가 "HH:MM"
+  //  - 이용 시간: <select>, option value 가 30분 단위 개수 ("1"=30분, "2"=60분)
+  // 타임블록 클릭 결과(방/시작/종료)를 이 세 컨트롤에 반영한다.
+  function findLmsRoomButton(roomName) {
+    const target = normalizeTextForMatch(extractKnownRoomName(roomName || "") || roomName || "");
+    if (!target) {
+      return null;
+    }
+    const buttons = Array.from(document.querySelectorAll("button"));
+    let fallback = null;
+    for (const button of buttons) {
+      const label = normalizeTextForMatch(button.textContent || "");
+      if (!label) {
+        continue;
+      }
+      if (label === target) {
+        return button;
+      }
+      if (!fallback && (label.includes(target) || target.includes(label))) {
+        fallback = button;
+      }
+    }
+    return fallback;
+  }
+
+  function isLmsRoomButtonSelected(button) {
+    if (!(button instanceof HTMLElement)) {
+      return false;
+    }
+    // 선택된 방 버튼은 primary 배경 클래스를 가진다.
+    return button.className.includes("bg-primary");
+  }
+
+  function findLmsSelectByOptionValue(candidateValues) {
+    const selects = Array.from(document.querySelectorAll("select"));
+    for (const select of selects) {
+      const optionValues = Array.from(select.options).map((option) => option.value);
+      if (candidateValues.every((value) => optionValues.includes(value))) {
+        return select;
+      }
+    }
+    return null;
+  }
+
+  // 시작 시간 select 는 "HH:MM" 옵션들을, 이용 시간 select 는 "1"/"2" 옵션을 갖는다.
+  function findLmsStartTimeSelect(startTime) {
+    const selects = Array.from(document.querySelectorAll("select"));
+    for (const select of selects) {
+      const hasHourMinuteOptions = Array.from(select.options).some((option) =>
+        /^\d{2}:\d{2}$/.test(option.value),
+      );
+      if (!hasHourMinuteOptions) {
+        continue;
+      }
+      if (
+        !startTime ||
+        Array.from(select.options).some((option) => option.value === startTime)
+      ) {
+        return select;
+      }
+    }
+    return null;
+  }
+
+  function findLmsDurationSelect() {
+    // 이용 시간 select 는 30분 단위 개수를 value 로 갖는다("1","2",...).
+    const selects = Array.from(document.querySelectorAll("select"));
+    for (const select of selects) {
+      const optionValues = Array.from(select.options).map((option) => option.value);
+      const hasHourMinuteOptions = optionValues.some((value) => /^\d{2}:\d{2}$/.test(value));
+      if (hasHourMinuteOptions) {
+        continue;
+      }
+      // "1"/"2" 같은 순수 숫자 옵션이 있으면 이용 시간 select 로 본다.
+      if (optionValues.some((value) => /^\d+$/.test(value))) {
+        return select;
+      }
+    }
+    return null;
+  }
+
+  async function syncLmsReservationForm(payload) {
+    const startTime = normalizeHourMinute(payload.startTime);
+    const endMinute = parseHourMinute(normalizeHourMinute(payload.endTime));
+    const startMinute = parseHourMinute(startTime);
+    const durationMinutes =
+      Number.isInteger(startMinute) && Number.isInteger(endMinute) && endMinute > startMinute
+        ? endMinute - startMinute
+        : null;
+
+    // 0) 날짜 input (type="date", name 없음). 회의실 버튼 클릭으로 React 가 리렌더되기
+    //    전에 먼저 맞춰, 날짜가 바뀐 스케줄로 폼이 반영되게 한다.
+    let dateSynced = true;
+    const targetDate = normalizeDateString(payload.date);
+    if (targetDate) {
+      const dateInput = queryHostDateInput(document);
+      if (dateInput instanceof HTMLInputElement) {
+        setFormElementValue(dateInput, targetDate);
+        dateSynced = normalizeDateString(dateInput.value) === targetDate;
+        // React 가 날짜 변경으로 예약 목록/폼을 다시 그릴 수 있어 한 틱 기다린다.
+        await new Promise((resolve) => setTimeout(resolve, 60));
+      } else {
+        dateSynced = false;
+      }
+    }
+
+    // 1) 회의실 버튼 선택
+    let roomSynced = true;
+    const roomButton = findLmsRoomButton(payload.roomName);
+    if (roomButton instanceof HTMLElement) {
+      if (!isLmsRoomButtonSelected(roomButton)) {
+        roomButton.click();
+        // React 리렌더로 select 들이 새로 붙을 수 있어 한 틱 기다린다.
+        await new Promise((resolve) => setTimeout(resolve, 60));
+      }
+      roomSynced = true;
+    } else {
+      roomSynced = false;
+    }
+
+    // 2) 시작 시간 select
+    let startSynced = true;
+    if (startTime) {
+      const startSelect = findLmsStartTimeSelect(startTime);
+      if (startSelect instanceof HTMLSelectElement) {
+        const hasOption = Array.from(startSelect.options).some(
+          (option) => option.value === startTime,
+        );
+        if (hasOption) {
+          setFormElementValue(startSelect, startTime);
+          startSynced = startSelect.value === startTime;
+        } else {
+          startSynced = false;
+        }
+      } else {
+        startSynced = false;
+      }
+    }
+
+    // 3) 이용 시간 select (30분 단위 개수)
+    let durationSynced = true;
+    if (Number.isInteger(durationMinutes) && durationMinutes > 0) {
+      const durationSelect = findLmsDurationSelect();
+      if (durationSelect instanceof HTMLSelectElement) {
+        const units = String(Math.max(1, Math.round(durationMinutes / 30)));
+        const hasOption = Array.from(durationSelect.options).some(
+          (option) => option.value === units,
+        );
+        if (hasOption) {
+          setFormElementValue(durationSelect, units);
+          durationSynced = durationSelect.value === units;
+        } else {
+          durationSynced = false;
+        }
+      } else {
+        durationSynced = false;
+      }
+    }
+
+    return dateSynced && roomSynced && startSynced && durationSynced;
   }
 
   function isHostReservationFormSynced(payload, root = document) {
@@ -6735,7 +7284,7 @@
 
   function handleLocationChange() {
     state.lastObservedRouteKey = getCurrentRouteKey();
-    if (!isGuestPage()) {
+    if (!isRadarSupportedPage()) {
       resetEditReservationBaselineConstraint();
       restorePageReservationNetworkHook();
       teardownGuestUi({
@@ -7051,7 +7600,7 @@
   }
 
   function shouldInstallPageReservationNetworkHook() {
-    return isGuestPage();
+    return isRadarSupportedPage();
   }
 
   function installReservationIntentWatcher() {
@@ -7171,7 +7720,7 @@
   }
 
   function handleReservationOwnerInputEvent(event) {
-    if (!isGuestPage()) {
+    if (!isRadarSupportedPage()) {
       return;
     }
 
@@ -7199,7 +7748,7 @@
   }
 
   function handleReservationIntentClick(event) {
-    if (!isGuestPage()) {
+    if (!isRadarSupportedPage()) {
       return;
     }
 
@@ -7232,7 +7781,7 @@
   }
 
   function handleReservationIntentSubmit(event) {
-    if (!isGuestPage()) {
+    if (!isRadarSupportedPage()) {
       return;
     }
 
@@ -8656,7 +9205,52 @@
     resolveReservationAttemptForPayload,
     shouldIgnoreAmbiguousReservationSuccess,
     consumeReservationAttempt,
+    isLmsService,
+    buildLmsSlackReservationContext,
   });
+
+  // 개편 서비스(lms+) 예약 생성 응답 body → Slack 모달 context.
+  // 응답 예: {date,startTime,endTime,spaceName,floor,purpose,reserverName,mine,id,spaceId}
+  function buildLmsSlackReservationContext(responseBody) {
+    if (!responseBody || typeof responseBody !== "object") {
+      return null;
+    }
+    const date = typeof responseBody.date === "string" ? responseBody.date : "";
+    const startTime = normalizeHourMinute(
+      typeof responseBody.startTime === "string" ? responseBody.startTime : "",
+    );
+    const endTime = normalizeHourMinute(
+      typeof responseBody.endTime === "string" ? responseBody.endTime : "",
+    );
+    if (!isDateString(date) || !startTime || !endTime) {
+      return null;
+    }
+
+    const spaceName =
+      typeof responseBody.spaceName === "string" ? responseBody.spaceName.trim() : "";
+    const floorLabel = Number.isInteger(Number(responseBody.floor))
+      ? `${Number(responseBody.floor)}층`
+      : "";
+    // roomName 은 "12층 보이저" 형태로 만들어 Slack 위치 라벨이 층까지 표시하게 한다.
+    const roomName = [floorLabel, spaceName].filter(Boolean).join(" ") || spaceName;
+
+    const owner =
+      typeof responseBody.reserverName === "string" ? responseBody.reserverName.trim() : "";
+    const purpose =
+      typeof responseBody.purpose === "string" ? responseBody.purpose.trim() : "";
+
+    return {
+      date,
+      startTime,
+      endTime,
+      roomName,
+      owner,
+      // Slack 메시지 subject 는 context.description 을 쓴다.
+      description: purpose,
+      channelMention: state.slackChannelMention || "",
+      reminderLeadMinutes: normalizeSlackReminderLeadMinutes(state.slackReminderLeadMinutes),
+    };
+  }
 
   function isGuestReservationFlowPage() {
     return /^\/guest\/[^/?#]+(?:\/reservation\/edit|\/success)?\/?$/.test(
@@ -8827,6 +9421,12 @@
       type: message?.type,
       fallbackCandidate: shouldUseDirectApiFallback(message),
     });
+    // 개편 서비스는 페이지 localStorage 의 JWT 를 Authorization 헤더로 붙여야 하는데,
+    // 백그라운드 서비스워커는 페이지 저장소를 못 읽는다. 그래서 LMS 요청은 백그라운드를
+    // 거치지 않고 콘텐츠 스크립트(direct)에서 바로 처리한다.
+    if (isLmsService() && shouldUseDirectApiFallback(message)) {
+      return sendMessageDirectFallback(message);
+    }
     return sendMessageViaRuntime(message).catch((runtimeError) => {
       pushDebugEvent("transport", "runtime-failed", {
         type: message?.type,
@@ -8938,12 +9538,15 @@
   }
 
   function getDirectApiFallbackHandler(messageType) {
+    // 개편 서비스와 legacy 찜꽁이 동시 운영 중이라 현재 페이지에 맞는 구현을 고른다.
+    const useLmsService = isLmsService();
+
     if (messageType === "ZZK_FETCH_AVAILABILITY") {
-      return fetchAvailabilityDirect;
+      return useLmsService ? fetchLmsAvailability : fetchAvailabilityDirect;
     }
 
     if (messageType === "ZZK_FETCH_DAILY_SCHEDULE") {
-      return fetchDailyScheduleDirect;
+      return useLmsService ? fetchLmsDailySchedule : fetchDailyScheduleDirect;
     }
 
     return null;
@@ -8984,6 +9587,11 @@
     fetchApiJson,
     sanitizeSharingMapIdForApi,
   } = globalThis.__zzkGuestDataShared;
+
+  const {
+    fetchAvailability: fetchLmsAvailability,
+    fetchDailySchedule: fetchLmsDailySchedule,
+  } = globalThis.__zzkLmsDataShared;
 
   function normalizeDateInput(inputElement) {
     if (!(inputElement instanceof HTMLInputElement)) {
@@ -9175,14 +9783,19 @@
       : MAP_CALENDAR_SPACE_TAB_MEETING;
   }
 
-  if (location.hostname === "example.com") {
+  // 테스트 훅: example.com(테스트 호스트) 또는 DEBUG 모드에서만 노출한다.
+  if (location.hostname === "example.com" || DEBUG_MODE) {
     globalThis.__zzkTestApi = {
       clampMapCalendarWidth,
       getMapCalendarWidthBounds,
       computeMapCalendarCurrentTimeScrollLeft,
       getCurrentMinuteOfDayInKST,
+      // lms+ 예약 폼 반영 로직을 슬롯 클릭 없이 직접 검증할 때 쓴다.
+      syncLmsReservationForm(payload) {
+        return syncLmsReservationForm(payload);
+      },
       syncGuestUi() {
-        if (!isGuestPage()) {
+        if (!isRadarSupportedPage()) {
           return false;
         }
         ensurePanel();
@@ -9195,7 +9808,7 @@
         return true;
       },
       openRadar() {
-        if (!isGuestPage()) {
+        if (!isRadarSupportedPage()) {
           return false;
         }
         const hostDateInput = queryHostDateInput(document);
@@ -9215,7 +9828,7 @@
         return true;
       },
       async loadAndOpenRadar() {
-        if (!isGuestPage()) {
+        if (!isRadarSupportedPage()) {
           return false;
         }
         const hostDateInput = queryHostDateInput(document);
@@ -9237,6 +9850,24 @@
           return true;
         }
         openMapCalendarModal();
+        return true;
+      },
+      // 테스트에서 특정 날짜의 스케줄을 직접 렌더할 때 쓴다.
+      async renderScheduleForDate(date) {
+        if (!isRadarSupportedPage()) {
+          return false;
+        }
+        const normalizedDate = normalizeDateString(date);
+        if (!normalizedDate) {
+          return false;
+        }
+        if (state.elements?.dateInput instanceof HTMLInputElement) {
+          state.elements.dateInput.value = normalizedDate;
+        }
+        state.scheduleOverlayEnabled = true;
+        state.mapCalendarVisible = true;
+        state.activeScheduleDate = normalizedDate;
+        await refreshDailySchedule(normalizedDate);
         return true;
       },
       getStateSnapshot() {

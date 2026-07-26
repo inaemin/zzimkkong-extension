@@ -40,6 +40,8 @@
       dispatchFormElementEvents,
       normalizeDateString,
       collapseHostTimePickers,
+      isLmsService,
+      syncLmsReservationForm,
     } = deps;
 
     function handleHostDateChange(event) {
@@ -59,7 +61,12 @@
         return;
       }
 
-      if (target.name !== "date" || !target.value) {
+      // legacy 는 name="date" 입력을 쓰지만, 개편 서비스(lms+)의 날짜 입력에는 name 이 없다.
+      // lms+ 에서는 type="date" 만으로 호스트 날짜 입력으로 인정한다.
+      const isDateField =
+        target.name === "date" ||
+        (typeof isLmsService === "function" && isLmsService() && target.type === "date");
+      if (!isDateField || !target.value) {
         return;
       }
 
@@ -206,16 +213,19 @@
         renderMapCalendarOverlay(timelineSelectionCached);
       }
 
-      const hostSynced = await syncHostReservationForm(
-        {
-          date: normalizedDate,
-          startTime,
-          endTime,
-          roomId: selection.room.id,
-          roomName: selection.room.name,
-        },
-        requestId,
-      );
+      const syncPayload = {
+        date: normalizedDate,
+        startTime,
+        endTime,
+        roomId: selection.room.id,
+        roomName: selection.room.name,
+      };
+
+      // 개편 서비스(lms+)는 폼 구조가 legacy 와 완전히 달라 전용 경로를 쓴다.
+      const hostSynced =
+        typeof isLmsService === "function" && isLmsService()
+          ? await syncLmsReservationForm(syncPayload, requestId)
+          : await syncHostReservationForm(syncPayload, requestId);
 
       if (!isLatestTimelineSelectionRequest(requestId)) {
         return;
