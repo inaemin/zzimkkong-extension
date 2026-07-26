@@ -1141,8 +1141,16 @@ test("today's radar scrolls the timeline near the current time on open", async (
   // 가로 스크롤이 존재하는 상태여야 의미가 있는 테스트다.
   expect(result.scrollWidth).toBeGreaterThan(result.clientWidth);
 
-  // 새벽 시간대가 아니라면 스크롤이 앞쪽에서 시작하지 않아야 한다.
-  if (result.currentMinute !== null && result.currentMinute > 3 * 60) {
+  // 타임라인은 07:00 부터 시작하고, 현재 시각 스크롤은 30분 리드를 둔다. 따라서
+  // 현재 시각(KST)이 타임라인 시작 근처거나 그 이전이면 scrollLeft 가 0 인 게 정상이다.
+  // (CI 는 UTC 밤 = KST 이른 아침에 자주 도는데, 이때 07:xx 라 스크롤이 0 이 된다.)
+  // 현재 시각이 타임라인 시작보다 충분히 뒤(09:00 이후)일 때만 스크롤을 기대한다.
+  const TIMELINE_START_MINUTE = 7 * 60;
+  const SCROLL_EXPECTED_AFTER_MINUTE = TIMELINE_START_MINUTE + 2 * 60; // 09:00 KST
+  if (
+    result.currentMinute !== null &&
+    result.currentMinute > SCROLL_EXPECTED_AFTER_MINUTE
+  ) {
     expect(result.scrollLeft).toBeGreaterThan(0);
   }
 });
