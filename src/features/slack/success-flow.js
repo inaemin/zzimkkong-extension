@@ -52,6 +52,8 @@
       if (!(payload.ok === true && Number.isInteger(status) && status >= 200 && status < 300)) {
         return;
       }
+      // 현재 lms+ 지원 범위는 예약 "생성"(POST)만이다. 수정(PUT/PATCH) 성공은
+      // 아직 Slack 모달 대상이 아니므로 여기서 걸러낸다(추후 확장 시 이 가드를 넓힌다).
       const method = normalizeReservationMutationMethod(payload.method);
       if (method !== "POST") {
         return;

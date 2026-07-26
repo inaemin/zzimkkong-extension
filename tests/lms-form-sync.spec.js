@@ -219,6 +219,41 @@ test("syncLmsReservationForm sets 30min duration for a 30-minute window", async 
   expect(formState.room).toBe("은하수");
 });
 
+test("정확 일치 버튼이 없을 때, 방 이름의 부분 문자열 라벨을 가진 엉뚱한 버튼은 누르지 않는다", async ({
+  page,
+}) => {
+  await mountFormPage(page);
+
+  // 정확 일치 버튼이 없는 방 이름("은하수 A")으로 sync 를 시도한다. "은"(짧은 라벨)은
+  // "은하수 A" 의 부분 문자열이라, 예전 fallback(target.includes(label)) 이었다면 이
+  // 디코이를 눌러 엉뚱한 액션이 실행됐을 것이다. 이제는 후보 확신이 없으면 미반영한다.
+  await page.evaluate(() => {
+    const decoy = document.createElement("button");
+    decoy.textContent = "은";
+    decoy.addEventListener("click", () => {
+      window.__decoyClicked = true;
+    });
+    document.querySelector(".flex.flex-wrap.gap-2").appendChild(decoy);
+  });
+
+  await page.evaluate(() =>
+    window.__zzkTestApi.syncLmsReservationForm({
+      date: "2099-01-02",
+      startTime: "10:00",
+      endTime: "11:00",
+      roomId: 9,
+      roomName: "은하수 A",
+    }),
+  );
+
+  // 핵심: 짧은 부분 문자열 디코이("은")는 절대 눌리지 않아야 한다.
+  const decoyClicked = await page.evaluate(() => window.__decoyClicked === true);
+  expect(decoyClicked).toBe(false);
+  // 실제로 선택되는 버튼은 정확/정상 매칭된 "은하수" 여야 한다(디코이가 아님).
+  const formState = await readFormState(page);
+  expect(formState.room).toBe("은하수");
+});
+
 test("clicking a 30-min block wires through to the lms+ form", async ({ page }) => {
   await mountFormPage(page);
 

@@ -5733,7 +5733,7 @@
       return null;
     }
     const buttons = Array.from(document.querySelectorAll("button"));
-    let fallback = null;
+    const fallbackCandidates = [];
     for (const button of buttons) {
       const label = normalizeTextForMatch(button.textContent || "");
       if (!label) {
@@ -5742,11 +5742,16 @@
       if (label === target) {
         return button;
       }
-      if (!fallback && (label.includes(target) || target.includes(label))) {
-        fallback = button;
+      // fallback 은 "라벨이 방 이름을 포함" 한 방향만 허용한다. 반대 방향
+      // (target.includes(label))은 "저장"·"선택" 같은 짧은 버튼이 방 이름에 우연히
+      // 포함되면 엉뚱한 버튼을 눌러 다른 공간을 선택할 위험이 있어 제외한다.
+      if (target.length >= 2 && label.includes(target)) {
+        fallbackCandidates.push(button);
       }
     }
-    return fallback;
+    // 후보가 둘 이상이면 어느 버튼인지 확신할 수 없으므로 실패로 둔다
+    // (예약이라는 도메인에서 조용히 잘못된 선택보다 미반영이 안전하다).
+    return fallbackCandidates.length === 1 ? fallbackCandidates[0] : null;
   }
 
   function isLmsRoomButtonSelected(button) {
@@ -5805,7 +5810,12 @@
     return null;
   }
 
-  async function syncLmsReservationForm(payload) {
+  async function syncLmsReservationForm(payload, requestId = null) {
+    // legacy(syncHostReservationForm)와 동일하게, 타임블록 연속 클릭 시 이전 sync 가
+    // 나중 선택을 덮어쓰지 않도록 각 await 뒤에서 최신 요청인지 확인한다.
+    const isStaleRequest = () =>
+      requestId != null && !isLatestTimelineSelectionRequest(requestId);
+
     const startTime = normalizeHourMinute(payload.startTime);
     const endMinute = parseHourMinute(normalizeHourMinute(payload.endTime));
     const startMinute = parseHourMinute(startTime);
@@ -5825,6 +5835,9 @@
         dateSynced = normalizeDateString(dateInput.value) === targetDate;
         // React 가 날짜 변경으로 예약 목록/폼을 다시 그릴 수 있어 한 틱 기다린다.
         await new Promise((resolve) => setTimeout(resolve, 60));
+        if (isStaleRequest()) {
+          return false;
+        }
       } else {
         dateSynced = false;
       }
@@ -5838,6 +5851,9 @@
         roomButton.click();
         // React 리렌더로 select 들이 새로 붙을 수 있어 한 틱 기다린다.
         await new Promise((resolve) => setTimeout(resolve, 60));
+        if (isStaleRequest()) {
+          return false;
+        }
       }
       roomSynced = true;
     } else {
@@ -9244,7 +9260,8 @@
       startTime,
       endTime,
       roomName,
-      owner,
+      // 지문/병합 컨텍스트가 고정 키 ownerName 으로 예약자를 읽으므로 그 키로 맞춘다.
+      ownerName: owner,
       // Slack 메시지 subject 는 context.description 을 쓴다.
       description: purpose,
       channelMention: state.slackChannelMention || "",
