@@ -101,7 +101,6 @@ test("slack modal opens on reservation success without legacy slack test trigger
   `);
 
   await injectContentScriptBundle(page);
-  await page.waitForTimeout(700);
 
   await openSlackModalFromReservationSuccess(page);
 
@@ -190,7 +189,6 @@ test("reservation success consumes pending attempt id and clears document datase
   `);
 
   await injectContentScriptBundle(page);
-  await page.waitForTimeout(700);
   await page.click("#form-reserve-submit");
 
   const before = await page.evaluate(() => ({
@@ -256,7 +254,6 @@ test("pending reservation attempt pruning keeps newest ten attempts", async ({ p
   `);
 
   await injectContentScriptBundle(page);
-  await page.waitForTimeout(700);
 
   const snapshots = [];
   for (let index = 0; index < 11; index += 1) {
@@ -315,7 +312,6 @@ test("slack modal suppression resets radar launcher to closed state", async ({ p
   `);
 
   await injectContentScriptBundle(page);
-  await page.waitForTimeout(700);
 
   const before = await page.evaluate(() => {
     const launcher = document.getElementById("zzk-map-calendar-radar-launcher");
@@ -383,7 +379,6 @@ test("slack modal persists selected reminder offset across reopen", async ({ pag
   `);
 
   await injectContentScriptBundle(page);
-  await page.waitForTimeout(700);
 
   await openSlackModalFromReservationSuccess(page);
   await page.selectOption("#zzk-slack-reminder-lead-time", "30");
@@ -451,7 +446,6 @@ test("slack modal uses default 10-minute reminder offset", async ({ page }) => {
   `);
 
   await injectContentScriptBundle(page);
-  await page.waitForTimeout(700);
   await openSlackModalFromReservationSuccess(page, { url: "https://k8s.zzimkkong.com/api/guests/maps/abc/reservations/default" });
 
   const snapshot = await page.evaluate(() => {
@@ -533,7 +527,6 @@ test("slack modal opens channel-only input from success flow and manual trigger 
   });
 
   await injectContentScriptBundle(page);
-  await page.waitForTimeout(700);
   const hasManualTrigger = await page.evaluate(() => {
     return document.getElementById("zzk-slack-modal-trigger") instanceof HTMLButtonElement;
   });
@@ -672,7 +665,6 @@ test("slack modal channel input updates preview and persists across reopen", asy
   `);
 
   await injectContentScriptBundle(page);
-  await page.waitForTimeout(700);
 
   await openSlackModalFromReservationSuccess(page);
   await page.fill(".zzk-slack-copy-channel-input", "channel-test");
@@ -795,7 +787,6 @@ test("slack modal allows selecting a remembered channel suggestion", async ({ pa
     window.localStorage.setItem("zzk-slack-channel-history-v1", "#frontend\n#backend");
   });
   await injectContentScriptBundle(page);
-  await page.waitForTimeout(700);
 
   await openSlackModalFromReservationSuccess(page);
   await page.focus(".zzk-slack-copy-channel-input");
@@ -860,7 +851,6 @@ test("slack modal shows '#채널 추가' option for a new typed channel", async 
   `);
 
   await injectContentScriptBundle(page);
-  await page.waitForTimeout(700);
 
   await openSlackModalFromReservationSuccess(page);
   await page.fill(".zzk-slack-copy-channel-input", "fresh-channel");
@@ -930,7 +920,6 @@ test("slack modal allows deleting a remembered channel suggestion", async ({ pag
     window.localStorage.setItem("zzk-slack-channel-history-v1", "#frontend\n#backend");
   });
   await injectContentScriptBundle(page);
-  await page.waitForTimeout(700);
 
   await openSlackModalFromReservationSuccess(page);
   await page.focus(".zzk-slack-copy-channel-input");
@@ -996,7 +985,6 @@ test("manual slack trigger button is not rendered on reservation edit page", asy
   `);
 
   await injectContentScriptBundle(page);
-  await page.waitForTimeout(700);
 
   const hasManualTrigger = await page.evaluate(() => {
     return document.getElementById("zzk-slack-modal-trigger") instanceof HTMLButtonElement;
@@ -1045,7 +1033,6 @@ test("success route hides radar UI and uses requestContext for Slack message", a
   `);
 
   await injectContentScriptBundle(page);
-  await page.waitForTimeout(700);
 
   await page.click("#form-reserve-submit");
   await page.evaluate(() => {
@@ -1136,7 +1123,6 @@ test("reservation network message ignores untrusted event and payload URL origin
   `);
 
   await injectContentScriptBundle(page);
-  await page.waitForTimeout(700);
   await page.click("#form-reserve-submit");
 
   await page.evaluate(() => {
@@ -1243,7 +1229,6 @@ test("edit page PUT success queues Slack modal context for the returned guest pa
   `);
 
   await injectContentScriptBundle(page);
-  await page.waitForTimeout(700);
   await page.evaluate(() => {
     history.replaceState({}, "", "/guest/test-map/reservation/edit");
   });
@@ -1487,7 +1472,6 @@ test("same-route history replaceState does not repeat guest route synchronizatio
     window.__ZZK_DEBUG_MODE__ = true;
   });
   await injectContentScriptBundle(page);
-  await page.waitForTimeout(700);
 
   const initialRequestTotal = Array.from(requestCountByPath.values()).reduce((sum, count) => sum + count, 0);
 
@@ -1711,7 +1695,6 @@ test("slack message reads owner from owner-labeled custom control", async ({ pag
   `);
 
   await injectContentScriptBundle(page);
-  await page.waitForTimeout(700);
 
   await openSlackModalFromReservationSuccess(page);
 
@@ -1765,7 +1748,6 @@ test("reservation intent snapshot preserves owner when form value is cleared bef
   `);
 
   await injectContentScriptBundle(page);
-  await page.waitForTimeout(700);
 
   await page.click("#form-reserve-submit");
   await page.evaluate(() => {
@@ -1845,7 +1827,6 @@ test("ambiguous late reservation success after a newer submit does not reuse the
     window.__ZZK_DEBUG_MODE__ = true;
   });
   await injectContentScriptBundle(page);
-  await page.waitForTimeout(700);
 
   await page.click("#form-reserve-submit");
   await page.evaluate(() => {
@@ -1947,7 +1928,6 @@ test("matched reservation attempt success tolerates changed API path after the o
   `);
 
   await injectContentScriptBundle(page);
-  await page.waitForTimeout(700);
   await page.addScriptTag({ path: path.resolve(process.cwd(), "src/page-hook/shared.js") });
   await page.addScriptTag({ path: path.resolve(process.cwd(), "src/page-network-hook.js") });
   await page.click("#form-reserve-submit");
@@ -2026,7 +2006,6 @@ test("network payload ownerNameCandidate backfills owner when form fields are em
   `);
 
   await injectContentScriptBundle(page);
-  await page.waitForTimeout(700);
 
   await page.click("#form-reserve-submit");
   await page.evaluate(() => {
@@ -2148,7 +2127,6 @@ test("disabled owner input value is used for Slack owner line", async ({ page })
   `);
 
   await injectContentScriptBundle(page);
-  await page.waitForTimeout(700);
 
   await openSlackModalFromReservationSuccess(page);
 
@@ -4656,7 +4634,6 @@ test("edit page preserves a past reservation date instead of clamping it to toda
   `);
 
   await injectContentScriptBundle(page);
-  await page.waitForTimeout(700);
 
   const snapshot = await page.evaluate(() => {
     const hostDateInput = document.getElementById("reservation-date");
