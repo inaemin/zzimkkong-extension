@@ -16,6 +16,7 @@ async function injectContentScriptBundle(page) {
   await page.addScriptTag({ path: path.resolve(process.cwd(), "src/services/guest-data/shared.js") });
   await page.addScriptTag({ path: path.resolve(process.cwd(), "src/services/lms-data/normalizers.js") });
   await page.addScriptTag({ path: path.resolve(process.cwd(), "src/services/lms-data/shared.js") });
+  await page.addScriptTag({ path: path.resolve(process.cwd(), "src/features/radar/floor-maps.js") });
   await page.addScriptTag({ path: path.resolve(process.cwd(), "src/features/radar/shared.js") });
   await page.addScriptTag({ path: path.resolve(process.cwd(), "src/features/radar/workflow.js") });
   await page.addScriptTag({ path: path.resolve(process.cwd(), "src/features/radar/form-sync.js") });

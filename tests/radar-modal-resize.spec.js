@@ -18,6 +18,7 @@ async function injectContentScriptBundle(page, beforeContentScript) {
   await page.addScriptTag({ path: path.resolve(process.cwd(), "src/services/guest-data/shared.js") });
   await page.addScriptTag({ path: path.resolve(process.cwd(), "src/services/lms-data/normalizers.js") });
   await page.addScriptTag({ path: path.resolve(process.cwd(), "src/services/lms-data/shared.js") });
+  await page.addScriptTag({ path: path.resolve(process.cwd(), "src/features/radar/floor-maps.js") });
   await page.addScriptTag({ path: path.resolve(process.cwd(), "src/features/radar/shared.js") });
   await page.addScriptTag({ path: path.resolve(process.cwd(), "src/features/radar/workflow.js") });
   await page.addScriptTag({ path: path.resolve(process.cwd(), "src/features/radar/form-sync.js") });
@@ -1232,4 +1233,97 @@ test("dragging the resize handle does not move the modal", async ({ page }) => {
 
   // 리사이즈는 드래그 이동과 독립적이어야 한다.
   expect(afterTransform).toBe(beforeTransform);
+});
+
+test("리사이즈로 넓어져 화면을 벗어나면 다시 뷰포트 안으로 들어온다", async ({ page }) => {
+  // 좁은 뷰포트에서 좁은 폭으로 시작한다(왼쪽으로 옮길 여유 확보).
+  await page.setViewportSize({ width: 760, height: 720 });
+  await mountAndOpenRadar(page, {
+    seedStorage: async () => {
+      await page.evaluate(
+        ({ key, value }) => window.localStorage.setItem(key, String(value)),
+        { key: WIDTH_STORAGE_KEY, value: 500 }
+      );
+    },
+  });
+
+  // 헤더를 잡아 모달을 화면 왼쪽 끝으로 옮긴다.
+  const headerBox = await page
+    .locator("#zzk-map-calendar-overlay .zzk-map-calendar-header")
+    .boundingBox();
+  await page.mouse.move(headerBox.x + 20, headerBox.y + headerBox.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(30, 80, { steps: 12 });
+  await page.mouse.up();
+
+  const widthBefore = await page.evaluate(
+    () => Math.round(document.getElementById("zzk-map-calendar-overlay").getBoundingClientRect().width)
+  );
+
+  // 핸들(좌측 가장자리)을 왼쪽으로 끌어 폭을 최대까지 넓힌다.
+  // 오른쪽이 고정이라 넓힐수록 왼쪽 가장자리가 화면 밖으로 나가려 한다.
+  const handleBox = await page
+    .locator("#zzk-map-calendar-overlay .zzk-map-calendar-resize-handle")
+    .boundingBox();
+  await page.mouse.move(handleBox.x + handleBox.width / 2, handleBox.y + handleBox.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(0, handleBox.y + handleBox.height / 2, { steps: 20 });
+  await page.mouse.up();
+
+  const result = await page.evaluate(() => {
+    const overlay = document.getElementById("zzk-map-calendar-overlay");
+    const rect = overlay.getBoundingClientRect();
+    return {
+      left: Math.round(rect.left),
+      top: Math.round(rect.top),
+      right: Math.round(rect.right),
+      bottom: Math.round(rect.bottom),
+      vw: window.innerWidth,
+      vh: window.innerHeight,
+    };
+  });
+
+  // 리사이즈로 폭이 실제로 커졌다(핸들이 동작 안 해 폭이 그대로면 이 테스트는 무의미).
+  const widthAfter = result.right - result.left;
+  expect(widthAfter).toBeGreaterThan(widthBefore);
+  // 재조정 결과: 모달 전체가 뷰포트 안에 있어야 한다(약간의 오차 허용).
+  // 재클램프가 없으면 왼쪽 가장자리가 음수가 되어 화면 밖으로 나간다.
+  expect(result.left).toBeGreaterThanOrEqual(-2);
+  expect(result.top).toBeGreaterThanOrEqual(-2);
+  expect(result.right).toBeLessThanOrEqual(result.vw + 2);
+  expect(result.bottom).toBeLessThanOrEqual(result.vh + 2);
+});
+
+
+test("마운트 시 저장된 위치가 현재 뷰포트를 벗어나면 화면 안으로 재조정된다", async ({ page }) => {
+  // 좁은 뷰포트에서, 화면 밖을 가리키는 큰 offset 을 미리 저장해두고 연다.
+  await page.setViewportSize({ width: 760, height: 720 });
+  await mountAndOpenRadar(page, {
+    seedStorage: async () => {
+      await page.evaluate(
+        ({ key }) =>
+          window.localStorage.setItem(key, JSON.stringify({ x: -600, y: -500 })),
+        { key: "zzk-map-calendar-offset-v1" }
+      );
+    },
+  });
+
+  const result = await page.evaluate(() => {
+    const overlay = document.getElementById("zzk-map-calendar-overlay");
+    const rect = overlay.getBoundingClientRect();
+    return {
+      left: Math.round(rect.left),
+      top: Math.round(rect.top),
+      right: Math.round(rect.right),
+      bottom: Math.round(rect.bottom),
+      vw: window.innerWidth,
+      vh: window.innerHeight,
+    };
+  });
+
+  // 저장된 위치가 화면 밖(-600,-500)을 가리켰지만, 마운트 시 화면 안으로 들어와야 한다.
+  expect(result.left).toBeGreaterThanOrEqual(-2);
+  expect(result.top).toBeGreaterThanOrEqual(-2);
+  expect(result.right).toBeLessThanOrEqual(result.vw + 2);
+  expect(result.bottom).toBeLessThanOrEqual(result.vh + 2);
 });

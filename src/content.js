@@ -122,6 +122,7 @@
     PAGE_RESERVATION_HOOK_SCRIPT_ID,
     PAGE_RESERVATION_EVENT_TYPE,
     SLACK_COPY_MODAL_ID,
+    FLOOR_MAP_ZOOM_ID,
     SLACK_COPY_MODAL_STYLE_ID,
     SLACK_COPY_MODAL_BASECOAT_STYLE_ID,
     SLACK_COPY_MODAL_BASECOAT_STYLE_PATH,
@@ -138,6 +139,7 @@
     MAP_CALENDAR_SPACE_TAB_STORAGE_KEY,
     MAP_CALENDAR_WIDTH_STORAGE_KEY,
     MAP_CALENDAR_OFFSET_STORAGE_KEY,
+    MAP_CALENDAR_FLOORMAP_OPEN_STORAGE_KEY,
     MAP_CALENDAR_MIN_WIDTH,
     MAP_CALENDAR_VIEWPORT_MARGIN,
     MAP_CALENDAR_CURRENT_TIME_SCROLL_LEAD_MINUTES,
@@ -208,6 +210,185 @@
       return;
     }
     writeStoredText(MAP_CALENDAR_OFFSET_STORAGE_KEY, JSON.stringify({ x, y }));
+  }
+
+  function isFloorMapSectionOpen() {
+    // 기본은 접힘.
+    return readStoredBoolean(MAP_CALENDAR_FLOORMAP_OPEN_STORAGE_KEY, false);
+  }
+
+  function persistFloorMapSectionOpen(open) {
+    writeStoredBoolean(MAP_CALENDAR_FLOORMAP_OPEN_STORAGE_KEY, open);
+  }
+
+  // 평면도를 누르고 있는 동안 화면 중앙에 크게 띄우는 확대 모달. 단일 인스턴스를
+  // 재사용한다(누를 때 보이고, 손을 떼면 숨긴다).
+  let floorMapZoomOverlay = null;
+
+  function ensureFloorMapZoomOverlay() {
+    // detached 노드도 instanceof 는 계속 true 이므로, DOM 에 붙어있는지(isConnected)
+    // 까지 확인한다. lms+ SPA 에서 body 하위가 갈려 떨어져 나갔으면 새로 만든다.
+    if (floorMapZoomOverlay instanceof HTMLElement && floorMapZoomOverlay.isConnected) {
+      return floorMapZoomOverlay;
+    }
+    const overlay = document.createElement("div");
+    overlay.id = FLOOR_MAP_ZOOM_ID;
+    overlay.setAttribute("aria-hidden", "true");
+    // 클릭을 가로채지 않는다(누르는 동안 보기용). pointerup 은 window 에서 감지한다.
+    overlay.style.pointerEvents = "none";
+
+    const zoomImg = document.createElement("img");
+    zoomImg.className = "zzk-floormap-zoom-image";
+    zoomImg.alt = "";
+    zoomImg.draggable = false;
+
+    const caption = document.createElement("div");
+    caption.className = "zzk-floormap-zoom-caption";
+
+    overlay.append(zoomImg, caption);
+    document.body.appendChild(overlay);
+    overlay.__zzkImage = zoomImg;
+    overlay.__zzkCaption = caption;
+    floorMapZoomOverlay = overlay;
+    return overlay;
+  }
+
+  function openFloorMapZoom(floor, dataUri) {
+    if (!dataUri) {
+      return;
+    }
+    const overlay = ensureFloorMapZoomOverlay();
+    overlay.__zzkImage.src = dataUri;
+    overlay.__zzkImage.alt = `${floor}층 평면도 확대`;
+    overlay.__zzkCaption.textContent = `${floor}F`;
+    overlay.classList.add("visible");
+    overlay.setAttribute("aria-hidden", "false");
+  }
+
+  function closeFloorMapZoom() {
+    if (!(floorMapZoomOverlay instanceof HTMLElement)) {
+      return;
+    }
+    floorMapZoomOverlay.classList.remove("visible");
+    floorMapZoomOverlay.setAttribute("aria-hidden", "true");
+  }
+
+  // 타임라인 아래에 층별 평면도(SVG)를 접이식으로 붙인다. lms+ 에는 지도가 없어
+  // 공간의 물리적 위치를 알 수 없으므로, 평면도로 페어룸 등의 위치를 확인하게 한다.
+  function renderMapCalendarFloorMapSection(body, preservedScrollLeft = 0) {
+    if (!(body instanceof HTMLElement)) {
+      return;
+    }
+    const floorMaps = globalThis.__zzkFloorMaps;
+    if (!floorMaps || typeof floorMaps.getAvailableFloorMapFloors !== "function") {
+      return;
+    }
+    const floors = floorMaps.getAvailableFloorMapFloors();
+    if (!Array.isArray(floors) || floors.length === 0) {
+      return;
+    }
+
+    const section = document.createElement("section");
+    section.className = "zzk-map-calendar-floormap-section";
+
+    const open = isFloorMapSectionOpen();
+
+    // 접기/펼치기 헤더(버튼).
+    const header = document.createElement("button");
+    header.type = "button";
+    header.className = "zzk-map-calendar-floormap-header";
+    header.setAttribute("aria-expanded", open ? "true" : "false");
+
+    const caret = document.createElement("span");
+    caret.className = "zzk-map-calendar-floormap-caret";
+    caret.setAttribute("aria-hidden", "true");
+    caret.textContent = "▸";
+
+    const title = document.createElement("span");
+    title.className = "zzk-map-calendar-floormap-title";
+    title.textContent = "평면도";
+
+    header.append(caret, title);
+    section.appendChild(header);
+
+    // 층별 평면도를 가로로 나열하는 스크롤 컨테이너.
+    const scroller = document.createElement("div");
+    scroller.className = "zzk-map-calendar-floormap-scroller";
+
+    floors.forEach((floor) => {
+      const dataUri = floorMaps.getFloorMapDataUri(floor);
+      if (!dataUri) {
+        return;
+      }
+      const card = document.createElement("figure");
+      card.className = "zzk-map-calendar-floormap-card";
+
+      const img = document.createElement("img");
+      img.className = "zzk-map-calendar-floormap-image";
+      img.src = dataUri;
+      img.alt = `${floor}층 평면도`;
+      img.loading = "lazy";
+      img.draggable = false;
+
+      // 마우스로 누르고 있는 동안에만 확대 모달로 크게 보여준다.
+      img.addEventListener("pointerdown", (event) => {
+        // 주 버튼(좌클릭)/터치만 처리한다.
+        if (event.button != null && event.button !== 0) {
+          return;
+        }
+        event.preventDefault();
+        openFloorMapZoom(floor, dataUri);
+
+        const release = () => {
+          closeFloorMapZoom();
+          window.removeEventListener("pointerup", release);
+          window.removeEventListener("pointercancel", release);
+          window.removeEventListener("blur", release);
+        };
+        // 이미지 밖에서 손을 떼도 닫히도록 window 에 한 번만 건다.
+        window.addEventListener("pointerup", release);
+        window.addEventListener("pointercancel", release);
+        window.addEventListener("blur", release);
+      });
+
+      const caption = document.createElement("figcaption");
+      caption.className = "zzk-map-calendar-floormap-caption";
+      caption.textContent = `${floor}F`;
+
+      card.append(img, caption);
+      scroller.appendChild(card);
+    });
+
+    section.appendChild(scroller);
+
+    const applyOpenState = (nextOpen) => {
+      section.classList.toggle("open", nextOpen);
+      header.setAttribute("aria-expanded", nextOpen ? "true" : "false");
+      caret.textContent = nextOpen ? "▾" : "▸";
+    };
+    applyOpenState(open);
+
+    // 리렌더로 스크롤러가 새로 만들어졌으므로, 펼쳐진 상태면 이전 가로 스크롤 위치를
+    // 복원한다. 이미지 레이아웃이 잡힌 뒤라야 scrollLeft 가 먹으므로 다음 프레임에서 한다.
+    if (open && preservedScrollLeft > 0) {
+      window.requestAnimationFrame(() => {
+        scroller.scrollLeft = preservedScrollLeft;
+      });
+    }
+
+    header.addEventListener("click", () => {
+      const nextOpen = !section.classList.contains("open");
+      applyOpenState(nextOpen);
+      persistFloorMapSectionOpen(nextOpen);
+      // 평면도를 펼치면 모달이 세로로 길어지는(=리사이즈) 것이므로, 뷰포트를
+      // 벗어났으면 화면 안으로 다시 끌어들인다. 새 높이가 레이아웃에 반영된 뒤
+      // 측정하도록 다음 프레임에서 실행한다.
+      window.requestAnimationFrame(() => {
+        reclampMapCalendarOffsetToViewport();
+      });
+    });
+
+    body.appendChild(section);
   }
 
   const state = {
@@ -1401,6 +1582,15 @@
       top:
         previousBody instanceof HTMLElement ? previousBody.scrollTop : 0,
     };
+    // 평면도 스크롤러도 매 리렌더마다 새로 그려지므로, 슬롯 hover 등으로 자주 재렌더될 때
+    // 가로 스크롤 위치가 맨 앞으로 튀지 않도록 이전 위치를 보존한다.
+    const previousFloorMapScroller = overlay.querySelector(
+      ".zzk-map-calendar-floormap-scroller",
+    );
+    const preservedFloorMapScrollLeft =
+      previousFloorMapScroller instanceof HTMLElement
+        ? previousFloorMapScroller.scrollLeft
+        : 0;
 
     applyMapCalendarOverlayOffset(overlay);
     updateMapCalendarLauncherState();
@@ -2697,9 +2887,19 @@
       });
     });
 
+    // 개편 서비스(lms+)에는 지도가 없어 공간의 물리적 위치를 알 수 없다. 타임라인 아래에
+    // 층별 평면도(SVG)를 접이식으로 붙여, 페어룸 등이 실제 어디인지 확인할 수 있게 한다.
+    if (isLmsService()) {
+      renderMapCalendarFloorMapSection(body, preservedFloorMapScrollLeft);
+    }
+
     const scrollEl = getMapCalendarScrollElement(overlay);
     syncMapCalendarBodyScrollState(body);
     applyMapCalendarWidth(overlay);
+    // 너비까지 적용돼 최종 크기가 확정된 뒤, 저장된 위치(offset)가 현재 뷰포트를
+    // 벗어났다면(예: 더 큰 화면에서 옮겨둔 위치를 작은 화면에서 열 때) 화면 안으로
+    // 다시 끌어들인다.
+    reclampMapCalendarOffsetToViewport(overlay);
     // 가로 스크롤 위치는 실제 스크롤 요소(timeline-pane)에 복원한다.
     if (preservedBodyScroll.left !== 0 && scrollEl instanceof HTMLElement) {
       scrollEl.scrollLeft = preservedBodyScroll.left;
@@ -3997,6 +4197,111 @@
         opacity: 0.58;
       }
 
+      /* 층별 평면도 영역 — 타임라인 아래에 접이식으로 붙는다. */
+      #${MAP_CALENDAR_OVERLAY_ID} .zzk-map-calendar-floormap-section {
+        border-top: 1px solid var(--zzk-section-divider-color);
+        margin-top: 8px;
+        padding-top: 8px;
+      }
+
+      #${MAP_CALENDAR_OVERLAY_ID} .zzk-map-calendar-floormap-header {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        width: 100%;
+        padding: 6px 4px;
+        background: none;
+        border: none;
+        cursor: pointer;
+        font-size: 13px;
+        font-weight: 700;
+        color: #1e293b;
+        text-align: left;
+      }
+
+      #${MAP_CALENDAR_OVERLAY_ID} .zzk-map-calendar-floormap-caret {
+        font-size: 11px;
+        color: #64748b;
+        line-height: 1;
+      }
+
+      /* 접힌 상태에서는 평면도 스크롤 영역을 숨긴다(기본). */
+      #${MAP_CALENDAR_OVERLAY_ID} .zzk-map-calendar-floormap-scroller {
+        display: none;
+        gap: 12px;
+        overflow-x: auto;
+        overflow-y: hidden;
+        padding: 6px 4px 10px;
+      }
+
+      #${MAP_CALENDAR_OVERLAY_ID} .zzk-map-calendar-floormap-section.open .zzk-map-calendar-floormap-scroller {
+        display: flex;
+      }
+
+      #${MAP_CALENDAR_OVERLAY_ID} .zzk-map-calendar-floormap-card {
+        flex: 0 0 auto;
+        margin: 0;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 4px;
+      }
+
+      #${MAP_CALENDAR_OVERLAY_ID} .zzk-map-calendar-floormap-image {
+        display: block;
+        height: 220px;
+        width: auto;
+        max-width: none;
+        border: 1px solid var(--zzk-section-divider-color);
+        border-radius: 8px;
+        background: #ffffff;
+        cursor: zoom-in;
+      }
+
+      #${MAP_CALENDAR_OVERLAY_ID} .zzk-map-calendar-floormap-caption {
+        font-size: 12px;
+        font-weight: 600;
+        color: #475569;
+      }
+
+      /* 평면도 확대 모달 — document.body 에 붙으므로 오버레이 스코프 밖에 둔다.
+         누르는 동안에만 .visible 로 표시된다. */
+      #${FLOOR_MAP_ZOOM_ID} {
+        position: fixed;
+        inset: 0;
+        z-index: ${NAV_SAFE_Z_INDEX};
+        display: none;
+        align-items: center;
+        justify-content: center;
+        flex-direction: column;
+        gap: 12px;
+        padding: 32px;
+        background: rgba(15, 23, 42, 0.72);
+        pointer-events: none;
+      }
+
+      #${FLOOR_MAP_ZOOM_ID}.visible {
+        display: flex;
+      }
+
+      #${FLOOR_MAP_ZOOM_ID} .zzk-floormap-zoom-image {
+        max-width: 92vw;
+        max-height: 82vh;
+        width: auto;
+        height: auto;
+        object-fit: contain;
+        background: #ffffff;
+        border-radius: 12px;
+        box-shadow: 0 24px 64px rgba(0, 0, 0, 0.45);
+      }
+
+      #${FLOOR_MAP_ZOOM_ID} .zzk-floormap-zoom-caption {
+        font-size: 15px;
+        font-weight: 700;
+        color: #ffffff;
+        letter-spacing: 1px;
+      }
+
       @keyframes zzk-map-calendar-loading-spin {
         from {
           transform: rotate(0deg);
@@ -4582,6 +4887,8 @@
         }
 
         persistMapCalendarWidth(latestWidth);
+        // 리사이즈로 모달이 넓어져 뷰포트 밖으로 삐져나갔다면 다시 화면 안으로 끌어들인다.
+        reclampMapCalendarOffsetToViewport();
         // 너비가 바뀌면 가로 스크롤 가능 여부도 달라지므로 다시 맞춰준다.
         state.mapCalendarCurrentTimeScrollDate = null;
         applyMapCalendarCurrentTimeScroll();
@@ -4835,6 +5142,22 @@
     );
     state.mapCalendarOffset = offset;
     overlay.style.transform = `translate(${offset.x}px, ${offset.y}px)`;
+  }
+
+  // 모달 크기가 바뀐 뒤(리사이즈/평면도 펼침/마운트), 저장된 위치가 뷰포트를 벗어났으면
+  // 화면 안으로 다시 끌어들이고, 실제로 조정된 경우에만 저장한다.
+  function reclampMapCalendarOffsetToViewport(
+    overlay = document.getElementById(MAP_CALENDAR_OVERLAY_ID),
+  ) {
+    if (!(overlay instanceof HTMLElement)) {
+      return;
+    }
+    const before = state.mapCalendarOffset || { x: 0, y: 0 };
+    applyMapCalendarOverlayOffset(overlay);
+    const after = state.mapCalendarOffset || { x: 0, y: 0 };
+    if (after.x !== before.x || after.y !== before.y) {
+      persistMapCalendarOffset(after);
+    }
   }
 
   function normalizeElementOffset(element, offset) {

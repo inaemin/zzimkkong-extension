@@ -19,6 +19,7 @@ const CONTENT_SCRIPT_BUNDLE = [
   "src/services/guest-data/shared.js",
   "src/services/lms-data/normalizers.js",
   "src/services/lms-data/shared.js",
+  "src/features/radar/floor-maps.js",
   "src/features/radar/shared.js",
   "src/features/radar/workflow.js",
   "src/features/radar/form-sync.js",

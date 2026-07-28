@@ -79,9 +79,7 @@ GitHub Actions workflow: `.github/workflows/publish-chrome-extension.yml`
 
 - `CHROME_EXTENSION_ID`: Chrome Web Store 확장 프로그램 ID
 - `CHROME_WEBSTORE_PUBLISHER_ID`: Chrome Web Store Publisher ID
-- `CHROME_WEBSTORE_CLIENT_ID`: Google Cloud OAuth client ID
-- `CHROME_WEBSTORE_CLIENT_SECRET`: Google Cloud OAuth client secret
-- `CHROME_WEBSTORE_REFRESH_TOKEN`: `https://www.googleapis.com/auth/chromewebstore` scope로 발급한 refresh token
+- `GCP_SERVICE_ACCOUNT_KEY`: Chrome Web Store API 권한이 있는 Google Cloud 서비스 계정 키(JSON 전체). workflow 가 이 키로 JWT 를 직접 서명해 `https://www.googleapis.com/auth/chromewebstore` scope 의 access token 을 발급받습니다.
 
 주의:
 

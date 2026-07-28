@@ -1,0 +1,143 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="1471" height="934" viewBox="225 19 1471 934" role="img" aria-labelledby="title desc">
+  <title id="title">12F floor map</title>
+  <desc id="desc">Editable SVG recreation of the uploaded 12th-floor Korean floor plan.</desc>
+  <style>
+    .background { fill: #ffffff; }
+    .wall {
+      fill: none;
+      stroke: #545454;
+      stroke-width: 5;
+      stroke-linecap: square;
+      stroke-linejoin: miter;
+      vector-effect: non-scaling-stroke;
+    }
+    .wall-thin {
+      fill: none;
+      stroke: #666666;
+      stroke-width: 4;
+      stroke-linecap: square;
+      stroke-linejoin: miter;
+      vector-effect: non-scaling-stroke;
+    }
+    .soft-divider {
+      fill: none;
+      stroke: #c3c4c9;
+      stroke-width: 4;
+      stroke-linecap: square;
+      stroke-linejoin: miter;
+      vector-effect: non-scaling-stroke;
+    }
+    .label {
+      fill: #171717;
+      font-family: "Apple SD Gothic Neo", "Noto Sans KR", "NanumSquare", sans-serif;
+      font-size: 34px;
+      font-weight: 500;
+      letter-spacing: 0;
+      text-anchor: middle;
+      dominant-baseline: middle;
+    }
+    .pod-label {
+      fill: #111111;
+      font-family: "Apple SD Gothic Neo", "Noto Sans KR", "NanumSquare", sans-serif;
+      font-size: 31px;
+      font-weight: 700;
+      letter-spacing: 0;
+      text-anchor: middle;
+      dominant-baseline: middle;
+    }
+  </style>
+
+  <rect class="background" x="0" y="0" width="1714" height="970"/>
+
+  <g id="walls">
+    <g id="exterior">
+      <path class="wall" d="M231 25 H1690 V947 H231 Z"/>
+    </g>
+
+    <g id="library">
+      <line class="soft-divider" x1="1033" y1="26" x2="1033" y2="307"/>
+      <line class="soft-divider" x1="370" y1="307" x2="1033" y2="307"/>
+    </g>
+
+    <g id="pods-7-to-14">
+      <path class="wall-thin" d="M251 64 V147 M251 105 H332 M332 64 V147"/>
+      <path class="wall-thin" d="M251 205 V289 M251 246 H332 M332 205 V289"/>
+      <path class="wall-thin" d="M251 365 V449 M251 406 H332 M332 365 V449"/>
+      <path class="wall-thin" d="M251 525 V609 M251 566 H332 M332 525 V609"/>
+    </g>
+
+    <g id="coworking-zone">
+      <path class="wall" d="M370 345 H431 V625 H633"/>
+    </g>
+
+    <g id="meeting-rooms">
+      <line class="wall" x1="1110" y1="25" x2="1110" y2="266"/>
+      <line class="wall" x1="1110" y1="165" x2="1272" y2="165"/>
+      <line class="wall" x1="1110" y1="266" x2="1272" y2="266"/>
+      <line class="wall" x1="1272" y1="25" x2="1272" y2="47"/>
+      <line class="wall" x1="1272" y1="64" x2="1272" y2="227"/>
+      <line class="wall" x1="1311" y1="25" x2="1311" y2="47"/>
+      <line class="wall" x1="1311" y1="64" x2="1311" y2="227"/>
+      <line class="wall" x1="1311" y1="165" x2="1472" y2="165"/>
+      <line class="wall" x1="1311" y1="266" x2="1472" y2="266"/>
+    </g>
+
+    <g id="entry">
+      <path class="wall" d="M711 365 H994 M1109 365 H1414 V606 H1109"/>
+      <path class="wall" d="M711 365 V606 H994"/>
+    </g>
+
+    <g id="right-side-rooms">
+      <line class="wall" x1="1472" y1="25" x2="1472" y2="307"/>
+      <line class="wall" x1="1472" y1="345" x2="1690" y2="345"/>
+      <line class="wall" x1="1472" y1="345" x2="1472" y2="367"/>
+      <line class="wall" x1="1472" y1="425" x2="1472" y2="567"/>
+      <line class="wall" x1="1472" y1="625" x2="1690" y2="625"/>
+      <line class="wall" x1="1472" y1="605" x2="1472" y2="625"/>
+      <line class="wall" x1="1472" y1="625" x2="1472" y2="867"/>
+      <line class="wall" x1="1472" y1="905" x2="1472" y2="947"/>
+    </g>
+
+    <g id="bottom-rooms">
+      <line class="wall" x1="231" y1="685" x2="653" y2="685"/>
+      <line class="wall" x1="691" y1="685" x2="712" y2="685"/>
+      <line class="wall" x1="712" y1="685" x2="712" y2="947"/>
+      <line class="wall" x1="950" y1="685" x2="1113" y2="685"/>
+      <line class="wall" x1="972" y1="685" x2="972" y2="947"/>
+      <line class="wall" x1="1113" y1="685" x2="1113" y2="826"/>
+      <line class="wall" x1="972" y1="886" x2="1113" y2="886"/>
+      <line class="wall" x1="1113" y1="905" x2="1113" y2="947"/>
+      <line class="wall" x1="1169" y1="685" x2="1354" y2="685"/>
+      <line class="wall" x1="1411" y1="685" x2="1472" y2="685"/>
+    </g>
+  </g>
+
+  <g id="room-labels">
+    <text class="label" x="701" y="160">라이브러리</text>
+
+    <text class="pod-label" x="292" y="84">패 7</text>
+    <text class="pod-label" x="292" y="125">패 8</text>
+    <text class="pod-label" x="292" y="225">패 9</text>
+    <text class="pod-label" x="292" y="267">패 10</text>
+    <text class="pod-label" x="292" y="385">패 11</text>
+    <text class="pod-label" x="292" y="426">패 12</text>
+    <text class="pod-label" x="292" y="546">패 13</text>
+    <text class="pod-label" x="292" y="587">패 14</text>
+
+    <text class="label" x="500" y="483">코워킹 존</text>
+    <text class="label" x="1191" y="92">보이저</text>
+    <text class="label" x="1191" y="212">아폴로</text>
+    <text class="label" x="1392" y="92">디스커버리</text>
+    <text class="label" x="1392" y="212">허블</text>
+    <text class="label" x="1580" y="183">공조실</text>
+    <text class="label" x="1061" y="483">출입구</text>
+    <text class="label" x="1580" y="482">화장실</text>
+
+    <text class="label" x="472" y="810">작은 강의실</text>
+    <text class="label" x="842" y="810">캔틴</text>
+    <text class="label" x="1043" y="782">코치 2</text>
+    <text class="label" x="1293" y="810">코치룸</text>
+    <text class="label" x="1580" y="782">서버실</text>
+  </g>
+</svg>
