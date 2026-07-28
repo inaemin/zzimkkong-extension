@@ -1,12 +1,16 @@
 import fs from "node:fs";
 import path from "node:path";
 import process from "node:process";
+import { fileURLToPath } from "node:url";
 
 // 루트의 floor_map_<N>F.svg 들을 data-URI 로 인라인한
 // src/features/radar/floor-maps.js 를 생성한다.
 // SVG 를 수정한 뒤 `node scripts/generate-floor-maps.mjs` 로 다시 만든다.
 
-const rootDir = process.cwd();
+// 실행 위치(cwd)에 의존하지 않도록, 스크립트 파일 기준으로 저장소 루트를 계산한다.
+// (scripts/ 의 상위가 루트)
+const scriptDir = path.dirname(fileURLToPath(import.meta.url));
+const rootDir = path.resolve(scriptDir, "..");
 const floors = [11, 12, 13];
 const outputPath = path.join(rootDir, "src/features/radar/floor-maps.js");
 

@@ -1283,9 +1283,9 @@ test("리사이즈로 넓어져 화면을 벗어나면 다시 뷰포트 안으�
     };
   });
 
-  // 리사이즈로 폭이 커졌다(테스트 시나리오가 실제로 확장을 일으켰는지).
+  // 리사이즈로 폭이 실제로 커졌다(핸들이 동작 안 해 폭이 그대로면 이 테스트는 무의미).
   const widthAfter = result.right - result.left;
-  expect(widthAfter).toBeGreaterThanOrEqual(widthBefore);
+  expect(widthAfter).toBeGreaterThan(widthBefore);
   // 재조정 결과: 모달 전체가 뷰포트 안에 있어야 한다(약간의 오차 허용).
   // 재클램프가 없으면 왼쪽 가장자리가 음수가 되어 화면 밖으로 나간다.
   expect(result.left).toBeGreaterThanOrEqual(-2);

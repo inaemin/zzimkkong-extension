@@ -213,12 +213,12 @@
   }
 
   function isFloorMapSectionOpen() {
-    // 기본은 접힘("1" 로 저장돼 있을 때만 펼침).
-    return readStoredText(MAP_CALENDAR_FLOORMAP_OPEN_STORAGE_KEY, "") === "1";
+    // 기본은 접힘.
+    return readStoredBoolean(MAP_CALENDAR_FLOORMAP_OPEN_STORAGE_KEY, false);
   }
 
   function persistFloorMapSectionOpen(open) {
-    writeStoredText(MAP_CALENDAR_FLOORMAP_OPEN_STORAGE_KEY, open ? "1" : "0");
+    writeStoredBoolean(MAP_CALENDAR_FLOORMAP_OPEN_STORAGE_KEY, open);
   }
 
   // 평면도를 누르고 있는 동안 화면 중앙에 크게 띄우는 확대 모달. 단일 인스턴스를
@@ -226,7 +226,9 @@
   let floorMapZoomOverlay = null;
 
   function ensureFloorMapZoomOverlay() {
-    if (floorMapZoomOverlay instanceof HTMLElement) {
+    // detached 노드도 instanceof 는 계속 true 이므로, DOM 에 붙어있는지(isConnected)
+    // 까지 확인한다. lms+ SPA 에서 body 하위가 갈려 떨어져 나갔으면 새로 만든다.
+    if (floorMapZoomOverlay instanceof HTMLElement && floorMapZoomOverlay.isConnected) {
       return floorMapZoomOverlay;
     }
     const overlay = document.createElement("div");
@@ -273,7 +275,7 @@
 
   // 타임라인 아래에 층별 평면도(SVG)를 접이식으로 붙인다. lms+ 에는 지도가 없어
   // 공간의 물리적 위치를 알 수 없으므로, 평면도로 페어룸 등의 위치를 확인하게 한다.
-  function renderMapCalendarFloorMapSection(body) {
+  function renderMapCalendarFloorMapSection(body, preservedScrollLeft = 0) {
     if (!(body instanceof HTMLElement)) {
       return;
     }
@@ -365,6 +367,14 @@
       caret.textContent = nextOpen ? "▾" : "▸";
     };
     applyOpenState(open);
+
+    // 리렌더로 스크롤러가 새로 만들어졌으므로, 펼쳐진 상태면 이전 가로 스크롤 위치를
+    // 복원한다. 이미지 레이아웃이 잡힌 뒤라야 scrollLeft 가 먹으므로 다음 프레임에서 한다.
+    if (open && preservedScrollLeft > 0) {
+      window.requestAnimationFrame(() => {
+        scroller.scrollLeft = preservedScrollLeft;
+      });
+    }
 
     header.addEventListener("click", () => {
       const nextOpen = !section.classList.contains("open");
@@ -1572,6 +1582,15 @@
       top:
         previousBody instanceof HTMLElement ? previousBody.scrollTop : 0,
     };
+    // 평면도 스크롤러도 매 리렌더마다 새로 그려지므로, 슬롯 hover 등으로 자주 재렌더될 때
+    // 가로 스크롤 위치가 맨 앞으로 튀지 않도록 이전 위치를 보존한다.
+    const previousFloorMapScroller = overlay.querySelector(
+      ".zzk-map-calendar-floormap-scroller",
+    );
+    const preservedFloorMapScrollLeft =
+      previousFloorMapScroller instanceof HTMLElement
+        ? previousFloorMapScroller.scrollLeft
+        : 0;
 
     applyMapCalendarOverlayOffset(overlay);
     updateMapCalendarLauncherState();
@@ -2871,7 +2890,7 @@
     // 개편 서비스(lms+)에는 지도가 없어 공간의 물리적 위치를 알 수 없다. 타임라인 아래에
     // 층별 평면도(SVG)를 접이식으로 붙여, 페어룸 등이 실제 어디인지 확인할 수 있게 한다.
     if (isLmsService()) {
-      renderMapCalendarFloorMapSection(body);
+      renderMapCalendarFloorMapSection(body, preservedFloorMapScrollLeft);
     }
 
     const scrollEl = getMapCalendarScrollElement(overlay);
@@ -4236,16 +4255,13 @@
         border: 1px solid var(--zzk-section-divider-color);
         border-radius: 8px;
         background: #ffffff;
+        cursor: zoom-in;
       }
 
       #${MAP_CALENDAR_OVERLAY_ID} .zzk-map-calendar-floormap-caption {
         font-size: 12px;
         font-weight: 600;
         color: #475569;
-      }
-
-      #${MAP_CALENDAR_OVERLAY_ID} .zzk-map-calendar-floormap-image {
-        cursor: zoom-in;
       }
 
       /* 평면도 확대 모달 — document.body 에 붙으므로 오버레이 스코프 밖에 둔다.
