@@ -1,0 +1,130 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="1474" height="933" viewBox="234 23 1474 933" role="img" aria-labelledby="title desc">
+  <title id="title">13F floor map</title>
+  <desc id="desc">Editable SVG recreation of the uploaded 13th-floor Korean floor plan.</desc>
+  <style>
+    .background { fill: #ffffff; }
+    .wall {
+      fill: none;
+      stroke: #545454;
+      stroke-width: 5;
+      stroke-linecap: square;
+      stroke-linejoin: miter;
+      vector-effect: non-scaling-stroke;
+    }
+    .wall-thin {
+      fill: none;
+      stroke: #666666;
+      stroke-width: 4;
+      stroke-linecap: square;
+      stroke-linejoin: miter;
+      vector-effect: non-scaling-stroke;
+    }
+    .soft-divider {
+      fill: none;
+      stroke: #c3c4c9;
+      stroke-width: 4;
+      stroke-linecap: square;
+      stroke-linejoin: miter;
+      vector-effect: non-scaling-stroke;
+    }
+    .label {
+      fill: #171717;
+      font-family: "Apple SD Gothic Neo", "Noto Sans KR", "NanumSquare", sans-serif;
+      font-size: 34px;
+      font-weight: 500;
+      letter-spacing: 0;
+      text-anchor: middle;
+      dominant-baseline: middle;
+    }
+    .pod-label {
+      fill: #111111;
+      font-family: "Apple SD Gothic Neo", "Noto Sans KR", "NanumSquare", sans-serif;
+      font-size: 31px;
+      font-weight: 700;
+      letter-spacing: 0;
+      text-anchor: middle;
+      dominant-baseline: middle;
+    }
+  </style>
+
+  <rect class="background" x="0" y="0" width="1726" height="972"/>
+
+  <g id="walls">
+    <g id="exterior">
+      <path class="wall" d="M240 29 H1702 V950 H240 Z"/>
+    </g>
+
+    <g id="library">
+      <line class="soft-divider" x1="1042" y1="30" x2="1042" y2="310"/>
+      <line class="soft-divider" x1="240" y1="310" x2="1042" y2="310"/>
+      <line class="soft-divider" x1="242" y1="31" x2="1040" y2="309"/>
+      <line class="soft-divider" x1="1040" y1="31" x2="242" y2="309"/>
+    </g>
+
+    <g id="startup-lab">
+      <line class="soft-divider" x1="561" y1="310" x2="561" y2="950"/>
+    </g>
+
+    <g id="andromeda-room">
+      <line class="wall" x1="1141" y1="29" x2="1141" y2="290"/>
+      <line class="wall" x1="1141" y1="290" x2="1346" y2="290"/>
+      <line class="wall" x1="1382" y1="290" x2="1482" y2="290"/>
+      <line class="wall" x1="1482" y1="29" x2="1482" y2="310"/>
+    </g>
+
+    <g id="entry">
+      <path class="wall" d="M720 369 H1002 M1119 369 H1423 V610 H1119"/>
+      <path class="wall" d="M720 369 V610 H1002"/>
+    </g>
+
+    <g id="right-side-rooms">
+      <line class="wall" x1="1482" y1="348" x2="1702" y2="348"/>
+      <line class="wall" x1="1482" y1="348" x2="1482" y2="371"/>
+      <line class="wall" x1="1482" y1="429" x2="1482" y2="570"/>
+      <line class="wall" x1="1482" y1="628" x2="1702" y2="628"/>
+      <line class="wall" x1="1561" y1="628" x2="1561" y2="651"/>
+      <line class="wall" x1="1561" y1="670" x2="1561" y2="911"/>
+      <line class="wall" x1="1561" y1="789" x2="1702" y2="789"/>
+    </g>
+
+    <g id="coworking-and-focus-zones">
+      <line class="wall" x1="1121" y1="669" x2="1141" y2="669"/>
+      <line class="wall" x1="1141" y1="669" x2="1141" y2="869"/>
+      <line class="wall" x1="1121" y1="869" x2="1175" y2="869"/>
+      <line class="wall" x1="1141" y1="928" x2="1141" y2="950"/>
+    </g>
+
+    <g id="pods-1-to-6">
+      <line class="wall-thin" x1="1141" y1="808" x2="1323" y2="808"/>
+      <line class="wall-thin" x1="1202" y1="808" x2="1202" y2="870"/>
+      <line class="wall-thin" x1="1262" y1="808" x2="1262" y2="870"/>
+      <line class="wall-thin" x1="1323" y1="808" x2="1323" y2="870"/>
+      <line class="wall-thin" x1="1382" y1="808" x2="1561" y2="808"/>
+      <line class="wall-thin" x1="1382" y1="808" x2="1382" y2="870"/>
+      <line class="wall-thin" x1="1442" y1="808" x2="1442" y2="870"/>
+      <line class="wall-thin" x1="1502" y1="808" x2="1502" y2="870"/>
+    </g>
+  </g>
+
+  <g id="room-labels">
+    <text class="label" x="641" y="164">라이브러리</text>
+    <text class="label" x="1312" y="157">안드로메다같은 방</text>
+    <text class="label" x="1592" y="187">공조실</text>
+    <text class="label" x="1071" y="486">출입구</text>
+    <text class="label" x="1592" y="485">화장실</text>
+
+    <text class="label" x="401" y="625">스타트랙</text>
+    <text class="label" x="850" y="776">코워킹 존</text>
+    <text class="label" x="1352" y="737">포커스 존</text>
+    <text class="label" x="1631" y="708">은하수</text>
+    <text class="label" x="1631" y="869">스튜디오</text>
+
+    <text class="pod-label" x="1171" y="838">패 1</text>
+    <text class="pod-label" x="1232" y="838">패 2</text>
+    <text class="pod-label" x="1292" y="838">패 3</text>
+    <text class="pod-label" x="1412" y="838">패 4</text>
+    <text class="pod-label" x="1472" y="838">패 5</text>
+    <text class="pod-label" x="1532" y="838">패 6</text>
+  </g>
+</svg>
