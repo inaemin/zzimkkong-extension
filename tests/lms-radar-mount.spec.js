@@ -23,6 +23,7 @@ const CONTENT_SCRIPT_BUNDLE = [
   "src/services/guest-data/shared.js",
   "src/services/lms-data/normalizers.js",
   "src/services/lms-data/shared.js",
+  "src/features/radar/floor-maps.js",
   "src/features/radar/shared.js",
   "src/features/radar/workflow.js",
   "src/features/radar/form-sync.js",
@@ -404,3 +405,127 @@ test("회의실↔타임블록 세로 구분선이 헤더~마지막 행까지 �
   // 라벨 pane 높이가 그리드 wrap 전체 높이와 사실상 같다(끊김 없이 이어짐).
   expect(Math.abs(geom.labelPaneHeight - geom.gwHeight)).toBeLessThanOrEqual(2);
 });
+
+test("lms+ 레이더 하단에 층별 평면도 영역이 기본 접힘으로 붙는다", async ({ page }) => {
+  await mountServicePage(page);
+  await page.waitForSelector(`#${MAP_CALENDAR_OVERLAY_ID} .zzk-map-calendar-floormap-section`, {
+    timeout: 4000,
+  });
+
+  const initial = await page.evaluate((overlayId) => {
+    const overlay = document.getElementById(overlayId);
+    const section = overlay.querySelector(".zzk-map-calendar-floormap-section");
+    const header = section.querySelector(".zzk-map-calendar-floormap-header");
+    const scroller = section.querySelector(".zzk-map-calendar-floormap-scroller");
+    return {
+      hasSection: section instanceof HTMLElement,
+      isOpen: section.classList.contains("open"),
+      scrollerDisplay: getComputedStyle(scroller).display,
+      ariaExpanded: header.getAttribute("aria-expanded"),
+      imageCount: scroller.querySelectorAll(".zzk-map-calendar-floormap-image").length,
+      captions: Array.from(scroller.querySelectorAll(".zzk-map-calendar-floormap-caption")).map(
+        (el) => el.textContent,
+      ),
+      allSvgDataUri: Array.from(scroller.querySelectorAll(".zzk-map-calendar-floormap-image")).every(
+        (img) => img.getAttribute("src").startsWith("data:image/svg+xml,"),
+      ),
+    };
+  }, MAP_CALENDAR_OVERLAY_ID);
+
+  expect(initial.hasSection).toBe(true);
+  // 기본은 접힘: 스크롤 영역이 숨겨져 있다.
+  expect(initial.isOpen).toBe(false);
+  expect(initial.scrollerDisplay).toBe("none");
+  expect(initial.ariaExpanded).toBe("false");
+  // 11/12/13F 평면도 3개가 data-URI SVG 로 들어있다.
+  expect(initial.imageCount).toBe(3);
+  expect(initial.captions).toEqual(["11F", "12F", "13F"]);
+  expect(initial.allSvgDataUri).toBe(true);
+});
+
+test("평면도 헤더를 누르면 펼쳐지고 가로 스크롤이 생긴다", async ({ page }) => {
+  await mountServicePage(page);
+  await page.waitForSelector(`#${MAP_CALENDAR_OVERLAY_ID} .zzk-map-calendar-floormap-header`, {
+    timeout: 4000,
+  });
+
+  await page.click(`#${MAP_CALENDAR_OVERLAY_ID} .zzk-map-calendar-floormap-header`);
+
+  // 넓은 모달에서는 3장이 다 들어가 스크롤이 안 생길 수 있으므로, 카드를 좁혀
+  // 평면도가 실제로 넘치는 상황을 만든다.
+  await page.evaluate((overlayId) => {
+    const card = document.querySelector(`#${overlayId} .zzk-map-calendar-card`);
+    if (card) card.style.width = "520px";
+  }, MAP_CALENDAR_OVERLAY_ID);
+  await page.waitForTimeout(100);
+
+  const opened = await page.evaluate((overlayId) => {
+    const overlay = document.getElementById(overlayId);
+    const section = overlay.querySelector(".zzk-map-calendar-floormap-section");
+    const scroller = section.querySelector(".zzk-map-calendar-floormap-scroller");
+    return {
+      isOpen: section.classList.contains("open"),
+      scrollerDisplay: getComputedStyle(scroller).display,
+      overflowX: getComputedStyle(scroller).overflowX,
+      // 좁은 모달에서는 평면도 3장이 가로로 넘쳐 스크롤 폭이 보이는 폭보다 넓다.
+      hasHorizontalScroll: scroller.scrollWidth - scroller.clientWidth > 2,
+    };
+  }, MAP_CALENDAR_OVERLAY_ID);
+
+  expect(opened.isOpen).toBe(true);
+  expect(opened.scrollerDisplay).toBe("flex");
+  expect(opened.overflowX).toMatch(/auto|scroll/);
+  expect(opened.hasHorizontalScroll).toBe(true);
+});
+
+test("평면도를 누르고 있는 동안에만 확대 모달이 보인다", async ({ page }) => {
+  await mountServicePage(page);
+  await page.waitForSelector(`#${MAP_CALENDAR_OVERLAY_ID} .zzk-map-calendar-floormap-header`, {
+    timeout: 4000,
+  });
+
+  // 평면도 영역을 펼친다.
+  await page.click(`#${MAP_CALENDAR_OVERLAY_ID} .zzk-map-calendar-floormap-header`);
+  const firstImage = page.locator(
+    `#${MAP_CALENDAR_OVERLAY_ID} .zzk-map-calendar-floormap-image`,
+  ).first();
+  await firstImage.waitFor({ state: "visible" });
+
+  const readZoom = () =>
+    page.evaluate(() => {
+      const overlay = document.getElementById("zzk-floormap-zoom");
+      if (!overlay) return { exists: false };
+      const img = overlay.querySelector(".zzk-floormap-zoom-image");
+      return {
+        exists: true,
+        visible: overlay.classList.contains("visible"),
+        display: getComputedStyle(overlay).display,
+        imgSrcIsSvg: (img?.getAttribute("src") || "").startsWith("data:image/svg+xml,"),
+        caption: overlay.querySelector(".zzk-floormap-zoom-caption")?.textContent || "",
+      };
+    });
+
+  // 누르기 전에는 확대 모달이 없거나 숨김.
+  const before = await readZoom();
+  expect(before.visible === true).toBe(false);
+
+  // 이미지 중앙에서 마우스를 누른다(뗴지 않음).
+  const box = await firstImage.boundingBox();
+  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+  await page.mouse.down();
+
+  const during = await readZoom();
+  expect(during.exists).toBe(true);
+  expect(during.visible).toBe(true);
+  expect(during.display).toBe("flex");
+  expect(during.imgSrcIsSvg).toBe(true);
+  expect(during.caption).toBe("11F");
+
+  // 손을 떼면 닫힌다.
+  await page.mouse.up();
+  const after = await readZoom();
+  expect(after.visible).toBe(false);
+  expect(after.display).toBe("none");
+});
+
+
