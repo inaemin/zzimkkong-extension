@@ -10,7 +10,6 @@
       stroke-width: 5;
       stroke-linecap: square;
       stroke-linejoin: miter;
-      vector-effect: non-scaling-stroke;
     }
     .soft-divider {
       fill: none;
@@ -18,7 +17,6 @@
       stroke-width: 4;
       stroke-linecap: square;
       stroke-linejoin: miter;
-      vector-effect: non-scaling-stroke;
     }
     .label {
       fill: #171717;
