@@ -113,14 +113,14 @@
   <g id="room-labels">
     <text class="label" x="701" y="160">라이브러리</text>
 
-    <text class="pod-label" x="292" y="84">패 7</text>
-    <text class="pod-label" x="292" y="125">패 8</text>
-    <text class="pod-label" x="292" y="225">패 9</text>
-    <text class="pod-label" x="292" y="267">패 10</text>
-    <text class="pod-label" x="292" y="385">패 11</text>
-    <text class="pod-label" x="292" y="426">패 12</text>
-    <text class="pod-label" x="292" y="546">패 13</text>
-    <text class="pod-label" x="292" y="587">패 14</text>
+    <text class="pod-label" x="292" y="84">페 7</text>
+    <text class="pod-label" x="292" y="125">페 8</text>
+    <text class="pod-label" x="292" y="225">페 9</text>
+    <text class="pod-label" x="292" y="267">페 10</text>
+    <text class="pod-label" x="292" y="385">페 11</text>
+    <text class="pod-label" x="292" y="426">페 12</text>
+    <text class="pod-label" x="292" y="546">페 13</text>
+    <text class="pod-label" x="292" y="587">페 14</text>
 
     <text class="label" x="500" y="483">코워킹 존</text>
     <text class="label" x="1191" y="92">보이저</text>

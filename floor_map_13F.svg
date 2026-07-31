@@ -117,11 +117,11 @@
     <text class="label" x="1631" y="708">은하수</text>
     <text class="label" x="1631" y="869">스튜디오</text>
 
-    <text class="pod-label" x="1171" y="838">패 1</text>
-    <text class="pod-label" x="1232" y="838">패 2</text>
-    <text class="pod-label" x="1292" y="838">패 3</text>
-    <text class="pod-label" x="1412" y="838">패 4</text>
-    <text class="pod-label" x="1472" y="838">패 5</text>
-    <text class="pod-label" x="1532" y="838">패 6</text>
+    <text class="pod-label" x="1171" y="838">페 1</text>
+    <text class="pod-label" x="1232" y="838">페 2</text>
+    <text class="pod-label" x="1292" y="838">페 3</text>
+    <text class="pod-label" x="1412" y="838">페 4</text>
+    <text class="pod-label" x="1472" y="838">페 5</text>
+    <text class="pod-label" x="1532" y="838">페 6</text>
   </g>
 </svg>
