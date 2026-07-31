@@ -29,6 +29,28 @@ test("각 층 평면도 data-URI 가 정상 SVG 로 디코딩된다", async () =
   }
 });
 
+test("평면도 페어룸 라벨이 '페 N' 으로 표기된다(패 → 페 오타 회귀 방지)", async () => {
+  const floorMaps = await loadFloorMaps();
+
+  // 12F: 페7~14, 13F: 페1~6. (11F 는 페어룸 라벨 없음)
+  const expectedPodLabels = {
+    12: [7, 8, 9, 10, 11, 12, 13, 14].map((n) => `페 ${n}`),
+    13: [1, 2, 3, 4, 5, 6].map((n) => `페 ${n}`),
+  };
+
+  for (const floor of floorMaps.getAvailableFloorMapFloors()) {
+    const svg = decodeURIComponent(
+      floorMaps.getFloorMapDataUri(floor).slice("data:image/svg+xml,".length),
+    );
+    // 어느 층에도 '패' 라벨(오타)이 남아있으면 안 된다.
+    expect(svg).not.toContain(">패 ");
+    // 해당 층의 페어룸 라벨이 '페 N' 으로 정확히 들어있어야 한다.
+    for (const label of expectedPodLabels[floor] ?? []) {
+      expect(svg).toContain(`>${label}<`);
+    }
+  }
+});
+
 test("평면도 SVG 에 non-scaling-stroke 가 없어 확대 시 선 굵기도 함께 커진다", async () => {
   const floorMaps = await loadFloorMaps();
   for (const floor of floorMaps.getAvailableFloorMapFloors()) {
