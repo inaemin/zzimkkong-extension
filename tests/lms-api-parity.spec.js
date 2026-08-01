@@ -1,18 +1,11 @@
-import path from "node:path";
 import { expect, test } from "@playwright/test";
-import { ensureExtensionBuild, loadBackgroundBundle } from "./helpers/extension.js";
+import {
+  ensureExtensionBuild,
+  loadBackgroundBundle,
+  loadContentBundle,
+} from "./helpers/extension.js";
 
 test.beforeAll(ensureExtensionBuild);
-
-// background.js 는 서비스워커 밖에서는 importScripts 가 없어 전역이 미리 올라와 있어야 한다.
-const SCRIPT_ORDER_FOR_LMS_DATA = [
-  "src/utils/shared.js",
-  "src/constants/runtime.js",
-  "src/utils/date-time.js",
-  "src/utils/routes.js",
-  "src/services/lms-data/normalizers.js",
-  "src/services/lms-data/shared.js",
-];
 
 const API_ORIGIN = "https://techcourse-lms-plus-api.woowahan.com";
 const WEB_ORIGIN = "https://techcourse-lms-plus-web.woowahan.com";
@@ -163,10 +156,9 @@ async function routeLmsApi(page) {
   });
 }
 
+// 데이터 계층(__zzkLmsDataShared, __zzkRouteUtils)은 content 번들에 들어있다.
 async function loadLmsDataScripts(page) {
-  for (const scriptPath of SCRIPT_ORDER_FOR_LMS_DATA) {
-    await page.addScriptTag({ path: path.resolve(process.cwd(), scriptPath) });
-  }
+  await loadContentBundle(page);
 }
 
 async function loadBackgroundScript(page) {
