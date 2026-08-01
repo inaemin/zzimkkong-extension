@@ -55,14 +55,17 @@ export function ChannelCombobox({
       {value ? (
         <Badge variant="secondary" className="gap-1 pr-1">
           {value}
-          <button
+          <Button
             type="button"
+            variant="ghost"
+            size="icon"
             aria-label={`${value} 선택 해제`}
-            className="rounded-sm opacity-70 hover:opacity-100"
+            // Badge 안에 들어가므로 Button 기본 크기(size-9)를 chip 높이에 맞춘다.
+            className="size-4 rounded-sm opacity-70 hover:opacity-100"
             onClick={() => onChange("")}
           >
             <XIcon className="size-3" />
-          </button>
+          </Button>
         </Badge>
       ) : null}
 
@@ -107,10 +110,13 @@ export function ChannelCombobox({
                         className={cn("size-4", value === channel ? "opacity-100" : "opacity-0")}
                       />
                       <span className="flex-1">{channel}</span>
-                      <button
+                      <Button
                         type="button"
+                        variant="ghost"
+                        size="icon"
                         aria-label={`${channel} 기록에서 삭제`}
-                        className="opacity-0 group-hover:opacity-70 hover:opacity-100"
+                        // 목록 한 줄 높이를 넘기지 않게 Button 기본 크기를 줄인다.
+                        className="size-5 opacity-0 group-hover:opacity-70 hover:opacity-100"
                         onClick={(event) => {
                           // 항목 선택으로 번지지 않게 막는다.
                           event.stopPropagation();
@@ -118,7 +124,7 @@ export function ChannelCombobox({
                         }}
                       >
                         <XIcon className="size-3" />
-                      </button>
+                      </Button>
                     </CommandItem>
                   ))}
                 </CommandGroup>

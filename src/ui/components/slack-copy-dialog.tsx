@@ -149,9 +149,18 @@ export function SlackCopyDialog({
         </div>
 
         <DialogFooter className="sm:justify-between">
+          {/*
+            상태 문구는 DialogDescription 을 쓰지 않는다. Base UI 는 Description 을
+            컨텍스트로 등록해 aria-describedby 에 물리는데, 두 개를 두면 나중 것이
+            이겨서 헤더의 안내문 대신 이 한 줄만 읽힌다("무엇을 하는 창인지"가 사라짐).
+            모양은 dialog-description 과 같은 클래스로 맞추고, 변경 알림은 role=status
+            (aria-live)로 따로 처리한다.
+          */}
           <p
             data-state={status}
-            className="text-muted-foreground data-[state=error]:text-destructive text-xs"
+            role="status"
+            aria-live="polite"
+            className="text-xs text-muted-foreground data-[state=error]:text-destructive"
           >
             {statusMessage}
           </p>
