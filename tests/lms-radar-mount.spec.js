@@ -454,12 +454,14 @@ test("평면도를 누르고 있는 동안에만 확대 모달이 보인다", as
 
   const readZoom = () =>
     page.evaluate(() => {
-      const overlay = document.getElementById("zzk-floormap-zoom");
+      // 확대 뷰는 React 마운트(shadow root) 안에 있다.
+      const host = document.getElementById("zzk-floormap-zoom-root");
+      const overlay = host?.shadowRoot?.getElementById("zzk-floormap-zoom");
       if (!overlay) return { exists: false };
       const img = overlay.querySelector(".zzk-floormap-zoom-image");
       return {
         exists: true,
-        visible: overlay.classList.contains("visible"),
+        visible: overlay.dataset.visible === "true",
         display: getComputedStyle(overlay).display,
         imgSrcIsSvg: (img?.getAttribute("src") || "").startsWith("data:image/svg+xml,"),
         caption: overlay.querySelector(".zzk-floormap-zoom-caption")?.textContent || "",

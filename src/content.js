@@ -63,6 +63,10 @@ import {
   readHostFieldDisplayValue,
 } from "./features/form-fields/shared.js";
 import {
+  closeFloorMapZoom,
+  openFloorMapZoom,
+} from "./ui/floor-map-zoom-modal.js";
+import {
   MAP_CALENDAR_OVERLAY_ID,
   MAP_CALENDAR_LAUNCHER_ID,
   SLACK_MODAL_TRIGGER_ID,
@@ -72,7 +76,6 @@ import {
   MAP_CALENDAR_OVERLAY_TAB_PAIR_ID,
   PAGE_RESERVATION_EVENT_TYPE,
   SLACK_COPY_MODAL_ID,
-  FLOOR_MAP_ZOOM_ID,
   SLACK_COPY_MODAL_STYLE_ID,
   SLACK_COPY_MODAL_BASECOAT_STYLE_ID,
   SLACK_COPY_MODAL_BASECOAT_STYLE_PATH,
@@ -200,58 +203,6 @@ import { createSlackSuccessFlow } from "./features/slack/success-flow.js";
 
   function persistFloorMapSectionOpen(open) {
     writeStoredBoolean(MAP_CALENDAR_FLOORMAP_OPEN_STORAGE_KEY, open);
-  }
-
-  // 평면도를 누르고 있는 동안 화면 중앙에 크게 띄우는 확대 모달. 단일 인스턴스를
-  // 재사용한다(누를 때 보이고, 손을 떼면 숨긴다).
-  let floorMapZoomOverlay = null;
-
-  function ensureFloorMapZoomOverlay() {
-    // detached 노드도 instanceof 는 계속 true 이므로, DOM 에 붙어있는지(isConnected)
-    // 까지 확인한다. lms+ SPA 에서 body 하위가 갈려 떨어져 나갔으면 새로 만든다.
-    if (floorMapZoomOverlay instanceof HTMLElement && floorMapZoomOverlay.isConnected) {
-      return floorMapZoomOverlay;
-    }
-    const overlay = document.createElement("div");
-    overlay.id = FLOOR_MAP_ZOOM_ID;
-    overlay.setAttribute("aria-hidden", "true");
-    // 클릭을 가로채지 않는다(누르는 동안 보기용). pointerup 은 window 에서 감지한다.
-    overlay.style.pointerEvents = "none";
-
-    const zoomImg = document.createElement("img");
-    zoomImg.className = "zzk-floormap-zoom-image";
-    zoomImg.alt = "";
-    zoomImg.draggable = false;
-
-    const caption = document.createElement("div");
-    caption.className = "zzk-floormap-zoom-caption";
-
-    overlay.append(zoomImg, caption);
-    document.body.appendChild(overlay);
-    overlay.__zzkImage = zoomImg;
-    overlay.__zzkCaption = caption;
-    floorMapZoomOverlay = overlay;
-    return overlay;
-  }
-
-  function openFloorMapZoom(floor, dataUri) {
-    if (!dataUri) {
-      return;
-    }
-    const overlay = ensureFloorMapZoomOverlay();
-    overlay.__zzkImage.src = dataUri;
-    overlay.__zzkImage.alt = `${floor}층 평면도 확대`;
-    overlay.__zzkCaption.textContent = `${floor}F`;
-    overlay.classList.add("visible");
-    overlay.setAttribute("aria-hidden", "false");
-  }
-
-  function closeFloorMapZoom() {
-    if (!(floorMapZoomOverlay instanceof HTMLElement)) {
-      return;
-    }
-    floorMapZoomOverlay.classList.remove("visible");
-    floorMapZoomOverlay.setAttribute("aria-hidden", "true");
   }
 
   // 타임라인 아래에 층별 평면도(SVG)를 접이식으로 붙인다. lms+ 에는 지도가 없어
@@ -3638,44 +3589,6 @@ import { createSlackSuccessFlow } from "./features/slack/success-flow.js";
         font-size: 12px;
         font-weight: 600;
         color: #475569;
-      }
-
-      /* 평면도 확대 모달 — document.body 에 붙으므로 오버레이 스코프 밖에 둔다.
-         누르는 동안에만 .visible 로 표시된다. */
-      #${FLOOR_MAP_ZOOM_ID} {
-        position: fixed;
-        inset: 0;
-        z-index: ${NAV_SAFE_Z_INDEX};
-        display: none;
-        align-items: center;
-        justify-content: center;
-        flex-direction: column;
-        gap: 12px;
-        padding: 32px;
-        background: rgba(15, 23, 42, 0.72);
-        pointer-events: none;
-      }
-
-      #${FLOOR_MAP_ZOOM_ID}.visible {
-        display: flex;
-      }
-
-      #${FLOOR_MAP_ZOOM_ID} .zzk-floormap-zoom-image {
-        max-width: 92vw;
-        max-height: 82vh;
-        width: auto;
-        height: auto;
-        object-fit: contain;
-        background: #ffffff;
-        border-radius: 12px;
-        box-shadow: 0 24px 64px rgba(0, 0, 0, 0.45);
-      }
-
-      #${FLOOR_MAP_ZOOM_ID} .zzk-floormap-zoom-caption {
-        font-size: 15px;
-        font-weight: 700;
-        color: #ffffff;
-        letter-spacing: 1px;
       }
 
       @keyframes zzk-map-calendar-loading-spin {
