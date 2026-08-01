@@ -21,6 +21,9 @@
     "isolatedModules": true,
     "forceConsistentCasingInFileNames": true,
 
+    // React 19 JSX 변환(런타임 import 불필요).
+    "jsx": "react-jsx",
+
     // 크롬 확장 API 타입.
     "types": ["chrome"]
   },

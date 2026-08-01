@@ -2,6 +2,7 @@ import js from "@eslint/js";
 import prettierConfig from "eslint-config-prettier";
 import globals from "globals";
 import tseslint from "typescript-eslint";
+import reactHooks from "eslint-plugin-react-hooks";
 import { defineConfig, globalIgnores } from "eslint/config";
 
 // 마이그레이션 중이라 규칙을 세게 조이면 계속 막힌다.
@@ -45,7 +46,7 @@ export default defineConfig([
   // 아직 대부분이 .js 라 소음이 되므로 .ts 로 명시적으로 좁힌다.
   ...tseslint.configs.recommended.map((config) => ({
     ...config,
-    files: ["**/*.ts"],
+    files: ["**/*.{ts,tsx}"],
   })),
 
   {
@@ -58,7 +59,7 @@ export default defineConfig([
 
   // 확장 소스: content script / MAIN world 훅.
   {
-    files: ["src/**/*.{js,ts}"],
+    files: ["src/**/*.{js,ts,tsx}"],
     languageOptions: {
       ecmaVersion: 2023,
       sourceType: "module",
@@ -166,11 +167,11 @@ export default defineConfig([
   // any 로 흘러들어가는 값 등. 실제 버그가 여기서 걸린다.
   ...tseslint.configs.recommendedTypeChecked.map((config) => ({
     ...config,
-    files: ["**/*.ts"],
+    files: ["**/*.{ts,tsx}"],
   })),
 
   {
-    files: ["**/*.ts"],
+    files: ["**/*.{ts,tsx}"],
     languageOptions: {
       parserOptions: {
         // tsconfig.json 을 자동으로 찾아 타입 정보를 붙인다.
@@ -198,6 +199,17 @@ export default defineConfig([
       "@typescript-eslint/no-floating-promises": "error",
       "@typescript-eslint/await-thenable": "error",
       "@typescript-eslint/no-misused-promises": "error",
+    },
+  },
+
+  // 훅 규칙은 훅을 "쓰면서" 잡아야 의미가 있다. 다 짜고 5단계에 켜면
+  // 경고 수십 개를 사후 정리하는 일이 된다(로드맵 3단계 항목).
+  {
+    files: ["src/**/*.{ts,tsx}"],
+    plugins: { "react-hooks": reactHooks },
+    rules: {
+      "react-hooks/rules-of-hooks": "error",
+      "react-hooks/exhaustive-deps": "warn",
     },
   },
 
