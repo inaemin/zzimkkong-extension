@@ -3,6 +3,7 @@
 import * as React from "react";
 import { Select as SelectPrimitive } from "@base-ui/react/select";
 
+import { useShadowContainer } from "@/ui/shadow-root-context"
 import { cn } from "@/ui/lib/utils";
 import { ChevronDownIcon, CheckIcon, ChevronUpIcon } from "lucide-react";
 
@@ -68,8 +69,10 @@ function SelectContent({
     SelectPrimitive.Positioner.Props,
     "align" | "alignOffset" | "side" | "sideOffset" | "alignItemWithTrigger"
   >) {
+  // shadow root 안에서는 팝업도 그 안에 렌더돼야 스타일이 닿는다.
+  const shadowContainer = useShadowContainer()
   return (
-    <SelectPrimitive.Portal>
+    <SelectPrimitive.Portal container={shadowContainer ?? undefined}>
       <SelectPrimitive.Positioner
         side={side}
         sideOffset={sideOffset}

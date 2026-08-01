@@ -3,6 +3,7 @@
 import * as React from "react";
 import { Dialog as DialogPrimitive } from "@base-ui/react/dialog";
 
+import { useShadowContainer } from "@/ui/shadow-root-context"
 import { cn } from "@/ui/lib/utils";
 import { Button } from "@/ui/components/ui/button";
 import { XIcon } from "lucide-react";
@@ -16,7 +17,15 @@ function DialogTrigger({ ...props }: DialogPrimitive.Trigger.Props) {
 }
 
 function DialogPortal({ ...props }: DialogPrimitive.Portal.Props) {
-  return <DialogPrimitive.Portal data-slot="dialog-portal" {...props} />;
+  // shadow root 안에서는 팝업도 그 안에 렌더돼야 스타일이 닿는다.
+  const shadowContainer = useShadowContainer()
+  return (
+    <DialogPrimitive.Portal
+      data-slot="dialog-portal"
+      container={shadowContainer ?? undefined}
+      {...props}
+    />
+  );
 }
 
 function DialogClose({ ...props }: DialogPrimitive.Close.Props) {

@@ -81,18 +81,22 @@ function emitReservationSuccess(page, payloadOverrides = {}) {
   );
 }
 
+/** React 모달은 shadow root 안에 있어 document 쿼리로는 안 잡힌다. */
+async function slackModalExists(page) {
+  return page.evaluate(() => {
+    const host = document.getElementById("zzk-slack-copy-root");
+    return Boolean(host?.shadowRoot?.querySelector("#zzk-slack-message"));
+  });
+}
+
 test("lms+ 예약 성공 시 Slack 모달이 응답 body 기반으로 뜬다", async ({ page }) => {
   await mountLmsPage(page);
 
   await emitReservationSuccess(page);
-  await page.waitForSelector("#zzk-slack-copy-modal", { timeout: 3000 });
+  await page.waitForSelector("#zzk-slack-message", { timeout: 3000 });
 
   // /remind 미리보기(textarea)에 시간대·목적·장소(층+회의실)가 들어있어야 한다.
-  const remindText = await page.evaluate(() => {
-    const modal = document.getElementById("zzk-slack-copy-modal");
-    const textarea = modal ? modal.querySelector(".zzk-slack-copy-textarea") : null;
-    return textarea ? textarea.value : "";
-  });
+  const remindText = await page.locator("#zzk-slack-message").inputValue();
   expect(remindText).toContain("20:00-21:00");
   expect(remindText).toContain("학습");
   expect(remindText).toContain("보이저");
@@ -109,9 +113,7 @@ test("예약 실패(4xx)나 응답 body 없으면 Slack 모달이 뜨지 않는�
   await emitReservationSuccess(page, { responseBody: null });
   await page.waitForTimeout(500);
 
-  const modalExists = await page.evaluate(() =>
-    Boolean(document.getElementById("zzk-slack-copy-modal")),
-  );
+  const modalExists = await slackModalExists(page);
   expect(modalExists).toBe(false);
 });
 
@@ -119,18 +121,15 @@ test("같은 예약 응답이 두 번 와도 모달은 한 번만(중복 방지)
   await mountLmsPage(page);
 
   await emitReservationSuccess(page);
-  await page.waitForSelector("#zzk-slack-copy-modal", { timeout: 3000 });
+  await page.waitForSelector("#zzk-slack-message", { timeout: 3000 });
 
   // 모달을 닫고 같은 응답을 다시 보내면, 디듀프되어 다시 뜨지 않아야 한다.
   await page.evaluate(() => {
-    const modal = document.getElementById("zzk-slack-copy-modal");
-    if (modal) modal.remove();
+    document.getElementById("zzk-slack-copy-root")?.remove();
   });
   await emitReservationSuccess(page);
   await page.waitForTimeout(500);
 
-  const reopened = await page.evaluate(() =>
-    Boolean(document.getElementById("zzk-slack-copy-modal")),
-  );
+  const reopened = await slackModalExists(page);
   expect(reopened).toBe(false);
 });

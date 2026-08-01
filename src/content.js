@@ -7973,7 +7973,6 @@ import { createSlackSuccessFlow } from "./features/slack/success-flow.js";
   }
 
   const {
-    ensureSlackCopyModalStyle,
     showSlackCopyModal,
     closeSlackCopyModal,
     copyTextToClipboard,

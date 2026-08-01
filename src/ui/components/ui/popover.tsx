@@ -1,6 +1,7 @@
 import * as React from "react";
 import { Popover as PopoverPrimitive } from "@base-ui/react/popover";
 
+import { useShadowContainer } from "@/ui/shadow-root-context"
 import { cn } from "@/ui/lib/utils";
 
 function Popover({ ...props }: PopoverPrimitive.Root.Props) {
