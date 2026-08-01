@@ -6,18 +6,18 @@ import {
 } from "../constants/runtime.js";
 import { getErrorMessage } from "./shared.js";
 
-export function isDateString(value) {
+export function isDateString(value: unknown): value is string {
   return typeof value === "string" && /^\d{4}-\d{2}-\d{2}$/.test(value);
 }
 
-export function normalizeDateString(value) {
+export function normalizeDateString(value: unknown): string {
   if (!isDateString(value)) {
     return null;
   }
   return value;
 }
 
-export function parseHourMinute(value) {
+export function parseHourMinute(value: unknown): number | null {
   if (typeof value !== "string") {
     return null;
   }
@@ -39,7 +39,7 @@ export function parseHourMinute(value) {
   return hour * 60 + minute;
 }
 
-export function minuteToHourMinute(totalMinute) {
+export function minuteToHourMinute(totalMinute: number): string {
   if (!Number.isFinite(totalMinute)) {
     return "00:00";
   }
@@ -50,7 +50,7 @@ export function minuteToHourMinute(totalMinute) {
   return `${String(hour).padStart(2, "0")}:${String(remainMinute).padStart(2, "0")}`;
 }
 
-export function parseLocalizedHourMinute(value) {
+export function parseLocalizedHourMinute(value: unknown): number | null {
   if (typeof value !== "string") {
     return null;
   }
@@ -91,7 +91,7 @@ export function parseLocalizedHourMinute(value) {
   return hour * 60 + minute;
 }
 
-export function extractHourMinute(value) {
+export function extractHourMinute(value: unknown): string {
   if (typeof value !== "string") {
     return null;
   }
@@ -113,7 +113,7 @@ export function extractHourMinute(value) {
   return `${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}`;
 }
 
-export function normalizeHourMinute(value) {
+export function normalizeHourMinute(value: unknown): string {
   if (typeof value !== "string") {
     return null;
   }
@@ -132,7 +132,8 @@ export function normalizeHourMinute(value) {
   return extractHourMinute(value);
 }
 
-export function normalizeToTenMinute(value) {
+// 파싱 실패 시 입력을 그대로 돌려준다(호출부가 input.value 라 항상 문자열).
+export function normalizeToTenMinute(value: string): string {
   const totalMinute = parseHourMinute(value);
   if (!Number.isInteger(totalMinute)) {
     return value;
@@ -144,7 +145,7 @@ export function normalizeToTenMinute(value) {
   return minuteToHourMinute(clampedMinute);
 }
 
-export function isTenMinuteAligned(value) {
+export function isTenMinuteAligned(value: unknown): boolean {
   const totalMinute = parseHourMinute(value);
   if (!Number.isInteger(totalMinute)) {
     return false;
@@ -153,14 +154,14 @@ export function isTenMinuteAligned(value) {
   return totalMinute % TIME_STEP_MINUTES === 0;
 }
 
-export function formatDate(date) {
+export function formatDate(date: Date): string {
   const year = date.getFullYear();
   const month = String(date.getMonth() + 1).padStart(2, "0");
   const day = String(date.getDate()).padStart(2, "0");
   return `${year}-${month}-${day}`;
 }
 
-export function getTodayDateInKST() {
+export function getTodayDateInKST(): string {
   const parts = KST_DATE_PARTS_FORMATTER.formatToParts(new Date());
   const year = parts.find((part) => part.type === "year")?.value || "1970";
   const month = parts.find((part) => part.type === "month")?.value || "01";
@@ -168,7 +169,7 @@ export function getTodayDateInKST() {
   return `${year}-${month}-${day}`;
 }
 
-export function getCurrentMinuteOfDayInKST() {
+export function getCurrentMinuteOfDayInKST(): number {
   const parts = KST_TIME_PARTS_FORMATTER.formatToParts(new Date());
   const hour = Number(parts.find((part) => part.type === "hour")?.value || "0");
   const minute = Number(parts.find((part) => part.type === "minute")?.value || "0");
@@ -181,7 +182,10 @@ export function getCurrentMinuteOfDayInKST() {
   return hour * 60 + minute + second / 60;
 }
 
-export function sanitizeDateForApi(value, options = {}) {
+export function sanitizeDateForApi(
+  value: unknown,
+  options: { allowPastDate?: boolean } = {},
+): string {
   if (typeof value !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(value)) {
     throw new Error("날짜 형식이 올바르지 않습니다.");
   }
@@ -193,7 +197,7 @@ export function sanitizeDateForApi(value, options = {}) {
   return value;
 }
 
-export function sanitizeTimeForApi(value) {
+export function sanitizeTimeForApi(value: unknown): string {
   if (typeof value !== "string" || !/^\d{2}:\d{2}$/.test(value)) {
     throw new Error("시간 형식이 올바르지 않습니다.");
   }
@@ -234,7 +238,7 @@ export function getNextHourRange() {
   };
 }
 
-export function getEarliestSelectableMinuteForDate(date) {
+export function getEarliestSelectableMinuteForDate(date: unknown): number {
   const todayDate = getTodayDateInKST();
   if (!isDateString(date)) {
     return 0;
@@ -255,7 +259,7 @@ export function getEarliestSelectableMinuteForDate(date) {
   return Math.max(0, Math.min(24 * 60, snappedMinute));
 }
 
-export function addDaysToDateString(dateString, dayOffset) {
+export function addDaysToDateString(dateString: string, dayOffset: number): string {
   if (!isDateString(dateString) || !Number.isInteger(dayOffset)) {
     return dateString;
   }
@@ -271,7 +275,7 @@ export function addDaysToDateString(dateString, dayOffset) {
   return `${shiftedYear}-${shiftedMonth}-${shiftedDay}`;
 }
 
-export function formatUTCDateString(date) {
+export function formatUTCDateString(date: Date): string {
   if (!(date instanceof Date) || Number.isNaN(date.getTime())) {
     return "";
   }
@@ -281,7 +285,7 @@ export function formatUTCDateString(date) {
   return `${year}-${month}-${day}`;
 }
 
-export function parseDateStringAsUTC(dateString) {
+export function parseDateStringAsUTC(dateString: string): Date | null {
   if (!isDateString(dateString)) {
     return null;
   }
@@ -290,7 +294,7 @@ export function parseDateStringAsUTC(dateString) {
   return Number.isNaN(date.getTime()) ? null : date;
 }
 
-export function addMonthsToDateString(dateString, monthOffset) {
+export function addMonthsToDateString(dateString: string, monthOffset: number): string {
   if (!isDateString(dateString) || !Number.isInteger(monthOffset)) {
     return dateString;
   }
@@ -303,7 +307,7 @@ export function addMonthsToDateString(dateString, monthOffset) {
   return formatUTCDateString(parsedDate);
 }
 
-export function getMonthStartDateString(dateString) {
+export function getMonthStartDateString(dateString: string): string {
   const parsedDate = parseDateStringAsUTC(dateString);
   if (!(parsedDate instanceof Date)) {
     return "";
@@ -312,7 +316,7 @@ export function getMonthStartDateString(dateString) {
   return formatUTCDateString(parsedDate);
 }
 
-export function formatMonthTitle(date) {
+export function formatMonthTitle(date: Date): string {
   if (!(date instanceof Date) || Number.isNaN(date.getTime())) {
     return "";
   }
@@ -321,7 +325,7 @@ export function formatMonthTitle(date) {
   return `${year}.${month}`;
 }
 
-export function formatKSTWeekday(dateString) {
+export function formatKSTWeekday(dateString: string): string {
   const parsedDate = parseDateStringAsUTC(dateString);
   if (!(parsedDate instanceof Date)) {
     return "";
@@ -329,7 +333,7 @@ export function formatKSTWeekday(dateString) {
   return KST_WEEKDAY_FORMATTER.format(parsedDate);
 }
 
-export function formatDateSelectorText(dateString) {
+export function formatDateSelectorText(dateString: string): string {
   if (!isDateString(dateString)) {
     return "";
   }

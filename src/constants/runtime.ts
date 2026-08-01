@@ -1,10 +1,10 @@
 import { DEBUG_MODE } from "./debug.js";
 
-export function normalizeRoomTagKey(value) {
+export function normalizeRoomTagKey(value: unknown): string {
   return typeof value === "string" ? value.trim().toLowerCase() : "";
 }
 
-export function normalizeTargetRoomName(value) {
+export function normalizeTargetRoomName(value: unknown): string {
   return typeof value === "string" ? value.replace(/\s+/g, "").trim() : "";
 }
 
@@ -85,11 +85,29 @@ export const CALENDAR_ROW_GAP = 4;
 export const CALENDAR_SIDE_MARGIN = 0;
 export const DRAG_SAFE_TOP = 56;
 export const NAV_SAFE_Z_INDEX = 2147483647;
-export const ROOM_TAG_METADATA = [{ key: "window", label: "창", description: "창문 있음" }];
+// 공간 종류. lms+ API 는 안 주므로 이름 기반 메타데이터로 분류한다.
+export type SpaceTab = typeof MAP_CALENDAR_SPACE_TAB_MEETING | typeof MAP_CALENDAR_SPACE_TAB_PAIR;
+
+export interface RoomTagMetadata {
+  key: string;
+  label: string;
+  description: string;
+}
+
+export interface TargetRoomMetadata {
+  name: string;
+  floor: string;
+  kind: SpaceTab;
+  tags: string[];
+}
+
+export const ROOM_TAG_METADATA: RoomTagMetadata[] = [
+  { key: "window", label: "창", description: "창문 있음" },
+];
 export const ROOM_TAG_METADATA_BY_KEY = new Map(
   ROOM_TAG_METADATA.map((entry) => [normalizeRoomTagKey(entry.key), entry]),
 );
-export const TARGET_ROOM_METADATA = [
+export const TARGET_ROOM_METADATA: TargetRoomMetadata[] = [
   { name: "금성", floor: "11층", kind: MAP_CALENDAR_SPACE_TAB_MEETING, tags: ["window"] },
   { name: "지구", floor: "11층", kind: MAP_CALENDAR_SPACE_TAB_MEETING, tags: ["window"] },
   { name: "수성", floor: "11층", kind: MAP_CALENDAR_SPACE_TAB_MEETING, tags: [] },
@@ -116,7 +134,10 @@ export const TARGET_ROOM_METADATA = [
   { name: "페어룸 13", floor: "12층", kind: MAP_CALENDAR_SPACE_TAB_PAIR, tags: [] },
   { name: "페어룸 14", floor: "12층", kind: MAP_CALENDAR_SPACE_TAB_PAIR, tags: [] },
 ];
-export const TARGET_ROOM_METADATA_BY_NORMALIZED_NAME = new Map(
+// index 는 크루 기준 표시 순서. content.js 가 정렬에 쓴다.
+export type IndexedRoomMetadata = TargetRoomMetadata & { index: number };
+
+export const TARGET_ROOM_METADATA_BY_NORMALIZED_NAME = new Map<string, IndexedRoomMetadata>(
   TARGET_ROOM_METADATA.map((entry, index) => [
     normalizeTargetRoomName(entry.name),
     { ...entry, index },
@@ -133,13 +154,13 @@ export const TARGET_ROOM_ORDER = new Map(
   TARGET_ROOM_METADATA.map((entry, index) => [normalizeTargetRoomName(entry.name), index]),
 );
 
-export function normalizeMapCalendarSpaceTab(value) {
+export function normalizeMapCalendarSpaceTab(value: unknown): SpaceTab {
   return value === MAP_CALENDAR_SPACE_TAB_PAIR
     ? MAP_CALENDAR_SPACE_TAB_PAIR
     : MAP_CALENDAR_SPACE_TAB_MEETING;
 }
 
-export function normalizeFetchRoomType(value) {
+export function normalizeFetchRoomType(value: unknown): SpaceTab | null {
   return value === MAP_CALENDAR_SPACE_TAB_PAIR
     ? MAP_CALENDAR_SPACE_TAB_PAIR
     : value === MAP_CALENDAR_SPACE_TAB_MEETING

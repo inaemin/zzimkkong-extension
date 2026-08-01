@@ -1,6 +1,6 @@
 import { debugWarn, pushDebugEvent } from "./shared.js";
 
-function reportStorageFailure(event, storageKey, error) {
+function reportStorageFailure(event: string, storageKey: unknown, error: unknown): void {
   const detail = {
     key: typeof storageKey === "string" ? storageKey : "",
     error: getStorageErrorMessage(error),
@@ -9,14 +9,14 @@ function reportStorageFailure(event, storageKey, error) {
   debugWarn("storage", event, detail);
 }
 
-function getStorageErrorMessage(error) {
+function getStorageErrorMessage(error: unknown): string {
   if (error instanceof Error && error.message) {
     return error.message;
   }
   return String(error || "unknown storage error");
 }
 
-export function readStoredBoolean(storageKey, fallbackValue = false) {
+export function readStoredBoolean(storageKey: string, fallbackValue = false): boolean {
   if (typeof storageKey !== "string" || storageKey === "") {
     return Boolean(fallbackValue);
   }
@@ -37,7 +37,7 @@ export function readStoredBoolean(storageKey, fallbackValue = false) {
   return Boolean(fallbackValue);
 }
 
-export function writeStoredBoolean(storageKey, value) {
+export function writeStoredBoolean(storageKey: string, value: boolean): void {
   if (typeof storageKey !== "string" || storageKey === "") {
     return;
   }
@@ -50,7 +50,7 @@ export function writeStoredBoolean(storageKey, value) {
   }
 }
 
-export function readStoredText(storageKey, fallbackValue = "") {
+export function readStoredText(storageKey: string, fallbackValue = ""): string {
   if (typeof storageKey !== "string" || storageKey === "") {
     return typeof fallbackValue === "string" ? fallbackValue : "";
   }
@@ -68,7 +68,7 @@ export function readStoredText(storageKey, fallbackValue = "") {
   return typeof fallbackValue === "string" ? fallbackValue : "";
 }
 
-export function writeStoredText(storageKey, value) {
+export function writeStoredText(storageKey: string, value: string): void {
   if (typeof storageKey !== "string" || storageKey === "") {
     return;
   }
@@ -91,14 +91,17 @@ export function writeStoredText(storageKey, value) {
   }
 }
 
-export function readStoredNumber(storageKey, fallbackValue = null) {
+export function readStoredNumber(
+  storageKey: string,
+  fallbackValue: number | null = null,
+): number | null {
   const normalizedFallback = Number.isFinite(fallbackValue) ? fallbackValue : null;
 
   if (typeof storageKey !== "string" || storageKey === "") {
     return normalizedFallback;
   }
 
-  let rawValue = null;
+  let rawValue: string | null = null;
   try {
     rawValue = window.localStorage.getItem(storageKey);
   } catch (error) {
@@ -118,7 +121,7 @@ export function readStoredNumber(storageKey, fallbackValue = null) {
   return parsed;
 }
 
-export function writeStoredNumber(storageKey, value) {
+export function writeStoredNumber(storageKey: string, value: number): void {
   if (typeof storageKey !== "string" || storageKey === "") {
     return;
   }

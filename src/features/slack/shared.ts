@@ -9,7 +9,7 @@ import {
   parseHourMinute,
 } from "../../utils/date-time.js";
 
-export function normalizeSlackFieldText(value) {
+export function normalizeSlackFieldText(value: unknown): string {
   if (typeof value !== "string") {
     return "";
   }
@@ -17,7 +17,10 @@ export function normalizeSlackFieldText(value) {
   return value.replace(/\s+/g, " ").trim();
 }
 
-export function normalizeSlackChannelToken(value, options = {}) {
+export function normalizeSlackChannelToken(
+  value: unknown,
+  options: { allowBare?: boolean } = {},
+): string {
   const allowBare = options.allowBare !== false;
   const normalized = normalizeSlackFieldText(value);
   if (!normalized || /\s/.test(normalized)) {
@@ -43,7 +46,7 @@ export function normalizeSlackChannelToken(value, options = {}) {
   return `#${normalized}`;
 }
 
-export function normalizeSlackReminderLeadMinutes(value) {
+export function normalizeSlackReminderLeadMinutes(value: unknown): number {
   const parsed = Number.parseInt(String(value || ""), 10);
   if (SLACK_REMINDER_LEAD_TIME_OPTIONS.includes(parsed)) {
     return parsed;
@@ -51,11 +54,20 @@ export function normalizeSlackReminderLeadMinutes(value) {
   return DEFAULT_SLACK_REMINDER_LEAD_TIME_MINUTES;
 }
 
-export function formatSlackReminderLeadOptionLabel(minutes) {
+export function formatSlackReminderLeadOptionLabel(minutes: number): string {
   return minutes === 60 ? "1시간전" : `${minutes}분전`;
 }
 
-export function computeSlackReminderDateTime(dateValue, startTimeValue, leadMinutesValue) {
+export interface SlackReminderDateTime {
+  date: string;
+  time: string;
+}
+
+export function computeSlackReminderDateTime(
+  dateValue: unknown,
+  startTimeValue: unknown,
+  leadMinutesValue: unknown,
+): SlackReminderDateTime | null {
   if (!isDateString(dateValue)) {
     return null;
   }
