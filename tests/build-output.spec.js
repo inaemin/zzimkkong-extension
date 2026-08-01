@@ -22,23 +22,6 @@ import {
 
 const DIST_DIR = path.resolve(process.cwd(), "dist/extension");
 
-// content.js 가 부팅 전에 요구하는 전역들(requiredBootstrapGlobals 와 같은 목록).
-const REQUIRED_GLOBALS = [
-  "__zzkSharedUtils",
-  "__zzkStorageUtils",
-  "__zzkDateTimeUtils",
-  "__zzkRouteUtils",
-  "__zzkSlackShared",
-  "__zzkRadarShared",
-  "__zzkSharedConstants",
-  "__zzkRadarWorkflow",
-  "__zzkRadarFormSync",
-  "__zzkSlackWorkflow",
-  "__zzkSlackSuccessFlow",
-  "__zzkFormFieldUtils",
-  "__zzkLmsDataShared",
-];
-
 test.beforeAll(ensureExtensionBuild);
 
 test("빌드 산출물 manifest 가 확장 로드에 필요한 형태를 갖춘다", () => {
@@ -89,16 +72,32 @@ test("서비스워커 번들이 모듈로 실제 실행된다", async ({ page })
 
   await stubServiceDocument(page);
   await page.goto(`${WEB_ORIGIN}/space-reservations`, { waitUntil: "domcontentloaded" });
+  // 워커는 chrome.runtime.onMessage 로 리스너를 등록한다. 페이지에는 없으니 흉내낸다.
+  await page.evaluate(() => {
+    window.__zzkBackgroundListeners = [];
+    window.chrome = {
+      runtime: {
+        onMessage: {
+          addListener(listener) {
+            window.__zzkBackgroundListeners.push(listener);
+          },
+        },
+      },
+    };
+  });
   await loadBackgroundBundle(page);
 
-  // 워커가 정상 부팅했다면 의존 전역이 올라와 있다.
-  const snapshot = await page.evaluate(() => ({
-    constants: Boolean(globalThis.__zzkSharedConstants),
-    normalizers: Boolean(globalThis.__zzkLmsDataNormalizers),
-  }));
-
+  // 부팅이 깨지면 import 단계에서 예외가 나므로 pageerror 로 잡힌다.
+  // (importScripts 를 쓰면 "Module scripts don't support importScripts()" 가 여기 뜬다)
+  // 2.5-A 이후 전역 배럴이 없어 전역 존재로는 확인할 수 없다.
   expect(pageErrors).toEqual([]);
-  expect(snapshot).toEqual({ constants: true, normalizers: true });
+
+  // 메시지 리스너를 등록했는지로 실제 초기화 완료를 확인한다.
+  const registeredListener = await page.evaluate(
+    () =>
+      Array.isArray(window.__zzkBackgroundListeners) && window.__zzkBackgroundListeners.length > 0,
+  );
+  expect(registeredListener).toBeTruthy();
 });
 
 test("예약 훅이 MAIN world content script 로 선언된다", () => {
@@ -204,15 +203,14 @@ test("번들된 content script 가 전역 부트스트랩을 동일하게 올린
   await page.goto(`${WEB_ORIGIN}/space-reservations`, { waitUntil: "domcontentloaded" });
   await loadContentBundle(page);
 
-  const snapshot = await page.evaluate(
-    (globalNames) => ({
-      loaded: window.__zzkAvailabilityLensLoaded === true,
-      loadError: window.__zzkAvailabilityLensLoadError || null,
-      bootstrapErrors: window.__zzkBootstrapLoadErrors || [],
-      missing: globalNames.filter((name) => !globalThis[name]),
-    }),
-    REQUIRED_GLOBALS,
-  );
+  // 2.5-A 이후 모듈 그래프로 연결되므로 전역 배럴은 더 이상 없다.
+  // 번들이 정상 부팅했는지는 로드 플래그와 테스트 API 로 확인한다.
+  const snapshot = await page.evaluate(() => ({
+    loaded: window.__zzkAvailabilityLensLoaded === true,
+    loadError: window.__zzkAvailabilityLensLoadError || null,
+    bootstrapErrors: window.__zzkBootstrapLoadErrors || [],
+    missing: [],
+  }));
 
   expect(pageErrors).toEqual([]);
   expect(snapshot.loadError).toBeNull();

@@ -138,14 +138,3 @@ export function writeStoredNumber(storageKey, value) {
     reportStorageFailure("write-failed", storageKey, error);
   }
 }
-
-// content.js 등 아직 전역을 읽는 소비처를 위해 이중 등록한다.
-// 소비처가 전부 import 로 옮겨지면 이 줄만 지우면 된다.
-globalThis.__zzkStorageUtils = {
-  readStoredBoolean,
-  writeStoredBoolean,
-  readStoredText,
-  writeStoredText,
-  readStoredNumber,
-  writeStoredNumber,
-};

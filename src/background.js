@@ -1,23 +1,20 @@
-// CRXJS 는 서비스워커를 "type": "module" 로 등록한다. ES 모듈에서는
-// importScripts() 를 쓸 수 없으므로 정적 import 로 의존성을 올린다.
-// (각 모듈은 여전히 globalThis.__zzk* 에 자기 API 를 등록한다)
-import "./constants/debug.js";
-import "./constants/runtime.js";
-import "./services/lms-data/normalizers.js";
+// CRXJS 는 서비스워커를 "type": "module" 로 등록한다.
+// ES 모듈이라 importScripts() 는 쓸 수 없다.
+import { DEBUG_MODE } from "./constants/debug.js";
+import {
+  KST_DATE_PARTS_FORMATTER,
+  LMS_API_BASE_URL,
+  LMS_TIME_STEP_MINUTES,
+  normalizeFetchRoomType as normalizeRoomType,
+  normalizeTargetRoomName,
+} from "./constants/runtime.js";
+import { createLmsDataNormalizers } from "./services/lms-data/normalizers.js";
 
 (() => {
   try {
-    const DEBUG_MODE = globalThis.__zzkDebugConfig?.DEBUG_MODE === true;
-    const {
-      LMS_API_BASE_URL,
-      LMS_TIME_STEP_MINUTES,
-      KST_DATE_PARTS_FORMATTER,
-      normalizeTargetRoomName,
-      normalizeFetchRoomType: normalizeRoomType,
-    } = globalThis.__zzkSharedConstants;
     const MESSAGE_TYPE_FETCH_AVAILABILITY = "ZZK_FETCH_AVAILABILITY";
     const MESSAGE_TYPE_FETCH_DAILY_SCHEDULE = "ZZK_FETCH_DAILY_SCHEDULE";
-    const lmsDataNormalizers = globalThis.__zzkLmsDataNormalizers.createLmsDataNormalizers({
+    const lmsDataNormalizers = createLmsDataNormalizers({
       getProperty,
       normalizeTargetRoomName,
       normalizeRoomType,

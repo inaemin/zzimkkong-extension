@@ -4,10 +4,10 @@ import { expect, test } from "@playwright/test";
 
 // floor-maps.js 는 IIFE 로 globalThis.__zzkFloorMaps 에 API 를 붙인다.
 // 브라우저 DOM 이 필요 없으므로 Node 컨텍스트에서 직접 로드해 검증한다.
+// 2.5-A 이후 전역 배럴이 없으므로 모듈 export 를 그대로 쓴다.
 async function loadFloorMaps() {
   const modulePath = path.resolve(process.cwd(), "src/features/radar/floor-maps.js");
-  await import(pathToFileURL(modulePath).href);
-  return globalThis.__zzkFloorMaps;
+  return await import(pathToFileURL(modulePath).href);
 }
 
 test("각 층 평면도 data-URI 가 정상 SVG 로 디코딩된다", async () => {
