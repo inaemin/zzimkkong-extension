@@ -1,0 +1,7 @@
+# 포맷만 바꾼 커밋들. git blame 에서 무시한다.
+#
+# 로컬 설정:
+#   git config blame.ignoreRevsFile .git-blame-ignore-revs
+#
+# style: Prettier 일괄 포맷 적용
+71960ad6d3a29d979f102265ee9f6a6c234b0464
