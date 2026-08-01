@@ -1169,6 +1169,21 @@
     state.availabilityInflightByToken.clear();
   }
 
+  // 예약이 새로 생기면 캐시된 예약 목록이 즉시 낡는다. TTL(3초)을 기다리면
+  // 방금 잡은 예약이 레이더에 안 보이므로, 성공 즉시 전 계층 캐시를 비우고 다시 그린다.
+  function invalidateReservationCaches() {
+    if (typeof clearLmsReservationCache === "function") {
+      clearLmsReservationCache();
+    }
+    clearAvailabilityCache();
+    state.scheduleCache.clear();
+    state.scheduleCacheFetchedAtByDate.clear();
+    state.scheduleInflightByDate.clear();
+    pushDebugEvent("availability", "cache-invalidated", {
+      reason: "reservation-mutated",
+    });
+  }
+
   // 새로 받은 응답이든 캐시된 응답이든 화면 반영은 같은 경로를 쓴다.
   function applyAvailabilityData(data, { roomType, date, startTime, endTime }) {
     const rooms = Array.isArray(data?.rooms) ? data.rooms : [];
@@ -8538,6 +8553,7 @@
     shouldSkipSlackCopyModal,
     showSlackCopyModal,
     buildLmsSlackReservationContext,
+    onReservationMutated: invalidateReservationCaches,
   });
 
   // 개편 서비스(lms+) 예약 생성 응답 body → Slack 모달 context.
@@ -8840,6 +8856,7 @@
   const {
     fetchAvailability: fetchLmsAvailability,
     fetchDailySchedule: fetchLmsDailySchedule,
+    clearReservationCache: clearLmsReservationCache,
   } = globalThis.__zzkLmsDataShared;
 
   function normalizeDateInput(inputElement) {

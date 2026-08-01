@@ -114,3 +114,49 @@ test("응답 도착 전에 연속으로 눌러도 회의실별 요청이 중복�
   expect(reservationRequests.length).toBe(SPACES.length);
   expect(new Set(reservationRequests).size).toBe(SPACES.length);
 });
+
+test("예약 성공 시 TTL 을 기다리지 않고 캐시가 즉시 무효화된다", async ({ page }) => {
+  const reservationRequests = await mountWithRequestCounter(page);
+  const afterMount = reservationRequests.length;
+
+  // TTL(3초) 안이라 그냥 재조회하면 캐시 히트여야 한다.
+  await page.evaluate(() => window.__zzkTestApi?.refreshAvailability?.());
+  await page.waitForTimeout(200);
+  expect(reservationRequests.length).toBe(afterMount);
+
+  // 예약 생성 성공 이벤트를 페이지 훅이 보낸 것처럼 흘려보낸다.
+  await page.evaluate(() => {
+    window.postMessage(
+      {
+        source: "zzk-page-reservation-hook",
+        type: "ZZK_RESERVATION_NETWORK_EVENT",
+        payload: {
+          via: "fetch",
+          ok: true,
+          status: 201,
+          method: "POST",
+          url: "https://techcourse-lms-plus-api.woowahan.com/api/space-reservations",
+          responseBody: {
+            id: 1,
+            spaceId: 1,
+            spaceName: "금성",
+            floor: 11,
+            date: "2099-01-02",
+            startTime: "10:00:00",
+            endTime: "11:00:00",
+            purpose: "학습",
+            reserverName: "애니",
+          },
+        },
+      },
+      "*",
+    );
+  });
+  await page.waitForTimeout(200);
+
+  // 무효화됐으므로 TTL 이 안 지났어도 다시 조회한다.
+  await page.evaluate(() => window.__zzkTestApi?.refreshAvailability?.());
+  await page.waitForTimeout(500);
+
+  expect(reservationRequests.length).toBeGreaterThan(afterMount);
+});

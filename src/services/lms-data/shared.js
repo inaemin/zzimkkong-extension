@@ -78,6 +78,12 @@
   const reservationCache = new Map();
   const reservationInflight = new Map();
 
+  // 예약이 생성/변경되면 캐시가 곧바로 낡는다. TTL(3초)을 기다리지 않고 비운다.
+  function clearReservationCache() {
+    reservationCache.clear();
+    reservationInflight.clear();
+  }
+
   function readCachedReservations(cacheKey) {
     const entry = reservationCache.get(cacheKey);
     if (!entry) {
@@ -356,6 +362,7 @@
     fetchQuota,
     loadSpaceContext,
     fetchReservationsForRoom,
+    clearReservationCache,
     buildTargetRooms: lmsDataNormalizers.buildTargetRooms,
     normalizeReservations: lmsDataNormalizers.normalizeReservations,
     normalizeQuota: lmsDataNormalizers.normalizeQuota,
