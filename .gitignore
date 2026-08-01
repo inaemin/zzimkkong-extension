@@ -12,6 +12,7 @@ test-results/
 artifacts/
 dist/
 *.zip
+/.omo/
 
 # Private or legacy local data
 crews.csv

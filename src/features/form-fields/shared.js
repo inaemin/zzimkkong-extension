@@ -1,5 +1,29 @@
 (() => {
-  if (globalThis.__zzkHostSyncShared) {
+  if (globalThis.__zzkFormFieldUtils) {
+    return;
+  }
+
+  function reportMissingBootstrapDependencies(missing) {
+    if (!Array.isArray(globalThis.__zzkBootstrapLoadErrors)) {
+      globalThis.__zzkBootstrapLoadErrors = [];
+    }
+    globalThis.__zzkBootstrapLoadErrors.push({
+      script: "src/features/form-fields/shared.js",
+      reason: "missing-bootstrap-dependencies",
+      missing,
+    });
+  }
+
+  const missingBootstrapDependencies = [
+    ["__zzkSharedUtils", globalThis.__zzkSharedUtils],
+    ["__zzkSlackShared", globalThis.__zzkSlackShared],
+    ["__zzkSharedConstants", globalThis.__zzkSharedConstants],
+  ]
+    .filter(([, value]) => !value)
+    .map(([name]) => name);
+
+  if (missingBootstrapDependencies.length > 0) {
+    reportMissingBootstrapDependencies(missingBootstrapDependencies);
     return;
   }
 
@@ -217,7 +241,7 @@
     return "";
   }
 
-  globalThis.__zzkHostSyncShared = {
+  globalThis.__zzkFormFieldUtils = {
     getInputAssociatedLabelText,
     buildHostInputDescriptor,
     normalizeHostReservationOwnerCandidate,

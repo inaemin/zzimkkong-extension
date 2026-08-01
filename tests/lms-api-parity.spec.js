@@ -2,13 +2,11 @@ import path from "node:path";
 import { expect, test } from "@playwright/test";
 
 // background.js 는 서비스워커 밖에서는 importScripts 가 없어 전역이 미리 올라와 있어야 한다.
-// legacy 정규화기도 background.js 가 참조하므로 함께 로드한다.
 const SCRIPT_ORDER_FOR_LMS_DATA = [
   "src/utils/shared.js",
   "src/constants/runtime.js",
   "src/utils/date-time.js",
   "src/utils/routes.js",
-  "src/services/guest-data/normalizers.js",
   "src/services/lms-data/normalizers.js",
   "src/services/lms-data/shared.js",
 ];
@@ -208,21 +206,17 @@ test.beforeEach(async ({ page }) => {
   await loadBackgroundScript(page);
 });
 
-test("route utils detect the new service from the host", async ({ page }) => {
+test("route utils treat the lms+ reservation page as radar-supported", async ({ page }) => {
   const snapshot = await page.evaluate(() => ({
-    kind: window.__zzkRouteUtils.getServiceKind(),
-    isLms: window.__zzkRouteUtils.isLmsService(),
-    isLegacy: window.__zzkRouteUtils.isLegacyService(),
+    isReservationPage: window.__zzkRouteUtils.isLmsSpaceReservationPage(),
     supported: window.__zzkRouteUtils.isRadarSupportedPage(),
-    legacyKind: window.__zzkRouteUtils.getServiceKindForHost("zzimkkong.com"),
+    sharingMapId: window.__zzkRouteUtils.getSharingMapId(),
   }));
 
   expect(snapshot).toEqual({
-    kind: "lms",
-    isLms: true,
-    isLegacy: false,
+    isReservationPage: true,
     supported: true,
-    legacyKind: "legacy",
+    sharingMapId: "lms",
   });
 });
 
@@ -353,20 +347,4 @@ test("lms quota response is normalized", async ({ page }) => {
     monthlyUsedMinutes: 0,
     monthlyRemainingMinutes: 1200,
   });
-});
-
-test("legacy payloads still route to the legacy implementation", async ({ page }) => {
-  // serviceKind 가 없으면 legacy 로 취급되어 찜꽁 API를 호출한다.
-  const requestedUrls = [];
-  page.on("request", (request) => {
-    requestedUrls.push(request.url());
-  });
-
-  await sendBackgroundMessage(page, {
-    type: "ZZK_FETCH_DAILY_SCHEDULE",
-    payload: { sharingMapId: "abc", date: "2099-01-02", roomType: "meeting" },
-  });
-
-  expect(requestedUrls.some((url) => url.includes("k8s.zzimkkong.com"))).toBe(true);
-  expect(requestedUrls.some((url) => url.startsWith(`${API_ORIGIN}/api/spaces`))).toBe(false);
 });

@@ -22,10 +22,7 @@
       readHostRoomName,
       buildSlackReservationContext,
       showSlackCopyModal,
-      isGuestPage,
       isRadarSupportedPage,
-      isLmsService,
-      isGuestReservationEditPage,
       shouldDelayGuestMapCalendarUi,
       isMapCalendarModalOpenRequested,
       getHostReservationRoot,
@@ -124,7 +121,7 @@
       }
     })();
 
-    return (DEBUG_MODE || manualVerificationEnabled) && isGuestPage() && !isGuestReservationEditPage();
+    return DEBUG_MODE || manualVerificationEnabled;
   }
 
   function ensureSlackModalTrigger() {
@@ -208,61 +205,10 @@
       });
     }
 
-    // 개편 서비스(lms+)는 호스트 폼에 인라인으로 붙일 자리가 없어, 화면 오른쪽 하단에
+    // lms+ 는 호스트 폼에 인라인으로 붙일 자리가 없어, 화면 오른쪽 하단에
     // 40x40 원형 아이콘 버튼(플로팅)으로 띄우고 토글로 열고 닫는다.
-    if (typeof isLmsService === "function" && isLmsService()) {
-      styleLmsFloatingLauncher(launcher);
-      ensureMapCalendarLauncherContent(launcher);
-      updateMapCalendarLauncherState(launcher);
-      scheduleAutoOpenMapCalendarLauncher(launcher);
-      return;
-    }
-
-    mountMapCalendarLauncher(launcher);
-
-    const styleSourceButton = findGuestReservationTabStyleSource();
-    if (styleSourceButton instanceof HTMLButtonElement) {
-      launcher.className = styleSourceButton.className;
-      launcher.style.font = styleSourceButton.style.font;
-      launcher.style.fontFamily = styleSourceButton.style.fontFamily;
-      launcher.style.fontSize = styleSourceButton.style.fontSize;
-      launcher.style.fontWeight = styleSourceButton.style.fontWeight;
-      launcher.style.background = "";
-      launcher.style.color = "";
-      launcher.style.border = "";
-      launcher.style.borderRadius = "";
-      launcher.style.boxShadow = "";
-      launcher.style.backdropFilter = "";
-    }
-
-    launcher.style.position = "relative";
-    launcher.style.left = "";
-    launcher.style.bottom = "";
-    launcher.style.top = "";
-    launcher.style.transform = "";
-    launcher.style.zIndex = "";
-    const mountedBesideRoomTitle =
-      launcher.dataset.zzkMountType === "room-title";
-    launcher.style.marginLeft = mountedBesideRoomTitle ? "8px" : "0";
-    launcher.style.marginRight = "0";
-    launcher.style.verticalAlign = mountedBesideRoomTitle ? "middle" : "";
-    launcher.style.flexShrink = "0";
-    const isEditPageLauncher = isGuestReservationEditPage();
-    launcher.style.minHeight = isEditPageLauncher ? "36px" : "";
-    launcher.style.minWidth = "";
-    launcher.style.padding = isEditPageLauncher ? "8px 14px" : "";
-    launcher.style.borderRadius = isEditPageLauncher ? "999px" : "";
-    launcher.style.cursor = "pointer";
-    launcher.style.pointerEvents = "auto";
-    launcher.style.display = "inline-flex";
-    launcher.style.alignItems = "center";
-    launcher.style.gap = "6px";
-    launcher.style.lineHeight = "1";
-    launcher.style.transition =
-      "background-color 140ms ease, color 140ms ease, border-color 140ms ease, box-shadow 140ms ease, transform 140ms ease, opacity 140ms ease";
-
+    styleLmsFloatingLauncher(launcher);
     ensureMapCalendarLauncherContent(launcher);
-
     updateMapCalendarLauncherState(launcher);
     scheduleAutoOpenMapCalendarLauncher(launcher);
   }
@@ -299,181 +245,6 @@
       "background-color 140ms ease, color 140ms ease, border-color 140ms ease, box-shadow 140ms ease, transform 140ms ease",
       "important",
     );
-  }
-
-  function mountMapCalendarLauncher(launcher) {
-    if (!(launcher instanceof HTMLButtonElement)) {
-      return;
-    }
-
-    const allowRoomTitleMount = isGuestReservationEditPage();
-
-    if (
-      allowRoomTitleMount &&
-      launcher.dataset.zzkMountType === "room-title" &&
-      launcher.parentElement instanceof HTMLElement &&
-      launcher.parentElement.isConnected
-    ) {
-      return;
-    }
-
-    const now = Date.now();
-    if (now - (state.lastLauncherRemountAt || 0) < 280) {
-      return;
-    }
-    state.lastLauncherRemountAt = now;
-
-    if (allowRoomTitleMount) {
-      const roomTitleAnchor = findGuestRoomTitleAnchor();
-      if (roomTitleAnchor instanceof HTMLElement) {
-        if (launcher.parentElement !== roomTitleAnchor) {
-          roomTitleAnchor.appendChild(launcher);
-        }
-        launcher.dataset.zzkMountType = "room-title";
-        return;
-      }
-    }
-
-    const mountTarget = getMapCalendarLauncherMountTarget();
-    if (
-      mountTarget instanceof HTMLElement &&
-      launcher.parentElement !== mountTarget
-    ) {
-      mountTarget.appendChild(launcher);
-    }
-    launcher.dataset.zzkMountType = "default";
-  }
-
-  function findGuestRoomTitleAnchor() {
-    const roomNames = new Set(TARGET_ROOM_NAMES);
-    const currentRoomName = normalizeHostRoomCandidate(readHostRoomName());
-    if (currentRoomName) {
-      roomNames.add(extractKnownRoomName(currentRoomName));
-    }
-
-    const roomKeys = Array.from(roomNames)
-      .map((roomName) => normalizeTextForMatch(roomName))
-      .filter(Boolean);
-    if (roomKeys.length === 0) {
-      return null;
-    }
-
-    const candidateRoots = [];
-    const hostRoot = getHostReservationRoot();
-    if (hostRoot instanceof HTMLElement) {
-      candidateRoots.push(
-        hostRoot.closest("main") || hostRoot.parentElement || hostRoot,
-      );
-    }
-    if (document.body instanceof HTMLBodyElement) {
-      candidateRoots.push(document.body);
-    }
-
-    const seenRoots = new Set();
-    let bestCandidate = null;
-    let bestScore = Number.NEGATIVE_INFINITY;
-
-    const visitCandidate = (candidate) => {
-      if (!(candidate instanceof HTMLElement) || !isElementVisible(candidate)) {
-        return;
-      }
-      if (isInsideExtensionSurface(candidate)) {
-        return;
-      }
-
-      const text = normalizeSlackFieldText(candidate.textContent || "");
-      if (!text || text.length > 120) {
-        return;
-      }
-
-      const normalizedText = normalizeTextForMatch(text);
-      if (!normalizedText) {
-        return;
-      }
-
-      const matchedRoomKey = roomKeys.find(
-        (roomKey) =>
-          normalizedText === roomKey ||
-          normalizedText.endsWith(roomKey) ||
-          normalizedText.includes(roomKey),
-      );
-      if (!matchedRoomKey) {
-        return;
-      }
-
-      const rect = candidate.getBoundingClientRect();
-      let score = 0;
-      if (normalizedText === matchedRoomKey) {
-        score += 28;
-      } else if (normalizedText.endsWith(matchedRoomKey)) {
-        score += 24;
-      } else {
-        score += 16;
-      }
-
-      if (
-        candidate.tagName === "H1" ||
-        candidate.tagName === "H2" ||
-        candidate.tagName === "H3"
-      ) {
-        score += 10;
-      }
-
-      if (
-        typeof candidate.className === "string" &&
-        /title|heading|header/i.test(candidate.className)
-      ) {
-        score += 6;
-      }
-
-      if (rect.top >= 0 && rect.top < 260) {
-        score += 8;
-      }
-
-      if (rect.left >= 0 && rect.left < window.innerWidth * 0.66) {
-        score += 2;
-      }
-
-      if (text.length <= 40) {
-        score += 3;
-      }
-
-      if (score > bestScore) {
-        bestScore = score;
-        bestCandidate = candidate;
-      }
-    };
-
-    candidateRoots.forEach((root) => {
-      if (!(root instanceof HTMLElement) || seenRoots.has(root)) {
-        return;
-      }
-      seenRoots.add(root);
-
-      const headingCandidates = Array.from(
-        root.querySelectorAll(
-          "h1, h2, h3, h4, strong, [class*='title'], [class*='heading'], [class*='header']",
-        ),
-      );
-      headingCandidates.forEach(visitCandidate);
-
-      if (bestScore >= 24) {
-        return;
-      }
-
-      const fallbackCandidates = Array.from(
-        root.querySelectorAll("p, span, div"),
-      );
-      for (
-        let index = 0;
-        index < fallbackCandidates.length && index < 220;
-        index += 1
-      ) {
-        visitCandidate(fallbackCandidates[index]);
-      }
-    });
-
-    return bestScore >= 18 ? bestCandidate : null;
   }
 
   function scheduleAutoOpenMapCalendarLauncher(launcher) {
@@ -583,13 +354,6 @@
     launcher.dataset.zzkToggleState = isOpen ? "open" : "closed";
     launcher.style.setProperty("border-style", "solid", "important");
     launcher.style.setProperty("border-width", "1px", "important");
-    const isFloatingLauncher = launcher.dataset.zzkMountType === "lms-floating";
-    if (isGuestReservationEditPage() && !isFloatingLauncher) {
-      launcher.style.setProperty("border-radius", "999px", "important");
-      launcher.style.setProperty("padding", "8px 14px", "important");
-      launcher.style.setProperty("min-height", "36px", "important");
-    }
-
     if (isOpen) {
       launcher.style.setProperty("background-color", "#FF8833", "important");
       launcher.style.setProperty("border-color", "#FF8833", "important");
@@ -782,8 +546,6 @@
       ensureMapCalendarLoadingOverlay,
       syncMapCalendarBodyLoadingState,
       ensureMapCalendarLauncher,
-      mountMapCalendarLauncher,
-      findGuestRoomTitleAnchor,
       scheduleAutoOpenMapCalendarLauncher,
       removeMapCalendarLauncher,
       updateMapCalendarLauncherState,

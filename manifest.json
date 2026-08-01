@@ -15,7 +15,7 @@
   },
   "content_scripts": [
     {
-      "matches": ["https://zzimkkong.com/*", "https://techcourse-lms-plus-web.woowahan.com/*"],
+      "matches": ["https://techcourse-lms-plus-web.woowahan.com/*"],
       "js": [
         "src/constants/debug.js",
         "src/utils/shared.js",
@@ -26,9 +26,7 @@
         "src/features/slack/shared.js",
         "src/features/slack/workflow.js",
         "src/features/slack/success-flow.js",
-        "src/features/host-sync/shared.js",
-        "src/services/guest-data/normalizers.js",
-        "src/services/guest-data/shared.js",
+        "src/features/form-fields/shared.js",
         "src/services/lms-data/normalizers.js",
         "src/services/lms-data/shared.js",
         "src/features/radar/floor-maps.js",
@@ -48,12 +46,10 @@
         "src/page-network-restore.js",
         "assets/basecoat-dialog.css"
       ],
-      "matches": ["https://zzimkkong.com/*", "https://techcourse-lms-plus-web.woowahan.com/*"]
+      "matches": ["https://techcourse-lms-plus-web.woowahan.com/*"]
     }
   ],
   "host_permissions": [
-    "https://zzimkkong.com/*",
-    "https://k8s.zzimkkong.com/*",
     "https://techcourse-lms-plus-web.woowahan.com/*",
     "https://techcourse-lms-plus-api.woowahan.com/*"
   ]

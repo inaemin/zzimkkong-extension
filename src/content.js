@@ -10,13 +10,12 @@
     "__zzkRouteUtils",
     "__zzkSlackShared",
     "__zzkRadarShared",
-    "__zzkHostSyncShared",
     "__zzkSharedConstants",
     "__zzkRadarWorkflow",
     "__zzkRadarFormSync",
     "__zzkSlackWorkflow",
     "__zzkSlackSuccessFlow",
-    "__zzkGuestDataShared",
+    "__zzkFormFieldUtils",
     "__zzkLmsDataShared",
   ];
   const missingBootstrapGlobals = requiredBootstrapGlobals.filter((globalName) => {
@@ -74,15 +73,7 @@
     formatKSTWeekday,
     formatDateSelectorText,
   } = globalThis.__zzkDateTimeUtils;
-  const {
-    isGuestReservationEditPage,
-    isGuestSuccessPage,
-    isGuestPage,
-    getSharingMapId,
-    isLmsService,
-    isRadarSupportedPage,
-    getServiceKind,
-  } = globalThis.__zzkRouteUtils;
+  const { getSharingMapId, isRadarSupportedPage } = globalThis.__zzkRouteUtils;
   const {
     normalizeSlackFieldText,
     normalizeSlackChannelToken,
@@ -109,7 +100,7 @@
     getControlAssociatedLabelText,
     buildHostFieldDescriptor,
     readHostFieldDisplayValue,
-  } = globalThis.__zzkHostSyncShared;
+  } = globalThis.__zzkFormFieldUtils;
 
   const {
     MAP_CALENDAR_OVERLAY_ID,
@@ -145,7 +136,6 @@
     MAP_CALENDAR_CURRENT_TIME_SCROLL_LEAD_MINUTES,
     MAP_CALENDAR_SPACE_TAB_MEETING,
     MAP_CALENDAR_SPACE_TAB_PAIR,
-    API_BASE_URL,
     RUNTIME_MESSAGE_TIMEOUT_MS,
     RESERVATION_SCHEDULE_STALE_MS,
     SEOUL_TIMEZONE,
@@ -501,9 +491,6 @@
     syncSlackChannelMentionPreference();
     syncSlackReminderLeadTimePreference();
     restorePendingSlackModalState();
-    if (isGuestPage() && tryRecoverBlankGuestPage()) {
-      return;
-    }
 
     hookHistoryChanges();
     window.addEventListener("popstate", handleLocationChange);
@@ -618,19 +605,13 @@
     }
     if (!isRadarSupportedPage()) {
       restorePageReservationNetworkHook();
-      teardownGuestUi({
-        preserveReservationContext: isGuestReservationFlowPage(),
-      });
-      return;
-    }
-    if (tryRecoverBlankGuestPage()) {
+      teardownGuestUi();
       return;
     }
     if (shouldInstallPageReservationNetworkHook()) {
       installPageReservationNetworkHook();
     }
     queueSlackModalFromPersistedEditSubmitIfNeeded('mutation-observer');
-    clearBlankGuestRecoveryIfPageReady();
     if (!isGuestUiReadyForActivation()) {
       removeMapCalendarLauncher();
       removeMapCalendarOverlay();
@@ -950,7 +931,6 @@
       const response = await sendMessage({
         type: "ZZK_FETCH_AVAILABILITY",
         payload: {
-          serviceKind: getServiceKind(),
           sharingMapId,
           date,
           startTime,
@@ -1358,7 +1338,6 @@
       const response = await sendMessage({
         type: "ZZK_FETCH_DAILY_SCHEDULE",
         payload: {
-          serviceKind: getServiceKind(),
           sharingMapId,
           date: normalizedDate,
           roomType: activeTab,
@@ -1662,17 +1641,6 @@
     ) {
       state.appliedSelection = null;
     }
-
-    const editLockedRoomConstraint = buildEditLockedRoomConstraint(rooms);
-    enforceEditLockedRoomSelectionState(
-      editLockedRoomConstraint,
-      selectionDate,
-    );
-    const editReservationWindowConstraint =
-      buildEditReservationWindowConstraint(
-        selectionDate,
-        editLockedRoomConstraint,
-      );
 
     const shell = document.createElement("div");
     shell.className = "zzk-map-calendar-shell";
@@ -2471,17 +2439,9 @@
         }
       }
 
-      const roomSelectionLocked =
-        editLockedRoomConstraint != null &&
-        !doesRoomMatchEditLockedConstraint(room, editLockedRoomConstraint);
-
       // 라벨 pane 의 회의실 이름 행.
       const labelRow = document.createElement("div");
       labelRow.className = "zzk-map-calendar-row zzk-map-calendar-label-row";
-      if (roomSelectionLocked) {
-        labelRow.classList.add("room-locked-disabled");
-        labelRow.setAttribute("aria-disabled", "true");
-      }
       const roomName = document.createElement("div");
       roomName.className = "zzk-map-calendar-room-name";
       renderRoomLabel(roomName, room, {
@@ -2496,10 +2456,6 @@
       const row = document.createElement("div");
       row.className = "zzk-map-calendar-row zzk-map-calendar-timeline-row";
       currentTimelineRooms.appendChild(row);
-      if (roomSelectionLocked) {
-        row.classList.add("room-locked-disabled");
-        row.setAttribute("aria-disabled", "true");
-      }
       // hover 시 라벨 행도 같이 강조하려고 서로 참조를 걸어 둔다.
       row.__zzkLabelRow = labelRow;
       labelRow.__zzkTimelineRow = row;
@@ -2512,10 +2468,6 @@
       const reservations = Array.isArray(room.reservations)
         ? room.reservations
         : [];
-      const isEditableWindowRoom = doesRoomMatchEditWindowConstraint(
-        room,
-        editReservationWindowConstraint,
-      );
 
       const slotMetas = timeline.map((slot) => {
         const overlappedReservations = reservations.filter(
@@ -2525,16 +2477,6 @@
             reservation.startMinute < slot.endMinute &&
             reservation.endMinute > slot.startMinute,
         );
-        const effectiveOverlappedReservations =
-          isEditableWindowRoom && !roomSelectionLocked
-            ? overlappedReservations.filter(
-                (reservation) =>
-                  !isReservationEditableByCurrentEditWindow(
-                    reservation,
-                    editReservationWindowConstraint,
-                  ),
-              )
-            : overlappedReservations;
 
         const isPastBlocked =
           Number.isFinite(earliestSelectableMinute) &&
@@ -2542,14 +2484,11 @@
 
         return {
           slot,
-          overlappedReservations: effectiveOverlappedReservations,
-          isBusy: effectiveOverlappedReservations.length > 0,
+          overlappedReservations,
+          isBusy: overlappedReservations.length > 0,
           isPastBlocked,
-          isRoomLocked: roomSelectionLocked,
-          isSelectable:
-            effectiveOverlappedReservations.length === 0 &&
-            !isPastBlocked &&
-            !roomSelectionLocked,
+          isRoomLocked: false,
+          isSelectable: overlappedReservations.length === 0 && !isPastBlocked,
         };
       });
 
@@ -2642,28 +2581,19 @@
         if (hoverStartIndex >= 0 && slotMetas[hoverStartIndex].isSelectable) {
           // lms+ 는 클릭 시 기본 60분(30분 슬롯 2칸)을 선택하므로, hover 미리보기도
           // 같은 범위(다음 칸이 막혀 있으면 1칸)를 보여줘 클릭 결과와 일치시킨다.
-          // legacy 는 기존대로 연속 선택 가능 구간을 최대 MAX_RESERVATION_BLOCKS 까지 미리보기한다.
-          let hardMaxIndex;
-          if (isLmsService()) {
-            const hoverStartMinute = timeline[hoverStartIndex].startMinute;
-            const hoverTargetEndMinute =
-              hoverStartMinute + LMS_DEFAULT_RESERVATION_MINUTES;
-            let lmsMaxIndex = hoverStartIndex;
-            for (
-              let candidateIndex = hoverStartIndex;
-              candidateIndex < slotMetas.length &&
-              timeline[candidateIndex].endMinute <= hoverTargetEndMinute;
-              candidateIndex += 1
-            ) {
-              lmsMaxIndex = candidateIndex;
-            }
-            hardMaxIndex = Math.min(slotMetas.length - 1, lmsMaxIndex);
-          } else {
-            hardMaxIndex = Math.min(
-              slotMetas.length - 1,
-              hoverStartIndex + MAX_RESERVATION_BLOCKS - 1,
-            );
+          const hoverStartMinute = timeline[hoverStartIndex].startMinute;
+          const hoverTargetEndMinute =
+            hoverStartMinute + LMS_DEFAULT_RESERVATION_MINUTES;
+          let lmsMaxIndex = hoverStartIndex;
+          for (
+            let candidateIndex = hoverStartIndex;
+            candidateIndex < slotMetas.length &&
+            timeline[candidateIndex].endMinute <= hoverTargetEndMinute;
+            candidateIndex += 1
+          ) {
+            lmsMaxIndex = candidateIndex;
           }
+          const hardMaxIndex = Math.min(slotMetas.length - 1, lmsMaxIndex);
 
           for (let index = hoverStartIndex; index <= hardMaxIndex; index += 1) {
             if (!slotMetas[index].isSelectable) {
@@ -2835,27 +2765,18 @@
 
           // lms+ 는 클릭 한 번에 기본 60분(30분 슬롯 2칸)을 선택하되,
           // 다음 칸이 예약 등으로 막혀 있으면 30분만 선택한다.
-          // legacy 는 기존대로 연속 선택 가능 구간을 최대 MAX_RESERVATION_BLOCKS 까지 잡는다.
           const clickStartMinute = timeline[index].startMinute;
-          let hardMaxIndex;
-          if (isLmsService()) {
-            const lmsTargetEndMinute = clickStartMinute + LMS_DEFAULT_RESERVATION_MINUTES;
-            let lmsMaxIndex = index;
-            for (
-              let candidateIndex = index;
-              candidateIndex < slotMetas.length &&
-              timeline[candidateIndex].endMinute <= lmsTargetEndMinute;
-              candidateIndex += 1
-            ) {
-              lmsMaxIndex = candidateIndex;
-            }
-            hardMaxIndex = Math.min(slotMetas.length - 1, lmsMaxIndex);
-          } else {
-            hardMaxIndex = Math.min(
-              slotMetas.length - 1,
-              index + MAX_RESERVATION_BLOCKS - 1,
-            );
+          const lmsTargetEndMinute = clickStartMinute + LMS_DEFAULT_RESERVATION_MINUTES;
+          let lmsMaxIndex = index;
+          for (
+            let candidateIndex = index;
+            candidateIndex < slotMetas.length &&
+            timeline[candidateIndex].endMinute <= lmsTargetEndMinute;
+            candidateIndex += 1
+          ) {
+            lmsMaxIndex = candidateIndex;
           }
+          const hardMaxIndex = Math.min(slotMetas.length - 1, lmsMaxIndex);
 
           let autoEndIndex = index;
 
@@ -2887,11 +2808,9 @@
       });
     });
 
-    // 개편 서비스(lms+)에는 지도가 없어 공간의 물리적 위치를 알 수 없다. 타임라인 아래에
+    // lms+ 에는 지도가 없어 공간의 물리적 위치를 알 수 없다. 타임라인 아래에
     // 층별 평면도(SVG)를 접이식으로 붙여, 페어룸 등이 실제 어디인지 확인할 수 있게 한다.
-    if (isLmsService()) {
-      renderMapCalendarFloorMapSection(body, preservedFloorMapScrollLeft);
-    }
+    renderMapCalendarFloorMapSection(body, preservedFloorMapScrollLeft);
 
     const scrollEl = getMapCalendarScrollElement(overlay);
     syncMapCalendarBodyScrollState(body);
@@ -2943,420 +2862,11 @@
     gridWrap.style.setProperty("--zzk-hour-boundary-clip-top", "0px");
   }
 
-  function buildEditLockedRoomConstraint(rooms) {
-    if (!isGuestReservationEditPage()) {
-      return null;
-    }
-
-    const hostRoot = getHostReservationRoot();
-    const selectedRoomId =
-      readHostSelectedRoomId(hostRoot) || readHostSelectedRoomId(document);
-    const roomNameCandidate = resolveEditLockedRoomNameCandidate(hostRoot);
-    const normalizedRoomName = normalizeTextForMatch(
-      extractKnownRoomName(roomNameCandidate || ""),
-    );
-
-    if (!Number.isInteger(selectedRoomId) && !normalizedRoomName) {
-      return null;
-    }
-
-    const allowedRoomIds = new Set();
-    const roomList = Array.isArray(rooms) ? rooms : [];
-    roomList.forEach((room) => {
-      const roomId = Number(room?.id);
-      if (!Number.isInteger(roomId)) {
-        return;
-      }
-
-      const normalizedCandidateName = normalizeTextForMatch(
-        extractKnownRoomName(typeof room?.name === "string" ? room.name : ""),
-      );
-      const idMatched =
-        Number.isInteger(selectedRoomId) && roomId === selectedRoomId;
-      const nameMatched =
-        normalizedRoomName &&
-        normalizedCandidateName &&
-        (normalizedCandidateName === normalizedRoomName ||
-          normalizedCandidateName.includes(normalizedRoomName) ||
-          normalizedRoomName.includes(normalizedCandidateName));
-
-      if (idMatched || nameMatched) {
-        allowedRoomIds.add(roomId);
-      }
-    });
-
-    if (allowedRoomIds.size === 0 && Number.isInteger(selectedRoomId)) {
-      allowedRoomIds.add(selectedRoomId);
-    }
-
-    return {
-      roomId: Number.isInteger(selectedRoomId) ? selectedRoomId : null,
-      normalizedRoomName,
-      allowedRoomIds,
-    };
-  }
-
-  function resolveEditLockedRoomNameCandidate(root = document) {
-    const directRoomName = normalizeHostRoomCandidate(
-      readHostRoomName(root) || readHostRoomName(document) || "",
-    );
-    if (directRoomName) {
-      return directRoomName;
-    }
-
-    const roomFieldValue = normalizeHostRoomCandidate(
-      readHostReservationFieldValue(
-        root,
-        ["공간 선택", "공간", "회의실", "room", "space"],
-        {
-          includeReadOnly: true,
-          includeDisabled: true,
-          includeExtendedControls: true,
-        },
-      ) || "",
-    );
-    if (roomFieldValue) {
-      return roomFieldValue;
-    }
-
-    const roomTitleAnchor = findGuestRoomTitleAnchor();
-    if (roomTitleAnchor instanceof HTMLElement) {
-      const fromTitle = normalizeHostRoomCandidate(
-        roomTitleAnchor.textContent || "",
-      );
-      if (fromTitle) {
-        return fromTitle;
-      }
-    }
-
-    return "";
-  }
-
-  function readHostSelectedRoomId(root = document) {
-    const scopedRoomSelect = root.querySelector(
-      "select[name='spaceId'], select[name='roomId']",
-    );
-    const roomSelect =
-      scopedRoomSelect instanceof HTMLSelectElement
-        ? scopedRoomSelect
-        : document.querySelector(
-            "select[name='spaceId'], select[name='roomId']",
-          );
-    if (roomSelect instanceof HTMLSelectElement) {
-      const parsed = parseReservationRoomIdCandidate(roomSelect.value || "");
-      if (Number.isInteger(parsed)) {
-        return parsed;
-      }
-
-      const selectedOption =
-        roomSelect.selectedIndex >= 0
-          ? roomSelect.options[roomSelect.selectedIndex]
-          : null;
-      if (selectedOption instanceof HTMLOptionElement) {
-        const optionDataId =
-          selectedOption.getAttribute("data-value") ||
-          selectedOption.getAttribute("data-id") ||
-          selectedOption.value ||
-          "";
-        const optionParsed = parseReservationRoomIdCandidate(optionDataId);
-        if (Number.isInteger(optionParsed)) {
-          return optionParsed;
-        }
-      }
-    }
-
-    const hiddenRoomInput = root.querySelector(
-      "input[type='hidden'][name='spaceId'], input[type='hidden'][name='roomId']",
-    );
-    if (hiddenRoomInput instanceof HTMLInputElement) {
-      const hiddenParsed = parseReservationRoomIdCandidate(
-        hiddenRoomInput.value || "",
-      );
-      if (Number.isInteger(hiddenParsed)) {
-        return hiddenParsed;
-      }
-    }
-
-    const roomDropdownButton = findHostRoomDropdownButton(root);
-    if (!(roomDropdownButton instanceof HTMLButtonElement)) {
-      return null;
-    }
-
-    const dataValue =
-      roomDropdownButton.getAttribute("data-value") ||
-      roomDropdownButton.getAttribute("value") ||
-      roomDropdownButton.dataset.value ||
-      "";
-    const parsed = parseReservationRoomIdCandidate(dataValue);
-    return Number.isInteger(parsed) ? parsed : null;
-  }
-
-  function doesRoomMatchEditLockedConstraint(room, constraint) {
-    if (!constraint || typeof constraint !== "object") {
-      return true;
-    }
-
-    const roomId = Number(room?.id);
-    if (
-      Number.isInteger(roomId) &&
-      constraint.allowedRoomIds instanceof Set &&
-      constraint.allowedRoomIds.has(roomId)
-    ) {
-      return true;
-    }
-
-    if (
-      Number.isInteger(roomId) &&
-      Number.isInteger(constraint.roomId) &&
-      roomId === constraint.roomId
-    ) {
-      return true;
-    }
-
-    const lockedRoomName = normalizeTextForMatch(
-      constraint.normalizedRoomName || "",
-    );
-    if (!lockedRoomName) {
-      return false;
-    }
-
-    const roomName = normalizeTextForMatch(
-      extractKnownRoomName(typeof room?.name === "string" ? room.name : ""),
-    );
-    if (!roomName) {
-      return false;
-    }
-
-    return (
-      roomName === lockedRoomName ||
-      roomName.includes(lockedRoomName) ||
-      lockedRoomName.includes(roomName)
-    );
-  }
-
-  function enforceEditLockedRoomSelectionState(constraint, selectionDate) {
-    if (!constraint || !isGuestReservationEditPage()) {
-      return;
-    }
-
-    const isAllowedRoomId = (roomId) => {
-      if (!Number.isInteger(roomId)) {
-        return true;
-      }
-
-      if (
-        constraint.allowedRoomIds instanceof Set &&
-        constraint.allowedRoomIds.size > 0
-      ) {
-        return constraint.allowedRoomIds.has(roomId);
-      }
-
-      if (Number.isInteger(constraint.roomId)) {
-        return roomId === constraint.roomId;
-      }
-
-      return true;
-    };
-
-    if (
-      state.slotSelection &&
-      state.slotSelection.date === selectionDate &&
-      !isAllowedRoomId(state.slotSelection.roomId)
-    ) {
-      state.slotSelection = null;
-    }
-
-    if (
-      state.slotHover &&
-      state.slotHover.date === selectionDate &&
-      !isAllowedRoomId(state.slotHover.roomId)
-    ) {
-      state.slotHover = null;
-    }
-
-    if (
-      state.appliedSelection &&
-      state.appliedSelection.date === selectionDate &&
-      !isAllowedRoomId(state.appliedSelection.roomId)
-    ) {
-      state.appliedSelection = null;
-    }
-  }
-
   function resetEditReservationBaselineConstraint() {
     state.editReservationBaselineConstraint = null;
     state.editReservationBaselinePathKey = "";
   }
 
-  function buildEditReservationBaselineContextKey(lockConstraint) {
-    const sharingMapId = getSharingMapId() || "";
-    const roomKey = Number.isInteger(lockConstraint?.roomId)
-      ? String(lockConstraint.roomId)
-      : normalizeTextForMatch(lockConstraint?.normalizedRoomName || "");
-    return `${location.pathname}|${sharingMapId}|${roomKey}`;
-  }
-
-  function captureEditReservationWindowBaseline(selectionDate, lockConstraint) {
-    const hostRoot = getHostReservationRoot();
-    const dateInput =
-      queryHostDateInput(hostRoot) || queryHostDateInput(document);
-    const observedDate =
-      dateInput instanceof HTMLInputElement
-        ? normalizeDateString(dateInput.value || "")
-        : null;
-
-    const observedTimes = readHostReservationTimeValues(hostRoot);
-    const startMinute = parseHourMinute(String(observedTimes?.startTime || ""));
-    const endMinute = parseHourMinute(String(observedTimes?.endTime || ""));
-    if (
-      !Number.isInteger(startMinute) ||
-      !Number.isInteger(endMinute) ||
-      startMinute >= endMinute
-    ) {
-      return null;
-    }
-
-    const roomIdFromForm =
-      readHostSelectedRoomId(hostRoot) || readHostSelectedRoomId(document);
-    const roomNameCandidate = resolveEditLockedRoomNameCandidate(hostRoot);
-    const normalizedRoomName = normalizeTextForMatch(
-      extractKnownRoomName(roomNameCandidate || ""),
-    );
-    const normalizedSelectionDate = normalizeDateString(selectionDate || "");
-    const baselineDate = observedDate || normalizedSelectionDate || "";
-    if (!baselineDate) {
-      return null;
-    }
-
-    return {
-      date: baselineDate,
-      startMinute,
-      endMinute,
-      roomId:
-        Number.isInteger(roomIdFromForm) ||
-        Number.isInteger(lockConstraint?.roomId)
-          ? Number.isInteger(roomIdFromForm)
-            ? roomIdFromForm
-            : lockConstraint.roomId
-          : null,
-      normalizedRoomName:
-        normalizedRoomName ||
-        normalizeTextForMatch(lockConstraint?.normalizedRoomName || ""),
-    };
-  }
-
-  function buildEditReservationWindowConstraint(selectionDate, lockConstraint) {
-    if (!isGuestReservationEditPage()) {
-      return null;
-    }
-
-    const contextKey = buildEditReservationBaselineContextKey(lockConstraint);
-    if (state.editReservationBaselinePathKey !== contextKey) {
-      resetEditReservationBaselineConstraint();
-      state.editReservationBaselinePathKey = contextKey;
-    }
-
-    if (!state.editReservationBaselineConstraint) {
-      const baseline = captureEditReservationWindowBaseline(
-        selectionDate,
-        lockConstraint,
-      );
-      if (baseline) {
-        state.editReservationBaselineConstraint = baseline;
-      }
-    }
-
-    const baseline =
-      state.editReservationBaselineConstraint &&
-      typeof state.editReservationBaselineConstraint === "object"
-        ? state.editReservationBaselineConstraint
-        : null;
-    if (!baseline) {
-      return null;
-    }
-
-    const normalizedSelectionDate = normalizeDateString(selectionDate || "");
-    if (
-      normalizedSelectionDate &&
-      baseline.date &&
-      baseline.date !== normalizedSelectionDate
-    ) {
-      return null;
-    }
-
-    return {
-      date: baseline.date,
-      startMinute: baseline.startMinute,
-      endMinute: baseline.endMinute,
-      roomId: Number.isInteger(baseline.roomId) ? baseline.roomId : null,
-      normalizedRoomName: normalizeTextForMatch(
-        baseline.normalizedRoomName || "",
-      ),
-    };
-  }
-
-  function doesRoomMatchEditWindowConstraint(room, constraint) {
-    if (!constraint || typeof constraint !== "object") {
-      return false;
-    }
-
-    const roomId = Number(room?.id);
-    if (
-      Number.isInteger(roomId) &&
-      Number.isInteger(constraint.roomId) &&
-      roomId === constraint.roomId
-    ) {
-      return true;
-    }
-
-    const constraintRoomName = normalizeTextForMatch(
-      constraint.normalizedRoomName || "",
-    );
-    if (!constraintRoomName) {
-      return false;
-    }
-
-    const roomName = normalizeTextForMatch(
-      extractKnownRoomName(typeof room?.name === "string" ? room.name : ""),
-    );
-    if (!roomName) {
-      return false;
-    }
-
-    return (
-      roomName === constraintRoomName ||
-      roomName.includes(constraintRoomName) ||
-      constraintRoomName.includes(roomName)
-    );
-  }
-
-  function isReservationEditableByCurrentEditWindow(reservation, constraint) {
-    if (!constraint || typeof constraint !== "object") {
-      return false;
-    }
-
-    const reservationStartMinute = Number(reservation?.startMinute);
-    const reservationEndMinute = Number(reservation?.endMinute);
-    if (
-      !Number.isInteger(reservationStartMinute) ||
-      !Number.isInteger(reservationEndMinute) ||
-      reservationStartMinute >= reservationEndMinute
-    ) {
-      return false;
-    }
-
-    if (
-      !Number.isInteger(constraint.startMinute) ||
-      !Number.isInteger(constraint.endMinute)
-    ) {
-      return false;
-    }
-
-    return (
-      reservationStartMinute < constraint.endMinute &&
-      reservationEndMinute > constraint.startMinute
-    );
-  }
 
   function syncMapCalendarBodyScrollState(bodyElement) {
     if (!(bodyElement instanceof HTMLElement)) {
@@ -3412,9 +2922,7 @@
     let trackWidth = 0;
 
     // lms+ 는 30분 슬롯이라 시간당 2칸뿐이므로 클릭하기 좋게 더 넓게 그린다.
-    const slotWidth = isLmsService()
-      ? LMS_CALENDAR_SLOT_MIN_WIDTH
-      : CALENDAR_SLOT_MIN_WIDTH;
+    const slotWidth = LMS_CALENDAR_SLOT_MIN_WIDTH;
 
     const addColumn = (width) => {
       columns.push(width);
@@ -4716,8 +4224,6 @@
     ensureMapCalendarLoadingOverlay,
     syncMapCalendarBodyLoadingState,
     ensureMapCalendarLauncher,
-    mountMapCalendarLauncher,
-    findGuestRoomTitleAnchor,
     scheduleAutoOpenMapCalendarLauncher,
     removeMapCalendarLauncher,
     updateMapCalendarLauncherState,
@@ -4742,10 +4248,7 @@
     buildSlackReservationContext: (rootOverride) =>
       buildSlackReservationContext(rootOverride),
     showSlackCopyModal: (context) => showSlackCopyModal(context),
-    isGuestPage,
     isRadarSupportedPage,
-    isLmsService,
-    isGuestReservationEditPage,
     shouldDelayGuestMapCalendarUi,
     isMapCalendarModalOpenRequested,
     getHostReservationRoot,
@@ -4783,26 +4286,10 @@
     renderMapCalendarOverlay,
     refreshAvailability,
     parseHourMinute,
-    getHostReservationRoot,
-    isHostReservationRootReady,
-    waitForHostReservationReady,
-    isHostRoomSelectionSynced,
-    findHostRoomDropdownButton,
-    syncHostRoomSelection,
     queryHostDateInput,
-    readHostReservationTimeValues,
-    queryHostTimeInput,
-    queryFallbackHostTimeInputs,
-    setHostTimeByPicker,
-    waitForElement,
-    setFormElementValue,
     setFormElementValueSilently,
     dispatchFormElementEvents,
     normalizeDateString,
-    collapseHostTimePickers,
-    isHostReservationFormSynced,
-    applyPanelDateChange,
-    isLmsService,
     syncLmsReservationForm,
   });
 
@@ -5805,13 +5292,6 @@
     return radarFormSync.applyTimelineReservationSelection(selection, requestId);
   }
 
-  async function syncHostReservationForm(
-    payload,
-    requestId = state.timelineSelectionRequestId,
-  ) {
-    return radarFormSync.syncHostReservationForm(payload, requestId);
-  }
-
   function getHostReservationRoot() {
     const dateInputs = Array.from(
       document.querySelectorAll("input[name='date'], input[type='date']"),
@@ -6318,43 +5798,6 @@
 
     const dateInput = queryHostDateInput(root);
     return dateInput instanceof HTMLInputElement;
-  }
-
-  function findHostEditSubmitButton(root = document) {
-    return findHostReservationActionButton(root, {
-      expectedLabels: ["예약수정하기", "수정하기", "예약하기"],
-      expectedIds: ["formupdatesubmit", "formreservesubmit"],
-    });
-  }
-
-  function findHostBookingSubmitButton(root = document) {
-    return findHostReservationActionButton(root, {
-      expectedLabels: ["예약하기"],
-      expectedIds: ["formreservesubmit"],
-    });
-  }
-
-  function findHostReservationActionButton(root = document, options = {}) {
-    const expectedLabels = Array.isArray(options.expectedLabels)
-      ? options.expectedLabels
-      : [];
-    const expectedIds = Array.isArray(options.expectedIds) ? options.expectedIds : [];
-    const buttonCandidates = [
-      ...Array.from(root.querySelectorAll('button')),
-      ...Array.from(root.querySelectorAll('input[type="submit"], input[type="button"]')),
-    ].filter((element) => element instanceof HTMLElement && isElementVisible(element));
-
-    return buttonCandidates.find((element) => {
-      const textLike =
-        element instanceof HTMLInputElement
-          ? [element.value || '', element.getAttribute('aria-label') || '', element.id || ''].join(' ')
-          : [element.textContent || '', element.getAttribute('aria-label') || '', element.id || ''].join(' ');
-      const normalized = normalizeTextForMatch(textLike);
-      return (
-        expectedLabels.some((label) => normalized.includes(label)) ||
-        expectedIds.some((idValue) => normalized.includes(idValue))
-      );
-    }) || null;
   }
 
   async function waitForHostReservationReady(
@@ -7626,29 +7069,18 @@
     if (!isRadarSupportedPage()) {
       resetEditReservationBaselineConstraint();
       restorePageReservationNetworkHook();
-      teardownGuestUi({
-        preserveReservationContext: isGuestReservationFlowPage(),
-      });
+      teardownGuestUi();
       return;
     }
 
-    if (!isGuestReservationEditPage()) {
-      resetEditReservationBaselineConstraint();
-    }
+    resetEditReservationBaselineConstraint();
 
     state.lastGuestRouteChangeAt = Date.now();
-    const previousPathname = state.lastObservedPathname;
     state.lastObservedPathname = location.pathname;
-
-    if (tryRecoverBlankGuestPage()) {
-      return;
-    }
 
     if (shouldInstallPageReservationNetworkHook()) {
       installPageReservationNetworkHook();
     }
-
-    clearBlankGuestRecoveryIfPageReady();
 
     syncMapCalendarAlwaysOpenPreference();
     if (!isGuestUiReadyForActivation()) {
@@ -7657,34 +7089,6 @@
       state.mapCalendarVisible = false;
       state.lastAutoOpenPath = null;
       return;
-    }
-    const elapsedSinceEditAction = Date.now() - (state.lastReservationActionAt || 0);
-    if (
-      typeof previousPathname === 'string' &&
-      /^\/guest\/[^/?#]+\/reservation\/edit\/?$/.test(previousPathname) &&
-      !isGuestReservationEditPage() &&
-      Number.isFinite(elapsedSinceEditAction) &&
-      elapsedSinceEditAction >= 0 &&
-      elapsedSinceEditAction <= 20000
-    ) {
-      const pendingEditSubmitState = readPendingEditSubmitState();
-      const persistedContext =
-        pendingEditSubmitState &&
-        pendingEditSubmitState.context &&
-        typeof pendingEditSubmitState.context === 'object'
-          ? { ...pendingEditSubmitState.context }
-          : null;
-      const pendingContext =
-        persistedContext ||
-        (state.lastReservationContext && typeof state.lastReservationContext === 'object'
-          ? { ...state.lastReservationContext }
-          : null);
-      if (pendingContext) {
-        pendingContext.mutationMethod = 'PUT';
-        queuePendingSlackCopyModal(pendingContext, { requireNonEditPage: false });
-        state.lastReservationContext = null;
-        clearPendingEditSubmitState();
-      }
     }
     queueSlackModalFromPersistedEditSubmitIfNeeded('location-change');
     ensurePanel();
@@ -7990,10 +7394,6 @@
   }
 
   function handleHostTimePickerManualInteraction(event) {
-    if (!isGuestReservationEditPage()) {
-      return;
-    }
-
     if (event.isTrusted !== true) {
       return;
     }
@@ -8159,14 +7559,6 @@
       return true;
     }
 
-    if (isGuestReservationEditPage()) {
-      return (
-        normalizedLabel.includes("수정") ||
-        normalizedLabel.includes("변경") ||
-        normalizedLabel.includes("저장")
-      );
-    }
-
     return false;
   }
 
@@ -8230,9 +7622,6 @@
       document.documentElement.dataset.zzkReservationAttemptAt = String(state.lastReservationActionAt);
     }
 
-    if (isGuestReservationEditPage()) {
-      persistPendingEditSubmitState(state.lastReservationContext);
-    }
   }
 
   function createReservationAttemptId() {
@@ -8482,14 +7871,6 @@
     return slackSuccessFlow.tryOpenPendingSlackCopyModal();
   }
 
-  function tryRecoverBlankGuestPage() {
-    return slackSuccessFlow.tryRecoverBlankGuestPage();
-  }
-
-  function clearBlankGuestRecoveryIfPageReady() {
-    return slackSuccessFlow.clearBlankGuestRecoveryIfPageReady();
-  }
-
   function queueSlackModalFromPersistedEditSubmitIfNeeded(caller = '') {
     void caller;
     return slackSuccessFlow.queueSlackModalFromPersistedEditSubmitIfNeeded();
@@ -8714,93 +8095,6 @@
     }
 
     return null;
-  }
-
-  function readSuccessPageReservationContext() {
-    if (!isGuestSuccessPage() || !(document.body instanceof HTMLBodyElement)) {
-      return null;
-    }
-
-    const pageText = document.body.innerText || "";
-    if (!pageText) {
-      return null;
-    }
-
-    const roomNameRaw = readLabeledValueFromText(pageText, [
-      "공간이름",
-      "회의실명",
-    ]);
-    const ownerNameRaw = readLabeledValueFromText(pageText, [
-      "예약자명",
-      "신청자명",
-      "예약자",
-    ]);
-    const descriptionRaw = readLabeledValueFromText(pageText, [
-      "사용목적",
-      "이용목적",
-      "예약내용",
-      "내용",
-    ]);
-    const reservationDateTimeRaw = readLabeledValueFromText(pageText, [
-      "예약일시",
-    ]);
-    const dateParts = extractDateTimeParts(reservationDateTimeRaw || "");
-    const timeRangeMatch = normalizeSlackFieldText(
-      reservationDateTimeRaw || "",
-    ).match(/(\d{1,2}:\d{2})\s*[-~]\s*(\d{1,2}:\d{2})/);
-
-    const context = {
-      roomName: normalizeReservationContextField("roomName", roomNameRaw),
-      ownerName: normalizeReservationContextField("ownerName", ownerNameRaw),
-      description: normalizeReservationContextField(
-        "description",
-        descriptionRaw,
-      ),
-      date: dateParts.date || "",
-      startTime: timeRangeMatch
-        ? normalizeHourMinute(timeRangeMatch[1]) || ""
-        : dateParts.time || "",
-      endTime: timeRangeMatch
-        ? normalizeHourMinute(timeRangeMatch[2]) || ""
-        : "",
-      reservationLink: resolveReservationLinkFromContext(location.href),
-    };
-
-    const hasAnyField = Object.entries(context).some(([fieldName, value]) => {
-      const normalizedValue = normalizeReservationContextField(
-        fieldName,
-        value,
-      );
-      return isMeaningfulReservationContextField(fieldName, normalizedValue);
-    });
-
-    return hasAnyField ? context : null;
-  }
-
-  function readLabeledValueFromText(text, labels) {
-    if (typeof text !== "string" || !Array.isArray(labels)) {
-      return "";
-    }
-
-    for (const label of labels) {
-      const escapedLabel = escapeRegex(label);
-      const pattern = new RegExp(`${escapedLabel}\\s*[:：]?\\s*([^\\n]+)`);
-      const match = text.match(pattern);
-      if (!match) {
-        continue;
-      }
-
-      const value = normalizeSlackFieldText(match[1] || "");
-      if (value) {
-        return value;
-      }
-    }
-
-    return "";
-  }
-
-  function escapeRegex(value) {
-    return String(value || "").replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
   }
 
   function normalizeReservationContextField(fieldName, value) {
@@ -9033,7 +8327,7 @@
         "내용",
       ]) ||
       "-";
-    const defaultMutationMethod = isGuestReservationEditPage() ? "PUT" : "POST";
+    const defaultMutationMethod = "POST";
 
     return {
       mapName: state.latestMapName || "회의실 지도",
@@ -9517,34 +8811,11 @@
     state,
     PAGE_RESERVATION_EVENT_TYPE,
     PENDING_SLACK_MODAL_STORAGE_KEY,
-    BLANK_GUEST_RECOVERY_STORAGE_KEY,
-    isGuestReservationFlowPage,
-    isGuestSuccessPage,
-    isGuestReservationEditPage,
-    isGuestPage,
     isGuestUiReadyForActivation,
-    teardownGuestUi,
-    buildSlackReservationContext,
-    resolveReservationContextFromPayload,
-    readSuccessPageReservationContext,
-    buildMergedSlackReservationContext,
     normalizeReservationMutationMethod,
     createSlackMessageFingerprint,
     shouldSkipSlackCopyModal,
-    clearPendingEditSubmitState,
     showSlackCopyModal,
-    getHostReservationRoot,
-    queryHostDateInput,
-    findHostBookingSubmitButton,
-    rememberReservationOwnerName,
-    resolveReservationOwnerNameFromPayload,
-    isMeaningfulSlackContextValue,
-    getSharingMapId,
-    readPendingEditSubmitState,
-    resolveReservationAttemptForPayload,
-    shouldIgnoreAmbiguousReservationSuccess,
-    consumeReservationAttempt,
-    isLmsService,
     buildLmsSlackReservationContext,
   });
 
@@ -9592,77 +8863,14 @@
     };
   }
 
-  function isGuestReservationFlowPage() {
-    return /^\/guest\/[^/?#]+(?:\/reservation\/edit|\/success)?\/?$/.test(
-      location.pathname,
-    );
-  }
-
-  function isGuestReservationEditHostReady() {
-    if (!isGuestReservationEditPage()) {
-      return true;
-    }
-
-    const hostRoot = getHostReservationRoot();
-    if (!(hostRoot instanceof HTMLElement)) {
-      return false;
-    }
-
-    const dateInput = queryHostDateInput(hostRoot);
-    if (!(dateInput instanceof HTMLInputElement)) {
-      return false;
-    }
-
-    const editSubmitButton = findHostEditSubmitButton(hostRoot);
-    if (!(editSubmitButton instanceof HTMLElement)) {
-      return false;
-    }
-
-    return isHostReservationRootReady(hostRoot, { requireTimeControls: true });
-  }
-
-  function shouldDelayEditPageMapCalendarUi() {
-    return isGuestReservationEditPage() && !isGuestReservationEditHostReady();
-  }
-
-  function isGuestReservationDetailHostReady() {
-    if (!isGuestPage() || isGuestReservationEditPage()) {
-      return true;
-    }
-
-    const actionContainer = findGuestReservationTabContainer();
-    if (!(actionContainer instanceof HTMLElement)) {
-      return false;
-    }
-
-    const hostRoot = getHostReservationRoot();
-    if (!(hostRoot instanceof HTMLElement)) {
-      return false;
-    }
-
-    const dateInput = queryHostDateInput(hostRoot);
-    if (!(dateInput instanceof HTMLInputElement)) {
-      return false;
-    }
-
-    const bookingSubmitButton = findHostBookingSubmitButton(hostRoot);
-    return bookingSubmitButton instanceof HTMLElement;
-  }
-
+  // lms+ 예약 페이지에는 legacy 게스트 페이지 같은 지연 마운트 조건이 없어
+  // 레이더 UI 를 바로 띄울 수 있다.
   function shouldDelayGuestMapCalendarUi() {
-    if (!isGuestPage()) {
-      return false;
-    }
-
-    if (isGuestReservationEditPage()) {
-      return !isGuestReservationEditHostReady();
-    }
-
-    return !isGuestReservationDetailHostReady();
+    return false;
   }
 
   function isGuestUiReadyForActivation() {
-    return !shouldDelayGuestMapCalendarUi();
+    return true;
   }
 
   function syncMapCalendarAlwaysOpenPreference() {
@@ -9761,10 +8969,10 @@
       type: message?.type,
       fallbackCandidate: shouldUseDirectApiFallback(message),
     });
-    // 개편 서비스는 페이지 localStorage 의 JWT 를 Authorization 헤더로 붙여야 하는데,
-    // 백그라운드 서비스워커는 페이지 저장소를 못 읽는다. 그래서 LMS 요청은 백그라운드를
+    // lms+ 는 페이지 localStorage 의 JWT 를 Authorization 헤더로 붙여야 하는데,
+    // 백그라운드 서비스워커는 페이지 저장소를 못 읽는다. 그래서 API 요청은 백그라운드를
     // 거치지 않고 콘텐츠 스크립트(direct)에서 바로 처리한다.
-    if (isLmsService() && shouldUseDirectApiFallback(message)) {
+    if (shouldUseDirectApiFallback(message)) {
       return sendMessageDirectFallback(message);
     }
     return sendMessageViaRuntime(message).catch((runtimeError) => {
@@ -9878,15 +9086,12 @@
   }
 
   function getDirectApiFallbackHandler(messageType) {
-    // 개편 서비스와 legacy 찜꽁이 동시 운영 중이라 현재 페이지에 맞는 구현을 고른다.
-    const useLmsService = isLmsService();
-
     if (messageType === "ZZK_FETCH_AVAILABILITY") {
-      return useLmsService ? fetchLmsAvailability : fetchAvailabilityDirect;
+      return fetchLmsAvailability;
     }
 
     if (messageType === "ZZK_FETCH_DAILY_SCHEDULE") {
-      return useLmsService ? fetchLmsDailySchedule : fetchDailyScheduleDirect;
+      return fetchLmsDailySchedule;
     }
 
     return null;
@@ -9913,22 +9118,6 @@
   }
 
   const {
-    fetchAvailabilityDirect,
-    fetchDailyScheduleDirect,
-    loadMapContextDirect,
-    buildTargetRoomsFromSpaces,
-    normalizeDirectReservations,
-    parseApiWindowStartMinute,
-    parseApiWindowEndMinute,
-    parseApiTimeToMinute,
-    computeDirectTimelineRange,
-    buildDirectTimelineSlots,
-    toKstMinuteOfDay,
-    fetchApiJson,
-    sanitizeSharingMapIdForApi,
-  } = globalThis.__zzkGuestDataShared;
-
-  const {
     fetchAvailability: fetchLmsAvailability,
     fetchDailySchedule: fetchLmsDailySchedule,
   } = globalThis.__zzkLmsDataShared;
@@ -9952,12 +9141,9 @@
     return shouldAllowPastReservationDate(value) ? "" : getTodayDateInKST();
   }
 
-  function shouldAllowPastReservationDate(value) {
-    return (
-      isGuestReservationEditPage() &&
-      isDateString(value) &&
-      value < getTodayDateInKST()
-    );
+  // lms+ 에는 과거 날짜를 허용하는 수정 페이지가 없다.
+  function shouldAllowPastReservationDate() {
+    return false;
   }
 
   function setDateInputMinimum(inputElement, minimumDate) {
@@ -10123,8 +9309,13 @@
       : MAP_CALENDAR_SPACE_TAB_MEETING;
   }
 
-  // 테스트 훅: example.com(테스트 호스트) 또는 DEBUG 모드에서만 노출한다.
-  if (location.hostname === "example.com" || DEBUG_MODE) {
+  // 테스트 훅: 테스트 호스트(example.com), 테스트가 미리 심어둔 플래그, 또는 DEBUG 모드에서만
+  // 노출한다. lms+ 실제 호스트에서는 플래그가 없으므로 그대로 감춰진다.
+  if (
+    location.hostname === "example.com" ||
+    globalThis.__ZZK_TEST_HOOKS__ === true ||
+    DEBUG_MODE
+  ) {
     globalThis.__zzkTestApi = {
       clampMapCalendarWidth,
       getMapCalendarWidthBounds,
