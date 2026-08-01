@@ -228,7 +228,7 @@ export function extractOwnerCandidateFromBody(body) {
   return "";
 }
 
-async function extractOwnerCandidateFromFetchRequest(input, init) {
+export async function extractOwnerCandidateFromFetchRequest(input, init) {
   const fromInit = init && typeof init === "object" ? extractOwnerCandidateFromBody(init.body) : "";
   if (fromInit) {
     return fromInit;
@@ -630,7 +630,7 @@ export function resolveReservationRequestContextForEmit(urlValue, bodyContext) {
   return finalizeReservationRequestContext(mergedContext);
 }
 
-async function extractReservationRequestContextFromFetchRequest(input, init) {
+export async function extractReservationRequestContextFromFetchRequest(input, init) {
   let context =
     init && typeof init === "object" ? extractReservationRequestContextFromBody(init.body) : null;
 

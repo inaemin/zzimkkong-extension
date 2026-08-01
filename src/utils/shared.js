@@ -1,3 +1,8 @@
+import { DEBUG_MODE } from "../constants/debug.js";
+
+// 소비처가 편하도록 여기서도 다시 내보낸다.
+export { DEBUG_MODE };
+
 export function normalizeTextForMatch(value) {
   if (typeof value !== "string") {
     return "";
@@ -13,7 +18,6 @@ export function getErrorMessage(error) {
   return "알 수 없는 오류가 발생했습니다.";
 }
 
-export const DEBUG_MODE = globalThis.__zzkDebugConfig?.DEBUG_MODE === true;
 const DEBUG_EVENT_LIMIT = 200;
 const debugEvents = [];
 

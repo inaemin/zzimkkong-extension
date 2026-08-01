@@ -1,4 +1,4 @@
-const { pushDebugEvent, debugLog } = globalThis.__zzkSharedUtils;
+import { debugLog, pushDebugEvent } from "../../utils/shared.js";
 
 export function createRadarFormSync(deps) {
   const {

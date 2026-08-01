@@ -1,64 +1,44 @@
+import {
+  MESSAGE_SOURCE,
+  MESSAGE_TYPE,
+  buildReservationMutationEventPayload,
+  emitReservationEvent,
+  extractDateTimeParts,
+  extractOwnerCandidateFromBody,
+  extractOwnerCandidateFromEntries,
+  extractOwnerCandidateFromFetchRequest,
+  extractOwnerCandidateFromObject,
+  extractReservationContextFromUrl,
+  extractReservationRequestContextFromBody,
+  extractReservationRequestContextFromEntries,
+  extractReservationRequestContextFromFetchRequest,
+  extractReservationRequestContextFromObject,
+  finalizeReservationRequestContext,
+  isDateFieldKey,
+  isDescriptionFieldKey,
+  isEndDateTimeFieldKey,
+  isOwnerFieldKey,
+  isReservationMutationRequest,
+  isRoomNameFieldKey,
+  isStartDateTimeFieldKey,
+  mergeReservationRequestContext,
+  normalizeDateCandidate,
+  normalizeDescriptionCandidate,
+  normalizeFieldKey,
+  normalizeMethod,
+  normalizeOwnerCandidate,
+  normalizeText,
+  normalizeTimeCandidate,
+  parseUrl,
+  readReservationAttemptId,
+  resolveReservationRequestContextForEmit,
+  shouldEmitReservationMutationEvent,
+} from "./page-hook/shared.js";
+
 (() => {
   if (window.__zzkReservationHookLoaded) {
     return;
   }
-
-  function reportMissingBootstrapDependencies(missing) {
-    if (!Array.isArray(globalThis.__zzkBootstrapLoadErrors)) {
-      globalThis.__zzkBootstrapLoadErrors = [];
-    }
-    globalThis.__zzkBootstrapLoadErrors.push({
-      script: "src/page-network-hook.js",
-      reason: "missing-bootstrap-dependencies",
-      missing,
-    });
-  }
-
-  const missingBootstrapDependencies = [["__zzkPageHookShared", globalThis.__zzkPageHookShared]]
-    .filter(([, value]) => !value)
-    .map(([name]) => name);
-
-  if (missingBootstrapDependencies.length > 0) {
-    reportMissingBootstrapDependencies(missingBootstrapDependencies);
-    return;
-  }
-
-  const {
-    MESSAGE_SOURCE,
-    MESSAGE_TYPE,
-    normalizeMethod,
-    parseUrl,
-    normalizeText,
-    normalizeOwnerCandidate,
-    isOwnerFieldKey,
-    extractOwnerCandidateFromEntries,
-    extractOwnerCandidateFromObject,
-    extractOwnerCandidateFromBody,
-    extractOwnerCandidateFromFetchRequest,
-    normalizeFieldKey,
-    normalizeDateCandidate,
-    normalizeTimeCandidate,
-    extractDateTimeParts,
-    normalizeDescriptionCandidate,
-    isStartDateTimeFieldKey,
-    isEndDateTimeFieldKey,
-    isDateFieldKey,
-    isDescriptionFieldKey,
-    isRoomNameFieldKey,
-    mergeReservationRequestContext,
-    finalizeReservationRequestContext,
-    extractReservationRequestContextFromEntries,
-    extractReservationRequestContextFromObject,
-    extractReservationRequestContextFromBody,
-    extractReservationContextFromUrl,
-    resolveReservationRequestContextForEmit,
-    extractReservationRequestContextFromFetchRequest,
-    isReservationMutationRequest,
-    shouldEmitReservationMutationEvent,
-    emitReservationEvent,
-    buildReservationMutationEventPayload,
-    readReservationAttemptId,
-  } = globalThis.__zzkPageHookShared;
 
   const originalFetch = window.fetch;
   const originalXhrOpen = XMLHttpRequest.prototype.open;

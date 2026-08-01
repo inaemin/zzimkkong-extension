@@ -1,3 +1,5 @@
+import { DEBUG_MODE } from "./debug.js";
+
 export function normalizeRoomTagKey(value) {
   return typeof value === "string" ? value.trim().toLowerCase() : "";
 }
@@ -9,7 +11,7 @@ export function normalizeTargetRoomName(value) {
 export const MAP_CALENDAR_OVERLAY_ID = "zzk-map-calendar-overlay";
 export const MAP_CALENDAR_LAUNCHER_ID = "zzk-map-calendar-radar-launcher";
 export const SLACK_MODAL_TRIGGER_ID = "zzk-slack-modal-trigger";
-export const DEBUG_MODE = globalThis.__zzkDebugConfig?.DEBUG_MODE === true;
+export { DEBUG_MODE };
 export const MAP_CALENDAR_STYLE_ID = "zzk-map-calendar-style";
 export const MAP_CALENDAR_OVERLAY_TAB_MEETING_ID = "zzk-map-calendar-overlay-tab-meeting";
 export const MAP_CALENDAR_OVERLAY_TAB_PAIR_ID = "zzk-map-calendar-overlay-tab-pair";

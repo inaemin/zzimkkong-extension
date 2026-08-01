@@ -1,4 +1,4 @@
-const { normalizeTextForMatch } = globalThis.__zzkSharedUtils;
+import { normalizeTextForMatch } from "../../utils/shared.js";
 
 export function findGuestReservationTabContainer({ isInsideExtensionSurface, isElementVisible }) {
   const buttons = Array.from(document.querySelectorAll("button")).filter(

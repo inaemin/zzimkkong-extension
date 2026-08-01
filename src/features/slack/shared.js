@@ -1,7 +1,13 @@
-const { DEFAULT_SLACK_REMINDER_LEAD_TIME_MINUTES, SLACK_REMINDER_LEAD_TIME_OPTIONS } =
-  globalThis.__zzkSharedConstants;
-const { isDateString, addDaysToDateString, parseHourMinute, minuteToHourMinute } =
-  globalThis.__zzkDateTimeUtils;
+import {
+  DEFAULT_SLACK_REMINDER_LEAD_TIME_MINUTES,
+  SLACK_REMINDER_LEAD_TIME_OPTIONS,
+} from "../../constants/runtime.js";
+import {
+  addDaysToDateString,
+  isDateString,
+  minuteToHourMinute,
+  parseHourMinute,
+} from "../../utils/date-time.js";
 
 export function normalizeSlackFieldText(value) {
   if (typeof value !== "string") {

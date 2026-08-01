@@ -1,14 +1,18 @@
-const {
+import {
   LMS_API_BASE_URL,
   LMS_TIME_STEP_MINUTES,
+  MAP_CALENDAR_SPACE_TAB_MEETING,
   RESERVATION_SCHEDULE_STALE_MS,
   TARGET_ROOM_METADATA_BY_NORMALIZED_NAME,
-  MAP_CALENDAR_SPACE_TAB_MEETING,
-  normalizeTargetRoomName,
   normalizeFetchRoomType,
-} = globalThis.__zzkSharedConstants;
-const { sanitizeDateForApi, sanitizeTimeForApi, minuteToHourMinute } =
-  globalThis.__zzkDateTimeUtils;
+  normalizeTargetRoomName,
+} from "../../constants/runtime.js";
+import {
+  minuteToHourMinute,
+  sanitizeDateForApi,
+  sanitizeTimeForApi,
+} from "../../utils/date-time.js";
+import { createLmsDataNormalizers } from "./normalizers.js";
 
 function getRoomTypeForRoomName(roomName) {
   const normalizedName = normalizeTargetRoomName(roomName);
@@ -18,7 +22,7 @@ function getRoomTypeForRoomName(roomName) {
   );
 }
 
-const lmsDataNormalizers = globalThis.__zzkLmsDataNormalizers.createLmsDataNormalizers({
+const lmsDataNormalizers = createLmsDataNormalizers({
   getProperty(source, key) {
     if (source == null || (typeof source !== "object" && typeof source !== "function")) {
       return undefined;
@@ -31,7 +35,7 @@ const lmsDataNormalizers = globalThis.__zzkLmsDataNormalizers.createLmsDataNorma
   minuteToHourMinute,
 });
 
-async function loadSpaceContext(roomType = null) {
+export async function loadSpaceContext(roomType = null) {
   const spacesResponse = await fetchApiJson(`${LMS_API_BASE_URL}/api/spaces`);
   const spaces = lmsDataNormalizers.normalizeSpaces(spacesResponse);
 
@@ -69,7 +73,7 @@ function readCachedReservations(cacheKey) {
   return entry.reservations;
 }
 
-async function fetchReservationsForRoom(roomId, date) {
+export async function fetchReservationsForRoom(roomId, date) {
   const query = new URLSearchParams({
     date,
     spaceId: String(roomId),
@@ -105,7 +109,7 @@ async function fetchReservationsForRoom(roomId, date) {
 
 // 개편 서비스에는 availability 엔드포인트가 없어서, 각 공간의 당일 예약을 받아와
 // 요청 구간과 겹치는지로 예약 가능 여부를 계산한다.
-async function fetchAvailability(payload) {
+export async function fetchAvailability(payload) {
   const date = sanitizeDateForApi(payload && payload.date, {
     allowPastDate: payload?.allowPastDate === true,
   });
@@ -160,7 +164,7 @@ async function fetchAvailability(payload) {
   };
 }
 
-async function fetchDailySchedule(payload) {
+export async function fetchDailySchedule(payload) {
   const date = sanitizeDateForApi(payload && payload.date, {
     allowPastDate: payload?.allowPastDate === true,
   });
@@ -199,7 +203,7 @@ async function fetchDailySchedule(payload) {
 }
 
 // 개편 서비스 전용. 일/월 예약 한도 잔량을 보여줄 때 쓴다.
-async function fetchQuota(payload) {
+export async function fetchQuota(payload) {
   const date = sanitizeDateForApi(payload && payload.date, {
     allowPastDate: payload?.allowPastDate === true,
   });
@@ -282,7 +286,7 @@ function readLmsAuthToken() {
   return "";
 }
 
-async function fetchApiJson(url) {
+export async function fetchApiJson(url) {
   const headers = {
     accept: "application/json",
   };

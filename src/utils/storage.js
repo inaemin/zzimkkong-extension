@@ -1,14 +1,12 @@
+import { debugWarn, pushDebugEvent } from "./shared.js";
+
 function reportStorageFailure(event, storageKey, error) {
   const detail = {
     key: typeof storageKey === "string" ? storageKey : "",
     error: getStorageErrorMessage(error),
   };
-  if (typeof globalThis.__zzkSharedUtils?.pushDebugEvent === "function") {
-    globalThis.__zzkSharedUtils.pushDebugEvent("storage", event, detail);
-  }
-  if (typeof globalThis.__zzkSharedUtils?.debugWarn === "function") {
-    globalThis.__zzkSharedUtils.debugWarn("storage", event, detail);
-  }
+  pushDebugEvent("storage", event, detail);
+  debugWarn("storage", event, detail);
 }
 
 function getStorageErrorMessage(error) {

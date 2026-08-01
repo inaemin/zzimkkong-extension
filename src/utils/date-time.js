@@ -1,10 +1,10 @@
-const {
+import {
   KST_DATE_PARTS_FORMATTER,
   KST_TIME_PARTS_FORMATTER,
   KST_WEEKDAY_FORMATTER,
   TIME_STEP_MINUTES,
-} = globalThis.__zzkSharedConstants;
-const { getErrorMessage } = globalThis.__zzkSharedUtils;
+} from "../constants/runtime.js";
+import { getErrorMessage } from "./shared.js";
 
 export function isDateString(value) {
   return typeof value === "string" && /^\d{4}-\d{2}-\d{2}$/.test(value);

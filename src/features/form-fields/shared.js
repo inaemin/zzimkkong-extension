@@ -1,6 +1,6 @@
-const { normalizeTextForMatch } = globalThis.__zzkSharedUtils;
-const { normalizeSlackFieldText } = globalThis.__zzkSlackShared;
-const { TARGET_ROOM_NAMES } = globalThis.__zzkSharedConstants;
+import { TARGET_ROOM_NAMES } from "../../constants/runtime.js";
+import { normalizeTextForMatch } from "../../utils/shared.js";
+import { normalizeSlackFieldText } from "../slack/shared.js";
 
 export function getInputAssociatedLabelText(input) {
   const labels = [];
