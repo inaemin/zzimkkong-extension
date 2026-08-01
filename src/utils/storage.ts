@@ -1,4 +1,4 @@
-import { debugWarn, pushDebugEvent } from "./shared.js";
+import { debugWarn, pushDebugEvent, toDisplayString } from "./shared.js";
 
 function reportStorageFailure(event: string, storageKey: unknown, error: unknown): void {
   const detail = {
@@ -13,7 +13,7 @@ function getStorageErrorMessage(error: unknown): string {
   if (error instanceof Error && error.message) {
     return error.message;
   }
-  return String(error || "unknown storage error");
+  return toDisplayString(error) || "unknown storage error";
 }
 
 export function readStoredBoolean(storageKey: string, fallbackValue = false): boolean {

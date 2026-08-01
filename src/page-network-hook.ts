@@ -58,9 +58,13 @@ declare global {
     return;
   }
 
+  // 원본을 붙잡아 뒀다가 패치 함수 안에서 .apply(this, ...) 로 호출한다.
+  // 몽키패칭의 본질이라 unbound-method 경고는 여기서 의도된 것이다.
+  /* eslint-disable @typescript-eslint/unbound-method */
   const originalFetch = window.fetch;
   const originalXhrOpen = XMLHttpRequest.prototype.open;
   const originalXhrSend = XMLHttpRequest.prototype.send;
+  /* eslint-enable @typescript-eslint/unbound-method */
 
   // 개편 서비스(lms+) 예약 생성 POST 의 성공 응답 body 를 파싱한다.
   // 응답을 clone 해서 읽으므로 원본은 페이지 앱이 그대로 소비할 수 있다.
@@ -142,6 +146,9 @@ declare global {
         method = normalizeMethod(init.method);
       }
 
+      // 원본 fetch 에 인자를 그대로 넘겨야 해서 arguments 를 쓴다.
+      // rest 로 바꾸면 호출부가 넘긴 형태(Request 객체 등)를 잃을 수 있다.
+      // eslint-disable-next-line prefer-rest-params
       return Promise.resolve(originalFetch.apply(this, arguments)).then((response) => {
         if (!response || response.ok !== true) {
           return response;
@@ -204,13 +211,16 @@ declare global {
   XMLHttpRequest.prototype.open = function patchedOpen(method, url) {
     this.__zzkReservationMethod = normalizeMethod(method);
     this.__zzkReservationUrl = typeof url === "string" ? url : String(url || "");
+    // eslint-disable-next-line prefer-rest-params
     return originalXhrOpen.apply(this, arguments);
   };
 
   XMLHttpRequest.prototype.send = function patchedSend() {
     this.__zzkReservationAttemptId = readReservationAttemptId();
-    this.__zzkReservationOwnerNameCandidate = extractOwnerCandidateFromBody(arguments[0]);
-    this.__zzkReservationRequestContext = extractReservationRequestContextFromBody(arguments[0]);
+    // eslint-disable-next-line prefer-rest-params
+    const sendBody = arguments[0] as unknown;
+    this.__zzkReservationOwnerNameCandidate = extractOwnerCandidateFromBody(sendBody);
+    this.__zzkReservationRequestContext = extractReservationRequestContextFromBody(sendBody);
     if (this.__zzkReservationListenerBound !== true) {
       this.__zzkReservationListenerBound = true;
       this.addEventListener("loadend", () => {
@@ -238,6 +248,7 @@ declare global {
       });
     }
 
+    // eslint-disable-next-line prefer-rest-params
     return originalXhrSend.apply(this, arguments);
   };
 

@@ -1052,7 +1052,9 @@ export function createSlackWorkflow(deps: Deps) {
       refreshPreviewText();
     });
 
-    copyButton.addEventListener("click", async () => {
+    // 리스너에 async 함수를 그대로 넘기면 거부(rejection)가 아무도 안 받는다.
+    // 동기 리스너 안에서 Promise 를 만들고 실패까지 여기서 처리한다.
+    const handleCopyClick = async () => {
       if (!selectedChannelMention) {
         commitTypedChannel();
       } else {
@@ -1061,15 +1063,24 @@ export function createSlackWorkflow(deps: Deps) {
         renderSelectedChannelChip();
       }
       refreshPreviewText();
-      const copied = await copyTextToClipboard(textarea.value, textarea);
-      if (copied) {
-        status.dataset.state = "success";
-        status.textContent = "복사 완료! Slack 채널에 붙여넣어 주세요.";
-        return;
-      }
+      return copyTextToClipboard(textarea.value, textarea);
+    };
 
-      status.dataset.state = "error";
-      status.textContent = "복사에 실패했습니다. 직접 선택해서 복사해 주세요.";
+    copyButton.addEventListener("click", () => {
+      handleCopyClick()
+        .then((copied) => {
+          if (copied) {
+            status.dataset.state = "success";
+            status.textContent = "복사 완료! Slack 채널에 붙여넣어 주세요.";
+            return;
+          }
+          status.dataset.state = "error";
+          status.textContent = "복사에 실패했습니다. 직접 선택해서 복사해 주세요.";
+        })
+        .catch(() => {
+          status.dataset.state = "error";
+          status.textContent = "복사에 실패했습니다. 직접 선택해서 복사해 주세요.";
+        });
     });
 
     setStatusMessage(
