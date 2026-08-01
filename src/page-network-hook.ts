@@ -34,6 +34,24 @@ import {
   resolveReservationRequestContextForEmit,
   shouldEmitReservationMutationEvent,
 } from "./page-hook/shared.js";
+import type { ReservationRequestContext } from "./page-hook/shared.js";
+
+// 이 파일은 MAIN world 에서 페이지의 fetch/XHR 을 패치한다.
+// 패치 상태와 XHR 인스턴스에 붙이는 정보를 타입으로 선언한다.
+declare global {
+  interface Window {
+    __zzkReservationHookLoaded?: boolean;
+    __zzkReservationHookRestore?: () => boolean;
+  }
+  interface XMLHttpRequest {
+    __zzkReservationMethod?: string;
+    __zzkReservationUrl?: string;
+    __zzkReservationAttemptId?: string;
+    __zzkReservationOwnerNameCandidate?: string;
+    __zzkReservationRequestContext?: ReservationRequestContext | null;
+    __zzkReservationListenerBound?: boolean;
+  }
+}
 
 (() => {
   if (window.__zzkReservationHookLoaded) {
@@ -139,14 +157,8 @@ import {
         Promise.all([ownerNamePromise, requestContextPromise, responseBodyPromise])
           .then(([ownerNameCandidate, requestContext, responseBody]) => {
             const shouldEmit =
-              shouldEmitReservationMutationEvent(url, method, {
-                reservationAttemptId,
-                requestContext,
-              }) ||
-              shouldEmitReservationMutationEvent(eventUrl, method, {
-                reservationAttemptId,
-                requestContext,
-              });
+              shouldEmitReservationMutationEvent(url, method) ||
+              shouldEmitReservationMutationEvent(eventUrl, method);
             if (!shouldEmit) {
               return;
             }
@@ -209,10 +221,7 @@ import {
           Number.isInteger(status) &&
           status >= 200 &&
           status < 300 &&
-          shouldEmitReservationMutationEvent(url, method, {
-            reservationAttemptId: this.__zzkReservationAttemptId,
-            requestContext: this.__zzkReservationRequestContext,
-          })
+          shouldEmitReservationMutationEvent(url, method)
         ) {
           emitReservationEvent(
             buildReservationMutationEventPayload({

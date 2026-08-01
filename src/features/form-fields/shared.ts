@@ -2,7 +2,7 @@ import { TARGET_ROOM_NAMES } from "../../constants/runtime.js";
 import { normalizeTextForMatch } from "../../utils/shared.js";
 import { normalizeSlackFieldText } from "../slack/shared.js";
 
-export function getInputAssociatedLabelText(input) {
+export function getInputAssociatedLabelText(input: HTMLInputElement): string {
   const labels = [];
   if (input.labels && input.labels.length > 0) {
     Array.from(input.labels).forEach((label) => {
@@ -24,7 +24,7 @@ export function getInputAssociatedLabelText(input) {
   return labels.join(" ");
 }
 
-export function buildHostInputDescriptor(input) {
+export function buildHostInputDescriptor(input: HTMLInputElement): string {
   return [
     input.name,
     input.id,
@@ -38,7 +38,7 @@ export function buildHostInputDescriptor(input) {
     .toLowerCase();
 }
 
-export function normalizeHostReservationOwnerCandidate(value) {
+export function normalizeHostReservationOwnerCandidate(value: unknown): string {
   const normalized = normalizeSlackFieldText(value || "");
   if (!normalized) {
     return "";
@@ -71,7 +71,7 @@ export function normalizeHostReservationOwnerCandidate(value) {
   return normalized;
 }
 
-export function normalizeHostRoomCandidate(rawName) {
+export function normalizeHostRoomCandidate(rawName: unknown): string {
   const normalizedName = normalizeSlackFieldText(rawName || "");
   if (!normalizedName) {
     return "";
@@ -90,7 +90,7 @@ export function normalizeHostRoomCandidate(rawName) {
   return isPlaceholder ? "" : normalizedName;
 }
 
-export function extractKnownRoomName(rawName) {
+export function extractKnownRoomName(rawName: unknown): string {
   const normalized = normalizeTextForMatch(rawName);
   const matchedKnownRoom = TARGET_ROOM_NAMES.find((roomName) => {
     return normalized.includes(normalizeTextForMatch(roomName));
@@ -102,7 +102,7 @@ export function extractKnownRoomName(rawName) {
   return normalizeSlackFieldText(rawName);
 }
 
-export function getControlAssociatedLabelText(control) {
+export function getControlAssociatedLabelText(control: Element | null): string {
   if (!(control instanceof HTMLElement)) {
     return "";
   }
@@ -152,7 +152,7 @@ export function getControlAssociatedLabelText(control) {
   return labels.join(" ");
 }
 
-export function buildHostFieldDescriptor(control) {
+export function buildHostFieldDescriptor(control: Element | null): string {
   if (!(control instanceof HTMLElement)) {
     return "";
   }
@@ -176,7 +176,7 @@ export function buildHostFieldDescriptor(control) {
     .toLowerCase();
 }
 
-export function readHostFieldDisplayValue(control) {
+export function readHostFieldDisplayValue(control: Element | null): string {
   if (!(control instanceof HTMLElement)) {
     return "";
   }

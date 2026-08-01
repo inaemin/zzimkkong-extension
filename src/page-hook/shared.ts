@@ -1,7 +1,32 @@
+// 페이지 앱이 보낸 예약 요청에서 뽑아낸 정보. Slack 모달 컨텍스트의 재료가 된다.
+export interface ReservationRequestContext {
+  date?: string;
+  startTime?: string;
+  endTime?: string;
+  description?: string;
+  roomName?: string;
+  roomId?: number;
+}
+
+/** MAIN world 훅이 isolated world 로 postMessage 하는 payload. */
+export interface ReservationEventPayload {
+  via: string;
+  url: string;
+  method: unknown;
+  status: number;
+  ok: boolean;
+  timestamp: number;
+  ownerNameCandidate: string;
+  requestContext: ReservationRequestContext | null;
+  reservationAttemptId?: string;
+  /** lms+ 예약 생성 응답 body(spaceName/floor/reserverName 등). */
+  responseBody?: unknown;
+}
+
 export const MESSAGE_SOURCE = "zzk-page-reservation-hook";
 export const MESSAGE_TYPE = "ZZK_RESERVATION_NETWORK_EVENT";
 
-export function normalizeMethod(methodValue) {
+export function normalizeMethod(methodValue: unknown): string {
   if (typeof methodValue !== "string" || methodValue.trim() === "") {
     return "GET";
   }
@@ -9,7 +34,7 @@ export function normalizeMethod(methodValue) {
   return methodValue.trim().toUpperCase();
 }
 
-export function parseUrl(urlValue) {
+export function parseUrl(urlValue: unknown): URL | null {
   if (typeof urlValue !== "string" || urlValue.trim() === "") {
     return null;
   }
@@ -23,7 +48,7 @@ export function parseUrl(urlValue) {
   }
 }
 
-export function normalizeText(value) {
+export function normalizeText(value: unknown): string {
   if (typeof value !== "string") {
     return "";
   }
@@ -31,7 +56,7 @@ export function normalizeText(value) {
   return value.replace(/\s+/g, " ").trim();
 }
 
-export function normalizeOwnerCandidate(value) {
+export function normalizeOwnerCandidate(value: unknown): string {
   const normalized = normalizeText(String(value || ""));
   if (!normalized) {
     return "";
@@ -63,7 +88,7 @@ export function normalizeOwnerCandidate(value) {
   return normalized;
 }
 
-export function isOwnerFieldKey(key) {
+export function isOwnerFieldKey(key: unknown): boolean {
   const normalized = normalizeText(String(key || ""))
     .replace(/\s+/g, "")
     .toLowerCase();
@@ -121,7 +146,7 @@ export function isOwnerFieldKey(key) {
   return hasOwnerContext && !hasRoomContext;
 }
 
-export function extractOwnerCandidateFromEntries(entries) {
+export function extractOwnerCandidateFromEntries(entries: Array<[string, unknown]>): string {
   if (!Array.isArray(entries) || entries.length === 0) {
     return "";
   }
@@ -140,7 +165,7 @@ export function extractOwnerCandidateFromEntries(entries) {
   return "";
 }
 
-export function extractOwnerCandidateFromObject(value, depth = 0) {
+export function extractOwnerCandidateFromObject(value: unknown, depth = 0): string {
   if (!value || typeof value !== "object" || depth > 3) {
     return "";
   }
@@ -171,7 +196,7 @@ export function extractOwnerCandidateFromObject(value, depth = 0) {
   return "";
 }
 
-export function extractOwnerCandidateFromBody(body) {
+export function extractOwnerCandidateFromBody(body: unknown): string {
   if (body == null) {
     return "";
   }
@@ -228,7 +253,10 @@ export function extractOwnerCandidateFromBody(body) {
   return "";
 }
 
-export async function extractOwnerCandidateFromFetchRequest(input, init) {
+export async function extractOwnerCandidateFromFetchRequest(
+  input: unknown,
+  init?: RequestInit,
+): Promise<string> {
   const fromInit = init && typeof init === "object" ? extractOwnerCandidateFromBody(init.body) : "";
   if (fromInit) {
     return fromInit;
@@ -276,19 +304,19 @@ export async function extractOwnerCandidateFromFetchRequest(input, init) {
   return "";
 }
 
-export function normalizeFieldKey(value) {
+export function normalizeFieldKey(value: unknown): string {
   return normalizeText(String(value || ""))
     .replace(/\s+/g, "")
     .toLowerCase();
 }
 
-export function normalizeDateCandidate(value) {
+export function normalizeDateCandidate(value: unknown): string {
   const normalized = normalizeText(String(value || ""));
   const match = normalized.match(/(\d{4}-\d{2}-\d{2})/);
   return match ? match[1] : "";
 }
 
-export function normalizeTimeCandidate(value) {
+export function normalizeTimeCandidate(value: unknown): string {
   const normalized = normalizeText(String(value || ""));
   const match = normalized.match(/(\d{1,2}):(\d{2})/);
   if (!match) {
@@ -303,14 +331,14 @@ export function normalizeTimeCandidate(value) {
   return `${hour}:${minute}`;
 }
 
-export function extractDateTimeParts(value) {
+export function extractDateTimeParts(value: unknown): { date: string; time: string } {
   return {
     date: normalizeDateCandidate(value),
     time: normalizeTimeCandidate(value),
   };
 }
 
-export function normalizeDescriptionCandidate(value) {
+export function normalizeDescriptionCandidate(value: unknown): string {
   const normalized = normalizeText(String(value || ""));
   if (!normalized) {
     return "";
@@ -325,7 +353,7 @@ export function normalizeDescriptionCandidate(value) {
   return normalized;
 }
 
-export function isStartDateTimeFieldKey(normalizedKey) {
+export function isStartDateTimeFieldKey(normalizedKey: string): boolean {
   return (
     normalizedKey.includes("startdatetime") ||
     normalizedKey.includes("starttime") ||
@@ -334,7 +362,7 @@ export function isStartDateTimeFieldKey(normalizedKey) {
   );
 }
 
-export function isEndDateTimeFieldKey(normalizedKey) {
+export function isEndDateTimeFieldKey(normalizedKey: string): boolean {
   return (
     normalizedKey.includes("enddatetime") ||
     normalizedKey.includes("endtime") ||
@@ -343,7 +371,7 @@ export function isEndDateTimeFieldKey(normalizedKey) {
   );
 }
 
-export function isDateFieldKey(normalizedKey) {
+export function isDateFieldKey(normalizedKey: string): boolean {
   return (
     normalizedKey === "date" ||
     normalizedKey.endsWith("date") ||
@@ -352,7 +380,7 @@ export function isDateFieldKey(normalizedKey) {
   );
 }
 
-export function isDescriptionFieldKey(normalizedKey) {
+export function isDescriptionFieldKey(normalizedKey: string): boolean {
   return (
     normalizedKey.includes("description") ||
     normalizedKey.includes("purpose") ||
@@ -363,7 +391,7 @@ export function isDescriptionFieldKey(normalizedKey) {
   );
 }
 
-export function isRoomNameFieldKey(normalizedKey) {
+export function isRoomNameFieldKey(normalizedKey: string): boolean {
   return (
     normalizedKey.includes("roomname") ||
     normalizedKey.includes("spacename") ||
@@ -372,7 +400,7 @@ export function isRoomNameFieldKey(normalizedKey) {
   );
 }
 
-export function isRoomIdFieldKey(normalizedKey) {
+export function isRoomIdFieldKey(normalizedKey: string): boolean {
   return (
     normalizedKey === "roomid" ||
     normalizedKey === "spaceid" ||
@@ -383,8 +411,8 @@ export function isRoomIdFieldKey(normalizedKey) {
   );
 }
 
-export function parseReservationRoomIdCandidate(value) {
-  if (Number.isInteger(value)) {
+export function parseReservationRoomIdCandidate(value: unknown): number | null {
+  if (typeof value === "number" && Number.isInteger(value)) {
     return value;
   }
 
@@ -397,7 +425,10 @@ export function parseReservationRoomIdCandidate(value) {
   return Number.isInteger(roomId) ? roomId : null;
 }
 
-export function mergeReservationRequestContext(baseContext, patchContext) {
+export function mergeReservationRequestContext(
+  baseContext: ReservationRequestContext | null,
+  patchContext: ReservationRequestContext | null,
+): ReservationRequestContext {
   const base = baseContext && typeof baseContext === "object" ? { ...baseContext } : {};
   if (!patchContext || typeof patchContext !== "object") {
     return base;
@@ -421,7 +452,9 @@ export function mergeReservationRequestContext(baseContext, patchContext) {
   return next;
 }
 
-export function finalizeReservationRequestContext(context) {
+export function finalizeReservationRequestContext(
+  context: ReservationRequestContext | null,
+): ReservationRequestContext | null {
   if (!context || typeof context !== "object") {
     return null;
   }
@@ -433,14 +466,14 @@ export function finalizeReservationRequestContext(context) {
   const roomName = normalizeText(String(context.roomName || ""));
   const roomId = Number.isInteger(context.roomId) ? context.roomId : null;
 
-  const normalized = {
+  const normalized: ReservationRequestContext = {
     date,
     startTime,
     endTime,
     description,
     roomName,
   };
-  if (Number.isInteger(roomId)) {
+  if (typeof roomId === "number" && Number.isInteger(roomId)) {
     normalized.roomId = roomId;
   }
 
@@ -454,7 +487,10 @@ export function finalizeReservationRequestContext(context) {
   return hasValue ? normalized : null;
 }
 
-export function extractReservationRequestContextFromEntries(entries, initialContext = null) {
+export function extractReservationRequestContextFromEntries(
+  entries: Array<[string, unknown]>,
+  initialContext: ReservationRequestContext | null = null,
+): ReservationRequestContext | null {
   if (!Array.isArray(entries) || entries.length === 0) {
     return finalizeReservationRequestContext(initialContext);
   }
@@ -545,7 +581,9 @@ export function extractReservationRequestContextFromObject(
   return finalizeReservationRequestContext(context);
 }
 
-export function extractReservationRequestContextFromBody(body) {
+export function extractReservationRequestContextFromBody(
+  body: unknown,
+): ReservationRequestContext | null {
   if (body == null) {
     return null;
   }
@@ -601,7 +639,9 @@ export function extractReservationRequestContextFromBody(body) {
   return null;
 }
 
-export function extractReservationContextFromUrl(urlValue) {
+export function extractReservationContextFromUrl(
+  urlValue: unknown,
+): ReservationRequestContext | null {
   const parsed = parseUrl(urlValue);
   if (!parsed) {
     return null;
@@ -622,7 +662,10 @@ export function extractReservationContextFromUrl(urlValue) {
   return { roomId };
 }
 
-export function resolveReservationRequestContextForEmit(urlValue, bodyContext) {
+export function resolveReservationRequestContextForEmit(
+  urlValue: unknown,
+  bodyContext: ReservationRequestContext | null,
+): ReservationRequestContext | null {
   const mergedContext = mergeReservationRequestContext(
     extractReservationContextFromUrl(urlValue),
     bodyContext && typeof bodyContext === "object" ? bodyContext : null,
@@ -630,7 +673,10 @@ export function resolveReservationRequestContextForEmit(urlValue, bodyContext) {
   return finalizeReservationRequestContext(mergedContext);
 }
 
-export async function extractReservationRequestContextFromFetchRequest(input, init) {
+export async function extractReservationRequestContextFromFetchRequest(
+  input: unknown,
+  init?: RequestInit,
+): Promise<ReservationRequestContext | null> {
   let context =
     init && typeof init === "object" ? extractReservationRequestContextFromBody(init.body) : null;
 
@@ -679,7 +725,7 @@ export async function extractReservationRequestContextFromFetchRequest(input, in
   return finalizeReservationRequestContext(context);
 }
 
-export function isReservationMutationRequest(urlValue, methodValue) {
+export function isReservationMutationRequest(urlValue: unknown, methodValue: unknown): boolean {
   if (!isReservationApiMutationRequest(urlValue, methodValue)) {
     return false;
   }
@@ -692,16 +738,19 @@ export function isReservationMutationRequest(urlValue, methodValue) {
   return isReservationMutationPath(parsed.pathname);
 }
 
-function isReservationMutationPath(pathname) {
+function isReservationMutationPath(pathname: unknown): boolean {
   // lms+: /api/space-reservations/{id}
   return /\/api\/space-reservations(?:\/\d+)?\/?$/i.test(String(pathname || ""));
 }
 
-export function shouldEmitReservationMutationEvent(urlValue, methodValue) {
+export function shouldEmitReservationMutationEvent(
+  urlValue: unknown,
+  methodValue: unknown,
+): boolean {
   return isReservationMutationRequest(urlValue, methodValue);
 }
 
-function isReservationApiMutationRequest(urlValue, methodValue) {
+function isReservationApiMutationRequest(urlValue: unknown, methodValue: unknown): boolean {
   const method = normalizeMethod(methodValue);
   if (method === "GET" || method === "HEAD" || method === "OPTIONS") {
     return false;
@@ -715,7 +764,7 @@ function isReservationApiMutationRequest(urlValue, methodValue) {
   return parsed.pathname.toLowerCase().includes("/api/space-reservations");
 }
 
-export function emitReservationEvent(payload) {
+export function emitReservationEvent(payload: ReservationEventPayload): void {
   window.postMessage(
     {
       source: MESSAGE_SOURCE,
@@ -726,7 +775,7 @@ export function emitReservationEvent(payload) {
   );
 }
 
-export function readReservationAttemptId() {
+export function readReservationAttemptId(): string {
   const value =
     document.documentElement &&
     document.documentElement.dataset &&
@@ -736,7 +785,9 @@ export function readReservationAttemptId() {
   return value || "";
 }
 
-export function buildReservationMutationEventPayload(options) {
+export function buildReservationMutationEventPayload(
+  options: Record<string, unknown>,
+): ReservationEventPayload {
   const eventUrl = String(options && options.url ? options.url : "");
   const reservationAttemptId =
     options &&
@@ -745,7 +796,7 @@ export function buildReservationMutationEventPayload(options) {
       ? options.reservationAttemptId.trim()
       : readReservationAttemptId();
 
-  const payload = {
+  const payload: ReservationEventPayload = {
     via: options && typeof options.via === "string" ? options.via : "fetch",
     url: eventUrl,
     method: options ? options.method : "",

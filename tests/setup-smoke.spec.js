@@ -28,7 +28,7 @@ test("번들 진입점은 모듈 그래프에 맡기고 수동 나열을 하지 
 
 test("background service worker reuses shared room policy constants", async () => {
   const backgroundSource = fs.readFileSync(
-    path.resolve(process.cwd(), "src/background.js"),
+    path.resolve(process.cwd(), "src/background.ts"),
     "utf8",
   );
 
