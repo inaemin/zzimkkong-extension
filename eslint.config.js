@@ -161,14 +161,43 @@ export default defineConfig([
     },
   },
 
-  // TS 전환 초기(2.5-B)에는 느슨하게. 조이는 건 5단계.
+  // 타입 정보를 쓰는 규칙(recommendedTypeChecked)은 syntax 규칙만으로는
+  // 못 잡는 것들을 잡는다: await 안 한 Promise, 조건문에 쓴 항상 truthy 한 값,
+  // any 로 흘러들어가는 값 등. 실제 버그가 여기서 걸린다.
+  ...tseslint.configs.recommendedTypeChecked.map((config) => ({
+    ...config,
+    files: ["**/*.ts"],
+  })),
+
   {
     files: ["**/*.ts"],
+    languageOptions: {
+      parserOptions: {
+        // tsconfig.json 을 자동으로 찾아 타입 정보를 붙인다.
+        projectService: true,
+        tsconfigRootDir: import.meta.dirname,
+      },
+    },
+    // TS 전환 초기(2.5-B)에는 느슨하게. 조이는 건 5단계.
     rules: {
       "@typescript-eslint/no-explicit-any": "warn",
       "@typescript-eslint/no-unused-vars": ["warn", { argsIgnorePattern: "^_" }],
       // JS 규칙과 중복되므로 TS 버전만 남긴다.
       "no-unused-vars": "off",
+
+      // strict: false 로 시작하므로 unsafe 계열은 아직 소음이 크다.
+      // .ts 비중이 늘고 strict 로 조이는 5단계에서 error 로 올린다.
+      "@typescript-eslint/no-unsafe-assignment": "warn",
+      "@typescript-eslint/no-unsafe-member-access": "warn",
+      "@typescript-eslint/no-unsafe-call": "warn",
+      "@typescript-eslint/no-unsafe-argument": "warn",
+      "@typescript-eslint/no-unsafe-return": "warn",
+
+      // 이건 처음부터 error 로 둔다. 확장 코드가 비동기(fetch/storage)를
+      // 많이 쓰는데, await 빠뜨리면 조용히 어긋난다.
+      "@typescript-eslint/no-floating-promises": "error",
+      "@typescript-eslint/await-thenable": "error",
+      "@typescript-eslint/no-misused-promises": "error",
     },
   },
 

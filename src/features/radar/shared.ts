@@ -1,18 +1,28 @@
 import { normalizeTextForMatch } from "../../utils/shared.js";
 
-export function findGuestReservationTabContainer({ isInsideExtensionSurface, isElementVisible }) {
+// 호스트 페이지 DOM 을 훑는 헬퍼들이라 판별 함수를 주입받는다.
+// (확장이 만든 요소를 건너뛰고, 실제로 보이는 것만 후보로 삼는다)
+interface DomProbes {
+  isInsideExtensionSurface: (node: Element) => boolean;
+  isElementVisible: (node: Element) => boolean;
+}
+
+export function findGuestReservationTabContainer({
+  isInsideExtensionSurface,
+  isElementVisible,
+}: DomProbes): HTMLElement | null {
   const buttons = Array.from(document.querySelectorAll("button")).filter(
     (candidate) => candidate instanceof HTMLButtonElement && !isInsideExtensionSurface(candidate),
   );
 
-  const parentCandidates = new Set();
+  const parentCandidates = new Set<HTMLElement>();
   buttons.forEach((button) => {
     if (button.parentElement instanceof HTMLElement) {
       parentCandidates.add(button.parentElement);
     }
   });
 
-  let bestContainer = null;
+  let bestContainer: HTMLElement | null = null;
   let bestScore = Number.NEGATIVE_INFINITY;
 
   parentCandidates.forEach((parent) => {
@@ -52,7 +62,10 @@ export function findGuestReservationTabContainer({ isInsideExtensionSurface, isE
   return bestContainer;
 }
 
-export function findGuestReservationTabStyleSource({ isInsideExtensionSurface, isElementVisible }) {
+export function findGuestReservationTabStyleSource({
+  isInsideExtensionSurface,
+  isElementVisible,
+}: DomProbes): HTMLButtonElement | null {
   const actionContainer = findGuestReservationTabContainer({
     isInsideExtensionSurface,
     isElementVisible,

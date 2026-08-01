@@ -3,7 +3,7 @@ import { DEBUG_MODE } from "../constants/debug.js";
 // 소비처가 편하도록 여기서도 다시 내보낸다.
 export { DEBUG_MODE };
 
-export function normalizeTextForMatch(value) {
+export function normalizeTextForMatch(value: unknown): string {
   if (typeof value !== "string") {
     return "";
   }
@@ -11,7 +11,7 @@ export function normalizeTextForMatch(value) {
   return value.replace(/\s+/g, "").toLowerCase();
 }
 
-export function getErrorMessage(error) {
+export function getErrorMessage(error: unknown): string {
   if (error instanceof Error && error.message) {
     return error.message;
   }
@@ -19,9 +19,17 @@ export function getErrorMessage(error) {
 }
 
 const DEBUG_EVENT_LIMIT = 200;
-const debugEvents = [];
 
-function cloneDebugValue(value, seen = new WeakSet()) {
+export interface DebugEvent {
+  at: string;
+  scope: string;
+  event: string;
+  detail: unknown;
+}
+
+const debugEvents: DebugEvent[] = [];
+
+function cloneDebugValue(value: unknown, seen: WeakSet<object> = new WeakSet()): unknown {
   if (value == null) {
     return value;
   }
@@ -39,9 +47,10 @@ function cloneDebugValue(value, seen = new WeakSet()) {
       return "[circular]";
     }
     seen.add(value);
-    const output = {};
-    Object.keys(value).forEach((key) => {
-      output[key] = cloneDebugValue(value[key], seen);
+    const source = value as Record<string, unknown>;
+    const output: Record<string, unknown> = {};
+    Object.keys(source).forEach((key) => {
+      output[key] = cloneDebugValue(source[key], seen);
     });
     seen.delete(value);
     return output;
@@ -49,7 +58,7 @@ function cloneDebugValue(value, seen = new WeakSet()) {
   return String(value);
 }
 
-export function pushDebugEvent(scope, event, detail = {}) {
+export function pushDebugEvent(scope: string, event: string, detail: unknown = {}): void {
   if (!DEBUG_MODE) {
     return;
   }
@@ -64,7 +73,7 @@ export function pushDebugEvent(scope, event, detail = {}) {
   }
 }
 
-export function debugLog(scope, message, detail = undefined) {
+export function debugLog(scope: string, message: string, detail?: unknown): void {
   if (!DEBUG_MODE || typeof console === "undefined" || typeof console.log !== "function") {
     return;
   }
@@ -75,7 +84,7 @@ export function debugLog(scope, message, detail = undefined) {
   console.log("[찜꽁 레이더][debug]", scope, message, detail);
 }
 
-export function debugWarn(scope, message, detail = undefined) {
+export function debugWarn(scope: string, message: string, detail?: unknown): void {
   if (!DEBUG_MODE || typeof console === "undefined" || typeof console.warn !== "function") {
     return;
   }
@@ -86,10 +95,10 @@ export function debugWarn(scope, message, detail = undefined) {
   console.warn("[찜꽁 레이더][debug]", scope, message, detail);
 }
 
-export function getDebugEvents() {
+export function getDebugEvents(): unknown[] {
   return debugEvents.map((entry) => cloneDebugValue(entry));
 }
 
-export function clearDebugEvents() {
+export function clearDebugEvents(): void {
   debugEvents.length = 0;
 }
