@@ -67,17 +67,10 @@ export function ChannelCombobox({
       ) : null}
 
       <Popover open={open} onOpenChange={setOpen}>
-        <PopoverTrigger asChild>
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            role="combobox"
-            aria-expanded={open}
-            aria-label="슬랙 채널 선택"
-          >
-            {value ? "채널 변경" : "채널 선택"}
-          </Button>
+        <PopoverTrigger
+          render={<Button type="button" variant="outline" size="sm" aria-label="슬랙 채널 선택" />}
+        >
+          {value ? "채널 변경" : "채널 선택"}
         </PopoverTrigger>
         <PopoverContent className="w-64 p-0" align="start">
           <Command shouldFilter>

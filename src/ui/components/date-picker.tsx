@@ -58,21 +58,23 @@ export function DatePicker({
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
-      <PopoverTrigger asChild>
-        <Button
-          type="button"
-          variant="outline"
-          disabled={disabled}
-          aria-label={ariaLabel}
-          data-empty={!selected}
-          className={cn(
-            "justify-start text-left font-normal data-[empty=true]:text-muted-foreground",
-            className,
-          )}
-        >
-          <CalendarIcon />
-          {selected ? formatDisplayLabel(selected) : <span>날짜 선택</span>}
-        </Button>
+      <PopoverTrigger
+        render={
+          <Button
+            type="button"
+            variant="outline"
+            disabled={disabled}
+            aria-label={ariaLabel}
+            data-empty={!selected}
+            className={cn(
+              "justify-start text-left font-normal data-[empty=true]:text-muted-foreground",
+              className,
+            )}
+          />
+        }
+      >
+        <CalendarIcon />
+        {selected ? formatDisplayLabel(selected) : <span>날짜 선택</span>}
       </PopoverTrigger>
       <PopoverContent className="w-auto p-0" align="start">
         <Calendar
