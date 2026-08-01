@@ -10,12 +10,15 @@
     "pw:install": "playwright install chromium chrome",
     "pw:test": "playwright test",
     "pw:test:headed": "playwright test --headed",
-    "pw:test:list": "playwright test --list"
+    "pw:test:list": "playwright test --list",
+    "format": "prettier --write .",
+    "format:check": "prettier --check ."
   },
   "devDependencies": {
     "@crxjs/vite-plugin": "^2.7.1",
     "@playwright/test": "^1.61.1",
     "playwright": "^1.61.1",
+    "prettier": "^3.9.6",
     "vite": "^8.2.0"
   }
 }

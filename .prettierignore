@@ -1,0 +1,12 @@
+dist/
+node_modules/
+src-backup/
+test-results/
+artifacts/
+
+# 평면도 SVG 는 generate-floor-maps.mjs 가 생성한다. 포맷 대상 아님.
+*.svg
+src/features/radar/floor-maps.js
+
+# 생성물
+package-lock.json
