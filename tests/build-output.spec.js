@@ -1,15 +1,26 @@
 import fs from "node:fs";
 import path from "node:path";
-import { execFileSync } from "node:child_process";
 import { expect, test } from "@playwright/test";
+import {
+  API_ORIGIN,
+  WEB_ORIGIN,
+  ensureExtensionBuild,
+  getBackgroundBundlePath,
+  getContentBundlePath,
+  getPageHookBundlePath,
+  loadBackgroundBundle,
+  loadContentBundle,
+  loadPageHookBundle,
+  readBuiltManifest,
+  resolveBuiltPath,
+  stubServiceDocument,
+} from "./helpers/extension.js";
 
 // 2단계(빌드 도입) 회귀 가드.
 // 번들 산출물이 기존 스크립트 나열 방식과 동일하게 부트스트랩되는지 확인한다.
 // 로직/UI 는 그대로이므로 "동작 동일" 을 검증하는 게 목적이다.
 
 const DIST_DIR = path.resolve(process.cwd(), "dist/extension");
-const WEB_ORIGIN = "https://techcourse-lms-plus-web.woowahan.com";
-const API_ORIGIN = "https://techcourse-lms-plus-api.woowahan.com";
 
 // content.js 가 부팅 전에 요구하는 전역들(requiredBootstrapGlobals 와 같은 목록).
 const REQUIRED_GLOBALS = [
@@ -28,17 +39,7 @@ const REQUIRED_GLOBALS = [
   "__zzkLmsDataShared",
 ];
 
-test.beforeAll(() => {
-  // 산출물이 없거나 오래됐을 수 있으니 테스트 시작 전에 한 번 빌드한다.
-  execFileSync("npx", ["vite", "build"], {
-    cwd: process.cwd(),
-    stdio: "pipe",
-  });
-});
-
-function readBuiltManifest() {
-  return JSON.parse(fs.readFileSync(path.join(DIST_DIR, "manifest.json"), "utf8"));
-}
+test.beforeAll(ensureExtensionBuild);
 
 test("빌드 산출물 manifest 가 확장 로드에 필요한 형태를 갖춘다", () => {
   const manifest = readBuiltManifest();
@@ -71,6 +72,34 @@ test("런타임에 경로로 직접 불러오는 파일들이 산출물에 그�
   }
 });
 
+test("서비스워커 번들이 모듈로 실제 실행된다", async ({ page }) => {
+  // CRXJS 는 서비스워커를 type:"module" 로 등록한다. ES 모듈에서 importScripts()
+  // 를 쓰면 "Module scripts don't support importScripts()" 로 부팅이 통째로 깨진다.
+  // 파일 존재만 확인하면 못 잡으므로 실제로 실행해 본다.
+  const manifest = readBuiltManifest();
+  const chunkPath = getBackgroundBundlePath();
+
+  expect(manifest.background.type).toBe("module");
+  // 산출물 어디에도 importScripts 가 남아 있으면 안 된다.
+  expect(fs.readFileSync(chunkPath, "utf8")).not.toContain("importScripts");
+
+  const pageErrors = [];
+  page.on("pageerror", (error) => pageErrors.push(error.message));
+
+  await stubServiceDocument(page);
+  await page.goto(`${WEB_ORIGIN}/space-reservations`, { waitUntil: "domcontentloaded" });
+  await loadBackgroundBundle(page);
+
+  // 워커가 정상 부팅했다면 의존 전역이 올라와 있다.
+  const snapshot = await page.evaluate(() => ({
+    constants: Boolean(globalThis.__zzkSharedConstants),
+    normalizers: Boolean(globalThis.__zzkLmsDataNormalizers),
+  }));
+
+  expect(pageErrors).toEqual([]);
+  expect(snapshot).toEqual({ constants: true, normalizers: true });
+});
+
 test("예약 훅이 MAIN world content script 로 선언된다", () => {
   const manifest = readBuiltManifest();
 
@@ -90,9 +119,6 @@ test("예약 훅이 MAIN world content script 로 선언된다", () => {
 });
 
 test("MAIN world 번들이 페이지 fetch 를 패치해 예약 이벤트를 emit 한다", async ({ page }) => {
-  const manifest = readBuiltManifest();
-  const mainWorldScript = manifest.content_scripts.find((entry) => entry.world === "MAIN");
-  const bundlePath = path.join(DIST_DIR, mainWorldScript.js[0]);
 
   await page.route(`${WEB_ORIGIN}/**`, async (route) => {
     if (route.request().resourceType() !== "document") {
@@ -118,7 +144,7 @@ test("MAIN world 번들이 페이지 fetch 를 패치해 예약 이벤트를 emi
   });
 
   await page.goto(`${WEB_ORIGIN}/space-reservations`, { waitUntil: "domcontentloaded" });
-  await page.addScriptTag({ path: bundlePath, type: "module" });
+  await loadPageHookBundle(page);
 
   const messages = await page.evaluate(async (apiOrigin) => {
     const collected = [];
@@ -149,8 +175,6 @@ test("MAIN world 번들이 페이지 fetch 를 패치해 예약 이벤트를 emi
 });
 
 test("번들된 content script 가 전역 부트스트랩을 동일하게 올린다", async ({ page }) => {
-  const manifest = readBuiltManifest();
-  const bundlePath = path.join(DIST_DIR, manifest.content_scripts[0].js[0]);
 
   const pageErrors = [];
   page.on("pageerror", (error) => pageErrors.push(error.message));
@@ -179,11 +203,7 @@ test("번들된 content script 가 전역 부트스트랩을 동일하게 올린
   });
 
   await page.goto(`${WEB_ORIGIN}/space-reservations`, { waitUntil: "domcontentloaded" });
-  await page.addScriptTag({ path: bundlePath, type: "module" });
-
-  await page.waitForFunction(() => window.__zzkAvailabilityLensLoaded === true, undefined, {
-    timeout: 5000,
-  });
+  await loadContentBundle(page);
 
   const snapshot = await page.evaluate((globalNames) => ({
     loaded: window.__zzkAvailabilityLensLoaded === true,
@@ -200,8 +220,6 @@ test("번들된 content script 가 전역 부트스트랩을 동일하게 올린
 });
 
 test("번들된 content script 가 레이더 UI 를 실제로 마운트한다", async ({ page }) => {
-  const manifest = readBuiltManifest();
-  const bundlePath = path.join(DIST_DIR, manifest.content_scripts[0].js[0]);
 
   const spaces = [
     {
@@ -242,7 +260,7 @@ test("번들된 content script 가 레이더 UI 를 실제로 마운트한다", 
   });
 
   await page.goto(`${WEB_ORIGIN}/space-reservations`, { waitUntil: "domcontentloaded" });
-  await page.addScriptTag({ path: bundlePath, type: "module" });
+  await loadContentBundle(page);
 
   // 스크립트 나열 방식과 동일하게 런처와 오버레이가 뜬다.
   await expect

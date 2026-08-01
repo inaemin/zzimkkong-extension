@@ -39,18 +39,38 @@ export function resolveBuiltPath(relativePath) {
   return path.join(DIST_DIR, relativePath);
 }
 
+// CRXJS 는 content script 를 로더 + 실제 청크로 쪼갤 수 있다.
+// 로더는 chrome.runtime.getURL 로 청크를 동적 import 하므로 실제 확장에서는
+// 정상 동작하지만, 테스트는 확장 컨텍스트 없이 파일 경로로 주입하기 때문에
+// 로더 대신 실제 청크를 찾아 로드해야 한다.
+function resolveRealChunk(entryRelativePath) {
+  const entryPath = path.join(DIST_DIR, entryRelativePath);
+  const source = fs.readFileSync(entryPath, "utf8");
+  const loaderMatch = source.match(/chrome\.runtime\.getURL\(\s*["']([^"']+)["']\s*\)/);
+  return loaderMatch ? path.join(DIST_DIR, loaderMatch[1]) : entryPath;
+}
+
 // isolated world 에서 도는 메인 번들(레이더 UI 전체).
 export function getContentBundlePath() {
   const manifest = readBuiltManifest();
   const entry = manifest.content_scripts.find((script) => script.world !== "MAIN");
-  return path.join(DIST_DIR, entry.js[0]);
+  return resolveRealChunk(entry.js[0]);
 }
 
 // MAIN world 에서 도는 예약 네트워크 훅.
 export function getPageHookBundlePath() {
   const manifest = readBuiltManifest();
   const entry = manifest.content_scripts.find((script) => script.world === "MAIN");
-  return path.join(DIST_DIR, entry.js[0]);
+  return resolveRealChunk(entry.js[0]);
+}
+
+// 서비스워커 로더가 가리키는 실제 청크.
+export function getBackgroundBundlePath() {
+  const manifest = readBuiltManifest();
+  const loaderPath = path.join(DIST_DIR, manifest.background.service_worker);
+  const source = fs.readFileSync(loaderPath, "utf8");
+  const match = source.match(/import\s+["']\.\/([^"']+)["']/);
+  return match ? path.join(DIST_DIR, match[1]) : loaderPath;
 }
 
 // 실제 사이트는 미인증 요청을 로그인 페이지로 돌려보내므로 문서 응답을 고정한다.
@@ -98,16 +118,56 @@ export async function enableTestHooks(page) {
   });
 }
 
+// 번들 청크가 형제 청크를 상대 경로로 import 할 수 있다(공유 청크 분리).
+// 실제 확장은 chrome.runtime.getURL 로 풀지만 테스트에는 확장 컨텍스트가 없으므로,
+// dist/extension 을 페이지 오리진 아래로 서빙해 모듈 그래프가 그대로 풀리게 한다.
+const DIST_ROUTE_PREFIX = "/__dist__/";
+
+// Playwright 는 나중에 등록된 라우트를 먼저 평가한다. 스펙이 자체적으로
+// `${WEB_ORIGIN}/**` 를 걸면 dist 요청까지 가로채므로, 번들을 로드하는 시점에
+// 매번 다시 등록해 항상 가장 마지막(=우선순위 1위)이 되게 한다.
+export async function serveBuiltAssets(page) {
+  await page.route(`${WEB_ORIGIN}${DIST_ROUTE_PREFIX}**`, async (route) => {
+    const url = new URL(route.request().url());
+    const relative = decodeURIComponent(url.pathname.slice(DIST_ROUTE_PREFIX.length));
+    const filePath = resolveBuiltPath(relative);
+    if (!fs.existsSync(filePath)) {
+      await route.fulfill({ status: 404, body: "" });
+      return;
+    }
+    await route.fulfill({
+      status: 200,
+      headers: { "content-type": "text/javascript" },
+      body: fs.readFileSync(filePath, "utf8"),
+    });
+  });
+}
+
+async function importBuiltModule(page, absolutePath) {
+  await serveBuiltAssets(page);
+  const relative = path.relative(DIST_DIR, absolutePath).split(path.sep).join("/");
+  await page.evaluate(
+    async ({ origin, prefix, name }) => {
+      await import(`${origin}${prefix}${name}`);
+    },
+    { origin: WEB_ORIGIN, prefix: DIST_ROUTE_PREFIX, name: relative },
+  );
+}
+
 // 빌드된 content 번들을 로드하고 부트스트랩 완료까지 기다린다.
 export async function loadContentBundle(page, { timeout = 5000 } = {}) {
-  await page.addScriptTag({ path: getContentBundlePath(), type: "module" });
+  await importBuiltModule(page, getContentBundlePath());
   await page.waitForFunction(() => window.__zzkAvailabilityLensLoaded === true, undefined, {
     timeout,
   });
 }
 
 export async function loadPageHookBundle(page) {
-  await page.addScriptTag({ path: getPageHookBundlePath(), type: "module" });
+  await importBuiltModule(page, getPageHookBundlePath());
+}
+
+export async function loadBackgroundBundle(page) {
+  await importBuiltModule(page, getBackgroundBundlePath());
 }
 
 // 가장 흔한 셋업: 문서 스텁 + API 스텁 + 예약 페이지 이동 + 번들 로드.

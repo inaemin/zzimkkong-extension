@@ -1,10 +1,12 @@
+// CRXJS 는 서비스워커를 "type": "module" 로 등록한다. ES 모듈에서는
+// importScripts() 를 쓸 수 없으므로 정적 import 로 의존성을 올린다.
+// (각 모듈은 여전히 globalThis.__zzk* 에 자기 API 를 등록한다)
+import "./constants/debug.js";
+import "./constants/runtime.js";
+import "./services/lms-data/normalizers.js";
+
 (() => {
 try {
-if (typeof importScripts === "function") {
-  importScripts("constants/debug.js");
-  importScripts("constants/runtime.js");
-  importScripts("services/lms-data/normalizers.js");
-}
 const DEBUG_MODE = globalThis.__zzkDebugConfig?.DEBUG_MODE === true;
 const {
   LMS_API_BASE_URL,

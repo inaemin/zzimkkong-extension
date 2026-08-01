@@ -45,7 +45,11 @@ test("background service worker reuses shared room policy constants", async () =
     "utf8",
   );
 
-  expect(backgroundSource).toContain('importScripts("constants/runtime.js")');
+  // 서비스워커는 type:"module" 로 등록되므로 importScripts() 를 쓸 수 없다.
+  // (쓰면 "Module scripts don't support importScripts()" 로 부팅이 통째로 깨진다)
+  // 주석에 단어가 등장할 수 있으므로 실제 호출 형태만 본다.
+  expect(backgroundSource).not.toMatch(/^\s*importScripts\s*\(/m);
+  expect(backgroundSource).toContain('import "./constants/runtime.js"');
   expect(backgroundSource).not.toMatch(/const\s+TARGET_ROOM_NAMES\s*=\s*\[/);
 });
 
