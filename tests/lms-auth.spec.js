@@ -1,40 +1,25 @@
-import path from "node:path";
 import { expect, test } from "@playwright/test";
+import {
+  API_ORIGIN,
+  WEB_ORIGIN,
+  ensureExtensionBuild,
+  loadContentBundle,
+  stubServiceDocument,
+} from "./helpers/extension.js";
 
-const WEB_ORIGIN = "https://techcourse-lms-plus-web.woowahan.com";
-const API_ORIGIN = "https://techcourse-lms-plus-api.woowahan.com";
+test.beforeAll(ensureExtensionBuild);
 
 // 실제 앱이 저장하는 형태를 흉내낸 가짜 JWT (서명부는 임의값).
 const FAKE_JWT =
   "eyJhbGciOiJIUzUxMiJ9.eyJzdWIiOiI1NyIsInJvbGVzIjpbIlJPTEVfVVNFUiJdfQ.AAAABBBBCCCCDDDDEEEEFFFF";
 
-const LMS_DATA_SCRIPTS = [
-  "src/utils/shared.js",
-  "src/constants/runtime.js",
-  "src/utils/date-time.js",
-  "src/utils/routes.js",
-  "src/services/lms-data/normalizers.js",
-  "src/services/lms-data/shared.js",
-];
-
 async function stubDocument(page) {
-  await page.route(`${WEB_ORIGIN}/**`, async (route) => {
-    if (route.request().resourceType() !== "document") {
-      await route.continue();
-      return;
-    }
-    await route.fulfill({
-      status: 200,
-      contentType: "text/html",
-      body: "<html><body></body></html>",
-    });
-  });
+  await stubServiceDocument(page, "<html><body></body></html>");
 }
 
+// 데이터 계층(__zzkLmsDataShared)만 필요하지만, 번들이 한 덩어리라 content 번들을 쓴다.
 async function loadScripts(page) {
-  for (const scriptPath of LMS_DATA_SCRIPTS) {
-    await page.addScriptTag({ path: path.resolve(process.cwd(), scriptPath) });
-  }
+  await loadContentBundle(page);
 }
 
 test("attaches Authorization: Bearer from a JWT in localStorage", async ({ page }) => {

@@ -3,29 +3,6 @@
     return;
   }
 
-  function reportMissingBootstrapDependencies(missing) {
-    if (!Array.isArray(globalThis.__zzkBootstrapLoadErrors)) {
-      globalThis.__zzkBootstrapLoadErrors = [];
-    }
-    globalThis.__zzkBootstrapLoadErrors.push({
-      script: "src/utils/date-time.js",
-      reason: "missing-bootstrap-dependencies",
-      missing,
-    });
-  }
-
-  const missingBootstrapDependencies = [
-    ["__zzkSharedConstants", globalThis.__zzkSharedConstants],
-    ["__zzkSharedUtils", globalThis.__zzkSharedUtils],
-  ]
-    .filter(([, value]) => !value)
-    .map(([name]) => name);
-
-  if (missingBootstrapDependencies.length > 0) {
-    reportMissingBootstrapDependencies(missingBootstrapDependencies);
-    return;
-  }
-
   const {
     KST_DATE_PARTS_FORMATTER,
     KST_TIME_PARTS_FORMATTER,

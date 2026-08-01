@@ -1,6 +1,14 @@
 import fs from "node:fs";
 import path from "node:path";
 import { expect, test } from "@playwright/test";
+import {
+  WEB_ORIGIN,
+  ensureExtensionBuild,
+  loadContentBundle,
+  stubServiceDocument,
+} from "./helpers/extension.js";
+
+test.beforeAll(ensureExtensionBuild);
 
 test("playwright local setup works", async ({ page }) => {
   await page.goto("https://example.com", { waitUntil: "domcontentloaded" });
@@ -39,6 +47,22 @@ test("content bundle import order preserves global bootstrap dependencies", asyn
   ]);
 });
 
+test("MAIN world 번들도 의존 순서를 지킨다", async () => {
+  const bundleSource = fs.readFileSync(
+    path.resolve(process.cwd(), "src/page-hook-bundle.js"),
+    "utf8",
+  );
+  const importedPaths = Array.from(
+    bundleSource.matchAll(/^import "(\.\/[^"]+)";$/gm),
+  ).map((match) => match[1].replace(/^\.\//, "src/"));
+
+  // shared 가 globalThis.__zzkPageHookShared 를 올리고 hook 이 그걸 읽는다.
+  expect(importedPaths).toEqual([
+    "src/page-hook/shared.js",
+    "src/page-network-hook.js",
+  ]);
+});
+
 test("background service worker reuses shared room policy constants", async () => {
   const backgroundSource = fs.readFileSync(
     path.resolve(process.cwd(), "src/background.js"),
@@ -53,38 +77,37 @@ test("background service worker reuses shared room policy constants", async () =
   expect(backgroundSource).not.toMatch(/const\s+TARGET_ROOM_NAMES\s*=\s*\[/);
 });
 
-test("content script reports missing bootstrap dependencies instead of throwing", async ({ page }) => {
+test("레이더를 띄울 수 없는 페이지에서는 부팅해도 UI 를 만들지 않는다", async ({ page }) => {
   const pageErrors = [];
-  page.on("pageerror", (error) => {
-    pageErrors.push(error.message);
-  });
+  page.on("pageerror", (error) => pageErrors.push(error.message));
 
-  await page.goto("https://example.com/guest/test-map", { waitUntil: "domcontentloaded" });
-  await page.addScriptTag({ path: path.resolve(process.cwd(), "src/content.js") });
+  await stubServiceDocument(page);
+  // /space-reservations 가 아니므로 레이더 대상이 아니다.
+  await page.goto(`${WEB_ORIGIN}/mypage`, { waitUntil: "domcontentloaded" });
+  await loadContentBundle(page);
 
-  const snapshot = await page.evaluate(() => {
-    return {
-      loaded: window.__zzkAvailabilityLensLoaded === true,
-      error: window.__zzkAvailabilityLensLoadError || null,
-    };
-  });
+  const snapshot = await page.evaluate(() => ({
+    loaded: window.__zzkAvailabilityLensLoaded === true,
+    launcher: Boolean(document.getElementById("zzk-map-calendar-radar-launcher")),
+    overlay: Boolean(document.getElementById("zzk-map-calendar-overlay")),
+  }));
 
+  // 스크립트는 정상 부팅하되(에러 없음) UI 는 붙지 않아야 한다.
   expect(pageErrors).toEqual([]);
-  expect(snapshot.loaded).toBeFalsy();
-  expect(snapshot.error).toMatchObject({
-    reason: "missing-bootstrap-dependencies",
-  });
-  expect(snapshot.error.missing).toContain("__zzkSharedUtils");
+  expect(snapshot.loaded).toBeTruthy();
+  expect(snapshot.launcher).toBeFalsy();
+  expect(snapshot.overlay).toBeFalsy();
 });
 
 test("storage helpers report debug events when browser storage throws", async ({ page }) => {
-  await page.goto("https://example.com/guest/test-map", { waitUntil: "domcontentloaded" });
-  await page.evaluate(() => {
+  // 브라우저가 저장소를 막는 건 런타임에 실제로 일어난다(모듈 전환과 무관).
+  // 던지지 않고 디버그 이벤트로 남기는지 확인한다.
+  await page.addInitScript(() => {
     window.__ZZK_DEBUG_MODE__ = true;
   });
-  await page.addScriptTag({ path: path.resolve(process.cwd(), "src/constants/debug.js") });
-  await page.addScriptTag({ path: path.resolve(process.cwd(), "src/utils/shared.js") });
-  await page.addScriptTag({ path: path.resolve(process.cwd(), "src/utils/storage.js") });
+  await stubServiceDocument(page);
+  await page.goto(`${WEB_ORIGIN}/space-reservations`, { waitUntil: "domcontentloaded" });
+  await loadContentBundle(page);
 
   const snapshot = await page.evaluate(() => {
     const originalGetItem = Storage.prototype.getItem;
@@ -101,6 +124,7 @@ test("storage helpers report debug events when browser storage throws", async ({
     };
 
     try {
+      window.__zzkSharedUtils.clearDebugEvents();
       const boolValue = window.__zzkStorageUtils.readStoredBoolean("zzk-test-bool", true);
       window.__zzkStorageUtils.writeStoredBoolean("zzk-test-bool", false);
       window.__zzkStorageUtils.writeStoredText("zzk-test-text", "");
@@ -125,68 +149,23 @@ test("storage helpers report debug events when browser storage throws", async ({
   );
 });
 
-const bootstrapConsumerCases = [
-  {
-    scriptPath: "src/utils/date-time.js",
-    exportedGlobal: "__zzkDateTimeUtils",
-    missing: ["__zzkSharedConstants", "__zzkSharedUtils"],
-  },
-  {
-    scriptPath: "src/features/slack/shared.js",
-    exportedGlobal: "__zzkSlackShared",
-    missing: ["__zzkSharedConstants", "__zzkDateTimeUtils"],
-  },
-  {
-    scriptPath: "src/features/form-fields/shared.js",
-    exportedGlobal: "__zzkFormFieldUtils",
-    missing: ["__zzkSharedUtils", "__zzkSlackShared", "__zzkSharedConstants"],
-  },
-  {
-    scriptPath: "src/services/lms-data/shared.js",
-    exportedGlobal: "__zzkLmsDataShared",
-    missing: ["__zzkSharedConstants", "__zzkDateTimeUtils", "__zzkLmsDataNormalizers"],
-  },
-  {
-    scriptPath: "src/page-network-hook.js",
-    exportedGlobal: "__zzkReservationHookLoaded",
-    missing: ["__zzkPageHookShared"],
-  },
-];
+// 예전에는 각 모듈을 의존성 없이 주입해 "부트스트랩 실패"를 검증했다.
+// 번들이 한 덩어리라 그 상황 자체를 만들 수 없고, 실제 배포 형태도 아니다.
+// 대신 번들이 통째로 정상 부팅하는지를 확인한다.
+test("번들이 부트스트랩 전역을 빠짐없이 올린다", async ({ page }) => {
+  const pageErrors = [];
+  page.on("pageerror", (error) => pageErrors.push(error.message));
 
-for (const { scriptPath, exportedGlobal, missing } of bootstrapConsumerCases) {
-  test(`${scriptPath} reports missing bootstrap dependencies instead of throwing`, async ({ page }) => {
-    const pageErrors = [];
-    page.on("pageerror", (error) => {
-      pageErrors.push(error.message);
-    });
+  await stubServiceDocument(page);
+  await page.goto(`${WEB_ORIGIN}/space-reservations`, { waitUntil: "domcontentloaded" });
+  await loadContentBundle(page);
 
-    await page.goto("https://example.com/guest/test-map", { waitUntil: "domcontentloaded" });
-    await page.addScriptTag({ path: path.resolve(process.cwd(), scriptPath) });
+  const snapshot = await page.evaluate(() => ({
+    bootstrapErrors: window.__zzkBootstrapLoadErrors || [],
+    loadError: window.__zzkAvailabilityLensLoadError || null,
+  }));
 
-    const snapshot = await page.evaluate((globalName) => {
-      return {
-        exported: Boolean(window[globalName]),
-        errors: window.__zzkBootstrapLoadErrors || [],
-      };
-    }, exportedGlobal);
-
-    expect(pageErrors).toEqual([]);
-    expect(snapshot.exported).toBeFalsy();
-    expect(snapshot.errors).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({
-          script: scriptPath,
-          reason: "missing-bootstrap-dependencies",
-          missing: expect.arrayContaining(missing),
-        }),
-      ]),
-    );
-  });
-}
-
-test("zzimkkong guest route is reachable", async ({ page }) => {
-  test.skip(process.env.ZZK_E2E !== "1", "Set ZZK_E2E=1 to run live zzimkkong checks.");
-
-  await page.goto("/guest", { waitUntil: "domcontentloaded" });
-  await expect(page).toHaveURL(/\/guest(?:\?.*)?$/);
+  expect(pageErrors).toEqual([]);
+  expect(snapshot.bootstrapErrors).toEqual([]);
+  expect(snapshot.loadError).toBeNull();
 });

@@ -1,43 +1,31 @@
-import path from "node:path";
 import fs from "node:fs";
 import { expect, test } from "@playwright/test";
+import {
+  API_ORIGIN,
+  WEB_ORIGIN,
+  ensureExtensionBuild,
+  getPageHookBundlePath,
+  jsonResponse,
+  loadPageHookBundle,
+  stubServiceDocument,
+} from "./helpers/extension.js";
 
-const WEB_ORIGIN = "https://techcourse-lms-plus-web.woowahan.com";
-const API_ORIGIN = "https://techcourse-lms-plus-api.woowahan.com";
 const RESERVATIONS_URL = `${API_ORIGIN}/api/space-reservations`;
 
+test.beforeAll(ensureExtensionBuild);
+
 async function injectPageNetworkHookBundle(page) {
-  await page.addScriptTag({ path: path.resolve(process.cwd(), "src/page-hook/shared.js") });
-  await page.addScriptTag({ path: path.resolve(process.cwd(), "src/page-network-hook.js") });
+  await loadPageHookBundle(page);
 }
 
-// 실제 사이트는 미인증 요청을 로그인 페이지로 돌려보내므로 문서 응답을 고정한다.
 async function gotoReservationPage(page) {
-  await page.route(`${WEB_ORIGIN}/**`, async (route) => {
-    if (route.request().resourceType() !== "document") {
-      await route.continue();
-      return;
-    }
-    await route.fulfill({
-      status: 200,
-      contentType: "text/html",
-      body: "<html><body></body></html>",
-    });
-  });
+  await stubServiceDocument(page, "<html><body></body></html>");
   await page.goto(`${WEB_ORIGIN}/space-reservations`, { waitUntil: "domcontentloaded" });
 }
 
 async function routeReservationApi(page, body = "{}", status = 200) {
   await page.route(`${API_ORIGIN}/api/space-reservations**`, async (route) => {
-    await route.fulfill({
-      status,
-      headers: {
-        "access-control-allow-origin": WEB_ORIGIN,
-        "access-control-allow-credentials": "true",
-        "content-type": "application/json",
-      },
-      body,
-    });
+    await route.fulfill(jsonResponse(body, status));
   });
 }
 
@@ -374,8 +362,8 @@ test("page network hook can restore original fetch and XHR patches", async ({ pa
 
 test("page network hook registers restore before XHR patch failure can strand fetch", async ({ page }) => {
   await gotoReservationPage(page);
-  await page.addScriptTag({ path: path.resolve(process.cwd(), "src/page-hook/shared.js") });
-  const hookSource = fs.readFileSync(path.resolve(process.cwd(), "src/page-network-hook.js"), "utf8");
+  // 번들 전체를 소스로 평가한다(shared + hook 이 한 청크에 들어있다).
+  const hookSource = fs.readFileSync(getPageHookBundlePath(), "utf8");
 
   const snapshot = await page.evaluate((source) => {
     const originalFetch = window.fetch;

@@ -3,30 +3,6 @@
     return;
   }
 
-  function reportMissingBootstrapDependencies(missing) {
-    if (!Array.isArray(globalThis.__zzkBootstrapLoadErrors)) {
-      globalThis.__zzkBootstrapLoadErrors = [];
-    }
-    globalThis.__zzkBootstrapLoadErrors.push({
-      script: "src/services/lms-data/shared.js",
-      reason: "missing-bootstrap-dependencies",
-      missing,
-    });
-  }
-
-  const missingBootstrapDependencies = [
-    ["__zzkSharedConstants", globalThis.__zzkSharedConstants],
-    ["__zzkDateTimeUtils", globalThis.__zzkDateTimeUtils],
-    ["__zzkLmsDataNormalizers", globalThis.__zzkLmsDataNormalizers],
-  ]
-    .filter(([, value]) => !value)
-    .map(([name]) => name);
-
-  if (missingBootstrapDependencies.length > 0) {
-    reportMissingBootstrapDependencies(missingBootstrapDependencies);
-    return;
-  }
-
   const {
     LMS_API_BASE_URL,
     LMS_TIME_STEP_MINUTES,
