@@ -161,7 +161,6 @@
     TARGET_ROOM_METADATA,
     TARGET_ROOM_METADATA_BY_NORMALIZED_NAME,
     MAP_CALENDAR_ROOM_FLOOR_BY_NAME,
-    EXCLUDED_CREW_ROOM_SET,
     TARGET_ROOM_NAMES,
     TARGET_ROOM_SET,
     TARGET_ROOM_ORDER,
@@ -9104,9 +9103,6 @@
           const normalizedName = normalizeTargetRoomName(room?.name);
           const metadata =
             TARGET_ROOM_METADATA_BY_NORMALIZED_NAME.get(normalizedName);
-          if (EXCLUDED_CREW_ROOM_SET instanceof Set && EXCLUDED_CREW_ROOM_SET.has(normalizedName)) {
-            return false;
-          }
           const roomKind = metadata?.kind || inferRoomKindFromName(room?.name);
           return roomKind === normalizedTab;
         })

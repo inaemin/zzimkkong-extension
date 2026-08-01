@@ -40,7 +40,6 @@ test("background service worker reuses shared room policy constants", async () =
 
   expect(backgroundSource).toContain('importScripts("constants/runtime.js")');
   expect(backgroundSource).not.toMatch(/const\s+TARGET_ROOM_NAMES\s*=\s*\[/);
-  expect(backgroundSource).not.toMatch(/const\s+EXCLUDED_CREW_ROOM_NAMES\s*=\s*\[/);
 });
 
 test("content script reports missing bootstrap dependencies instead of throwing", async ({ page }) => {

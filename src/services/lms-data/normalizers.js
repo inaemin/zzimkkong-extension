@@ -7,10 +7,8 @@
   function createLmsDataNormalizers(deps) {
     const {
       getProperty,
-      normalizeTargetRoomName,
       normalizeRoomType,
       getRoomTypeForRoomName,
-      excludedRoomSet,
       timelineSlotMinutes,
       minuteToHourMinute,
     } = deps;
@@ -81,10 +79,6 @@
         })
         .filter((room) => {
           if (!Number.isInteger(room.id)) {
-            return false;
-          }
-          const normalizedName = normalizeTargetRoomName(room.name);
-          if (excludedRoomSet instanceof Set && excludedRoomSet.has(normalizedName)) {
             return false;
           }
           if (!normalizedRoomType) {

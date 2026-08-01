@@ -10,7 +10,6 @@ const {
   LMS_API_BASE_URL,
   LMS_TIME_STEP_MINUTES,
   KST_DATE_PARTS_FORMATTER,
-  EXCLUDED_CREW_ROOM_SET,
   normalizeTargetRoomName,
   normalizeFetchRoomType: normalizeRoomType,
 } = globalThis.__zzkSharedConstants;
@@ -21,7 +20,6 @@ const lmsDataNormalizers = globalThis.__zzkLmsDataNormalizers.createLmsDataNorma
   normalizeTargetRoomName,
   normalizeRoomType,
   getRoomTypeForRoomName: getRoomTypeByName,
-  excludedRoomSet: EXCLUDED_CREW_ROOM_SET,
   timelineSlotMinutes: LMS_TIME_STEP_MINUTES,
   minuteToHourMinute,
 });

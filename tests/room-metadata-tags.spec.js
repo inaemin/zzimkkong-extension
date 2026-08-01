@@ -133,28 +133,42 @@ test("창 태그가 붙은 회의실은 창 배지를 보여준다", async ({ pa
   expect(byName("아폴로").badges.join("")).not.toContain("창");
 });
 
-test("13층에서 크루가 예약할 수 없는 방은 은하수만 남기고 걸러진다", async ({ page }) => {
-  const restrictedRoomNames = [
-    "목성",
-    "스튜디오",
-    "안드로메다같은방",
-    "천왕성",
-    "코치1",
-    "코치2",
-    "토성",
-  ];
-
+test("active:false 인 방은 레이더에서 걸러진다", async ({ page }) => {
+  // 크루가 예약할 수 없는 방은 서버가 아예 안 내려주거나 active:false 로 준다.
+  // 확장에는 이름 기반 제외 목록이 없고, 이 필터가 유일한 방어선이다.
   await mountRadar(page, [
     buildSpace(9, "은하수", 13),
-    ...restrictedRoomNames.map((name, index) => buildSpace(100 + index, name, 13)),
+    buildSpace(100, "목성", 13, { active: false }),
+    buildSpace(101, "천왕성", 13, { active: false }),
   ]);
 
   const roomLabels = await readRoomLabels(page);
 
   expect(roomLabels.some((label) => label.includes("은하수"))).toBeTruthy();
-  for (const restrictedRoomName of restrictedRoomNames) {
-    expect(roomLabels.some((label) => label.includes(restrictedRoomName))).toBeFalsy();
-  }
+  expect(roomLabels.some((label) => label.includes("목성"))).toBeFalsy();
+  expect(roomLabels.some((label) => label.includes("천왕성"))).toBeFalsy();
+});
+
+test("페어룸은 API 이름(페어룸 01)으로 메타데이터에 매칭돼 페어룸 탭으로 분류된다", async ({ page }) => {
+  await mountRadar(page, [
+    buildSpace(9, "은하수", 13),
+    buildSpace(10, "페어룸 01", 13),
+    buildSpace(16, "페어룸 07", 12),
+  ]);
+
+  // 기본 탭(회의실)에는 페어룸이 안 보인다.
+  const meetingLabels = await readRoomLabels(page);
+  expect(meetingLabels.some((label) => label.includes("은하수"))).toBeTruthy();
+  expect(meetingLabels.some((label) => label.includes("페어룸"))).toBeFalsy();
+
+  // 페어룸 탭으로 전환하면 페어룸만 보인다.
+  await page.click("#zzk-map-calendar-overlay-tab-pair");
+  await page.waitForTimeout(200);
+
+  const pairLabels = await readRoomLabels(page);
+  expect(pairLabels.some((label) => label.includes("페어룸 01"))).toBeTruthy();
+  expect(pairLabels.some((label) => label.includes("페어룸 07"))).toBeTruthy();
+  expect(pairLabels.some((label) => label.includes("은하수"))).toBeFalsy();
 });
 
 test("12층 회의실은 API 순서가 아니라 크루 기준 순서로 정렬된다", async ({ page }) => {
