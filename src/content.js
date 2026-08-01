@@ -124,8 +124,6 @@
     SLACK_CHANNEL_HISTORY_STORAGE_KEY,
     SLACK_REMINDER_LEAD_TIME_STORAGE_KEY,
     PENDING_SLACK_MODAL_STORAGE_KEY,
-    BLANK_GUEST_RECOVERY_STORAGE_KEY,
-    PENDING_EDIT_SUBMIT_STORAGE_KEY,
     MAP_CALENDAR_ALWAYS_OPEN_STORAGE_KEY,
     MAP_CALENDAR_SPACE_TAB_STORAGE_KEY,
     MAP_CALENDAR_WIDTH_STORAGE_KEY,
@@ -386,10 +384,8 @@
     loading: false,
     availabilityInflightToken: null,
     pendingAvailabilityRefresh: false,
-    highlightedRects: new Set(),
     latestRooms: [],
     latestRoomsBySpaceTab: new Map(),
-    highlightEnabled: true,
     scheduleOverlayEnabled: true,
     scheduleCache: new Map(),
     scheduleCacheFetchedAtByDate: new Map(),
@@ -426,7 +422,6 @@
     timelineSelectionApplyTimer: null,
     currentSharingMapId: null,
     inputRefreshTimer: null,
-    autoRefreshTimer: null,
     autoScheduleRefreshTimer: null,
     mutationGuestUiSyncTimer: null,
     topNavBypassInstalled: false,
@@ -644,9 +639,6 @@
       } else {
         refreshAvailability();
       }
-    }
-    if (state.latestRooms.length > 0 && state.highlightEnabled) {
-      scheduleHighlightRefresh();
     }
     if (
       state.scheduleOverlayEnabled &&
@@ -890,7 +882,6 @@
         removeMapCalendarOverlay();
       }
       resetTimelineSelectionState();
-      clearMapHighlights();
     }
 
     const date = normalizeDateInput(state.elements.dateInput);
@@ -964,10 +955,6 @@
       renderRoomLists(visibleRooms);
       renderUpdatedAt();
 
-      if (state.highlightEnabled) {
-        applyMapHighlights(rooms);
-      }
-
       if (state.scheduleOverlayEnabled) {
         try {
           await refreshDailySchedule(date);
@@ -981,7 +968,6 @@
         "success",
       );
     } catch (error) {
-      clearMapHighlights();
       setStatus(getErrorMessage(error), "error");
     } finally {
       if (state.availabilityInflightToken === availabilityToken) {
@@ -4796,115 +4782,6 @@
     };
   }
 
-  function applyMapHighlights(rooms) {
-    clearMapHighlights();
-
-    const roomById = new Map(
-      rooms
-        .filter((room) => Number.isInteger(room.id))
-        .map((room) => [room.id, room]),
-    );
-
-    if (!state.highlightEnabled || roomById.size === 0) {
-      return;
-    }
-
-    const groups = document.querySelectorAll("svg g[data-testid]");
-    groups.forEach((group) => {
-      const id = Number(group.getAttribute("data-testid"));
-      const room = roomById.get(id);
-      if (!room) {
-        return;
-      }
-
-      const rect = group.querySelector("rect");
-      if (!(rect instanceof SVGElement)) {
-        return;
-      }
-
-      rememberOriginalRect(rect);
-
-      const fillColor = room.isAvailable ? "#22c55e" : "#ef4444";
-      const strokeColor = room.isAvailable ? "#166534" : "#991b1b";
-      const textColor = room.isAvailable ? "#064e3b" : "#7f1d1d";
-
-      rect.setAttribute("fill", fillColor);
-      rect.setAttribute("opacity", "0.82");
-      rect.setAttribute("stroke", strokeColor);
-      rect.setAttribute("stroke-width", "2.5");
-
-      const text = group.querySelector("text");
-      if (text instanceof SVGElement) {
-        rememberOriginalText(text);
-        text.setAttribute("fill", textColor);
-        text.setAttribute("font-weight", "700");
-      }
-
-      group.setAttribute(
-        "data-zzk-status",
-        room.isAvailable ? "available" : "occupied",
-      );
-      state.highlightedRects.add(rect);
-    });
-  }
-
-  function clearMapHighlights() {
-    state.highlightedRects.forEach((rect) => {
-      restoreRect(rect);
-      const group = rect.parentElement;
-      if (group) {
-        group.removeAttribute("data-zzk-status");
-      }
-
-      const text = group?.querySelector("text");
-      if (text instanceof SVGElement) {
-        restoreText(text);
-      }
-    });
-
-    state.highlightedRects.clear();
-  }
-
-  function rememberOriginalRect(rect) {
-    if (rect.dataset.zzkOrigFill === undefined) {
-      rect.dataset.zzkOrigFill = rect.getAttribute("fill") || "";
-    }
-    if (rect.dataset.zzkOrigOpacity === undefined) {
-      rect.dataset.zzkOrigOpacity = rect.getAttribute("opacity") || "";
-    }
-    if (rect.dataset.zzkOrigStroke === undefined) {
-      rect.dataset.zzkOrigStroke = rect.getAttribute("stroke") || "";
-    }
-    if (rect.dataset.zzkOrigStrokeWidth === undefined) {
-      rect.dataset.zzkOrigStrokeWidth = rect.getAttribute("stroke-width") || "";
-    }
-  }
-
-  function restoreRect(rect) {
-    setAttrOrRemove(rect, "fill", rect.dataset.zzkOrigFill || "");
-    setAttrOrRemove(rect, "opacity", rect.dataset.zzkOrigOpacity || "");
-    setAttrOrRemove(rect, "stroke", rect.dataset.zzkOrigStroke || "");
-    setAttrOrRemove(
-      rect,
-      "stroke-width",
-      rect.dataset.zzkOrigStrokeWidth || "",
-    );
-  }
-
-  function rememberOriginalText(text) {
-    if (text.dataset.zzkOrigFill === undefined) {
-      text.dataset.zzkOrigFill = text.getAttribute("fill") || "";
-    }
-    if (text.dataset.zzkOrigWeight === undefined) {
-      text.dataset.zzkOrigWeight = text.getAttribute("font-weight") || "";
-    }
-  }
-
-  function restoreText(text) {
-    setAttrOrRemove(text, "fill", text.dataset.zzkOrigFill || "");
-    setAttrOrRemove(text, "font-weight", text.dataset.zzkOrigWeight || "");
-  }
-
   function setAttrOrRemove(element, attrName, value) {
     if (!value) {
       element.removeAttribute(attrName);
@@ -7018,13 +6895,6 @@
     return isHostRoomSelectionSynced(roomId, roomName, root);
   }
 
-  function scheduleHighlightRefresh() {
-    clearTimeout(state.autoRefreshTimer);
-    state.autoRefreshTimer = setTimeout(() => {
-      applyMapHighlights(state.latestRooms);
-    }, 180);
-  }
-
   function scheduleInputRefresh(delay = 220) {
     clearTimeout(state.inputRefreshTimer);
     state.inputRefreshTimer = setTimeout(() => {
@@ -7165,7 +7035,6 @@
       clearPendingSlackModalState();
     }
     resetTimelineSelectionState();
-    clearMapHighlights();
     if (!preserveReservationContext) {
       closeSlackCopyModal();
     }
@@ -7767,56 +7636,6 @@
         isMeaningfulReservationContextField("endTime", payloadContext.endTime) &&
         isMeaningfulReservationContextField("roomName", payloadContext.roomName),
     );
-  }
-
-  function persistPendingEditSubmitState(contextSnapshot = null) {
-    const sharingMapId = getSharingMapId();
-    if (!sharingMapId) {
-      return;
-    }
-
-    try {
-      window.sessionStorage.setItem(
-        PENDING_EDIT_SUBMIT_STORAGE_KEY,
-        JSON.stringify({
-          sharingMapId,
-          at: Date.now(),
-          context:
-            contextSnapshot && typeof contextSnapshot === 'object'
-              ? contextSnapshot
-              : null,
-        }),
-      );
-    } catch (error) {
-      reportSessionStorageFailure("write-failed", PENDING_EDIT_SUBMIT_STORAGE_KEY, error);
-      return;
-    }
-  }
-
-  function readPendingEditSubmitState() {
-    try {
-      const rawValue = window.sessionStorage.getItem(PENDING_EDIT_SUBMIT_STORAGE_KEY);
-      if (!rawValue) {
-        return null;
-      }
-      const parsed = JSON.parse(rawValue);
-      if (!parsed || typeof parsed !== 'object') {
-        return null;
-      }
-      return parsed;
-    } catch (error) {
-      reportSessionStorageFailure("read-failed", PENDING_EDIT_SUBMIT_STORAGE_KEY, error);
-      return null;
-    }
-  }
-
-  function clearPendingEditSubmitState() {
-    try {
-      window.sessionStorage.removeItem(PENDING_EDIT_SUBMIT_STORAGE_KEY);
-    } catch (error) {
-      reportSessionStorageFailure("remove-failed", PENDING_EDIT_SUBMIT_STORAGE_KEY, error);
-      return;
-    }
   }
 
   function reportSessionStorageFailure(event, storageKey, error) {

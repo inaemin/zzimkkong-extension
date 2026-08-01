@@ -32,8 +32,6 @@
   const SLACK_CHANNEL_HISTORY_STORAGE_KEY = "zzk-slack-channel-history-v1";
   const SLACK_REMINDER_LEAD_TIME_STORAGE_KEY = "zzk-slack-reminder-lead-time-v1";
   const PENDING_SLACK_MODAL_STORAGE_KEY = "zzk-pending-slack-modal-v1";
-  const BLANK_GUEST_RECOVERY_STORAGE_KEY = "zzk-blank-guest-recovery-v1";
-  const PENDING_EDIT_SUBMIT_STORAGE_KEY = "zzk-pending-edit-submit-v1";
   const MAP_CALENDAR_ALWAYS_OPEN_STORAGE_KEY = "zzk-map-calendar-always-open-v3";
   const MAP_CALENDAR_SPACE_TAB_STORAGE_KEY = "zzk-map-calendar-space-tab-v1";
   const MAP_CALENDAR_WIDTH_STORAGE_KEY = "zzk-map-calendar-width-v1";
@@ -145,8 +143,6 @@
     SLACK_CHANNEL_HISTORY_STORAGE_KEY,
     SLACK_REMINDER_LEAD_TIME_STORAGE_KEY,
     PENDING_SLACK_MODAL_STORAGE_KEY,
-    BLANK_GUEST_RECOVERY_STORAGE_KEY,
-    PENDING_EDIT_SUBMIT_STORAGE_KEY,
     MAP_CALENDAR_ALWAYS_OPEN_STORAGE_KEY,
     MAP_CALENDAR_SPACE_TAB_STORAGE_KEY,
     MAP_CALENDAR_WIDTH_STORAGE_KEY,

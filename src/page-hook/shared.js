@@ -679,7 +679,7 @@
   }
 
   function isReservationMutationRequest(urlValue, methodValue) {
-    if (!isGuestApiMutationRequest(urlValue, methodValue)) {
+    if (!isReservationApiMutationRequest(urlValue, methodValue)) {
       return false;
     }
 
@@ -692,36 +692,15 @@
   }
 
   function isReservationMutationPath(pathname) {
-    const value = String(pathname || "");
-    // legacy 찜꽁: /api/guests/maps/{mapId}/spaces/{spaceId}/reservations
-    if (/\/api\/guests\/maps\/[^/]+(?:\/spaces\/[^/]+)?\/reservations(?:\/[^/]+)?\/?$/i.test(value)) {
-      return true;
-    }
-    // 개편 서비스: /api/space-reservations/{id}
-    return /\/api\/space-reservations(?:\/\d+)?\/?$/i.test(value);
+    // lms+: /api/space-reservations/{id}
+    return /\/api\/space-reservations(?:\/\d+)?\/?$/i.test(String(pathname || ""));
   }
 
-  function shouldEmitReservationMutationEvent(urlValue, methodValue, options = {}) {
-    if (isReservationMutationRequest(urlValue, methodValue)) {
-      return true;
-    }
-
-    if (!isRecoverableReservationMutationSignalRequest(urlValue, methodValue)) {
-      return false;
-    }
-
-    const reservationAttemptId =
-      options && typeof options.reservationAttemptId === "string"
-        ? options.reservationAttemptId.trim()
-        : "";
-    if (reservationAttemptId) {
-      return true;
-    }
-
-    return isCompleteReservationRequestContext(options ? options.requestContext : null);
+  function shouldEmitReservationMutationEvent(urlValue, methodValue) {
+    return isReservationMutationRequest(urlValue, methodValue);
   }
 
-  function isGuestApiMutationRequest(urlValue, methodValue) {
+  function isReservationApiMutationRequest(urlValue, methodValue) {
     const method = normalizeMethod(methodValue);
     if (method === "GET" || method === "HEAD" || method === "OPTIONS") {
       return false;
@@ -732,36 +711,7 @@
       return false;
     }
 
-    const pathname = parsed.pathname.toLowerCase();
-    // legacy는 /api/guests/ 아래, 개편 서비스는 /api/space-reservations 아래에 예약 API가 있다.
-    return pathname.includes("/api/guests/") || pathname.includes("/api/space-reservations");
-  }
-
-  function isRecoverableReservationMutationSignalRequest(urlValue, methodValue) {
-    if (!isGuestApiMutationRequest(urlValue, methodValue)) {
-      return false;
-    }
-
-    const parsed = parseUrl(urlValue);
-    if (!parsed) {
-      return false;
-    }
-
-    const pathname = parsed.pathname.toLowerCase();
-    return pathname.includes("/bookings/complete");
-  }
-
-  function isCompleteReservationRequestContext(context) {
-    if (!context || typeof context !== "object") {
-      return false;
-    }
-
-    return Boolean(
-      typeof context.date === "string" && context.date.trim() &&
-        typeof context.startTime === "string" && context.startTime.trim() &&
-        typeof context.endTime === "string" && context.endTime.trim() &&
-        typeof context.roomName === "string" && context.roomName.trim()
-    );
+    return parsed.pathname.toLowerCase().includes("/api/space-reservations");
   }
 
   function emitReservationEvent(payload) {
