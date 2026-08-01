@@ -1,6 +1,6 @@
 import { debugLog, pushDebugEvent } from "../../utils/shared.js";
 
-export function createRadarFormSync(deps) {
+export function createRadarFormSync(deps: Deps) {
   const {
     state,
     ensurePanel,
@@ -360,3 +360,10 @@ export function createRadarFormSync(deps) {
     applyTimelineReservationSelection,
   };
 }
+
+// content.js 가 주입하는 의존성 묶음.
+//
+// content.js 는 아직 .js 라(3단계에서 .tsx 로 다시 쓴다) 여기서 각 의존성의
+// 정확한 타입을 알 수 없다. 지금은 형태만 열어두고, content.js 가 컴포넌트로
+// 쪼개질 때 이 인터페이스를 구체 타입으로 좁힌다.
+type Deps = Record<string, any>;

@@ -1,4 +1,11 @@
-export function createRadarWorkflow(deps) {
+// content.js 가 주입하는 의존성 묶음.
+//
+// content.js 는 아직 .js 라(3단계에서 .tsx 로 다시 쓴다) 여기서 각 의존성의
+// 정확한 타입을 알 수 없다. 지금은 형태만 열어두고, content.js 가 컴포넌트로
+// 쪼개질 때 이 인터페이스를 구체 타입으로 좁힌다.
+type Deps = Record<string, any>;
+
+export function createRadarWorkflow(deps: Deps) {
   const {
     state,
     MAP_CALENDAR_OVERLAY_ID,
@@ -79,7 +86,7 @@ export function createRadarWorkflow(deps) {
     // lms+ 플로팅 런처는 아이콘만 노출한다(텍스트 라벨 숨김).
     const isFloating = launcher.dataset.zzkMountType === "lms-floating";
 
-    let label = launcher.querySelector(".zzk-map-calendar-radar-label");
+    let label = launcher.querySelector<HTMLSpanElement>(".zzk-map-calendar-radar-label");
     if (label instanceof HTMLSpanElement) {
       label.style.display = isFloating ? "none" : "";
       return label;
@@ -136,8 +143,10 @@ export function createRadarWorkflow(deps) {
       return;
     }
 
-    let trigger = existing;
-    if (!(trigger instanceof HTMLButtonElement)) {
+    let trigger: HTMLButtonElement;
+    if (existing instanceof HTMLButtonElement) {
+      trigger = existing;
+    } else {
       trigger = document.createElement("button");
       trigger.id = SLACK_MODAL_TRIGGER_ID;
       trigger.type = "button";
@@ -177,8 +186,11 @@ export function createRadarWorkflow(deps) {
       return;
     }
 
-    let launcher = document.getElementById(MAP_CALENDAR_LAUNCHER_ID);
-    if (!(launcher instanceof HTMLButtonElement)) {
+    const existingLauncher = document.getElementById(MAP_CALENDAR_LAUNCHER_ID);
+    let launcher: HTMLButtonElement;
+    if (existingLauncher instanceof HTMLButtonElement) {
+      launcher = existingLauncher;
+    } else {
       launcher = document.createElement("button");
       launcher.id = MAP_CALENDAR_LAUNCHER_ID;
       launcher.type = "button";
