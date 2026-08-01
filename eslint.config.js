@@ -1,6 +1,7 @@
 import js from "@eslint/js";
 import prettierConfig from "eslint-config-prettier";
 import globals from "globals";
+import tseslint from "typescript-eslint";
 import { defineConfig, globalIgnores } from "eslint/config";
 
 // 마이그레이션 중이라 규칙을 세게 조이면 계속 막힌다.
@@ -40,6 +41,12 @@ export default defineConfig([
   ]),
 
   js.configs.recommended,
+  // tseslint 의 recommended 는 files 제한이 없어 .js 까지 잡는다.
+  // 아직 대부분이 .js 라 소음이 되므로 .ts 로 명시적으로 좁힌다.
+  ...tseslint.configs.recommended.map((config) => ({
+    ...config,
+    files: ["**/*.ts"],
+  })),
 
   {
     rules: {
@@ -51,7 +58,7 @@ export default defineConfig([
 
   // 확장 소스: content script / MAIN world 훅.
   {
-    files: ["src/**/*.js"],
+    files: ["src/**/*.{js,ts}"],
     languageOptions: {
       ecmaVersion: 2023,
       sourceType: "module",
@@ -99,7 +106,7 @@ export default defineConfig([
 
   // 서비스워커는 window 가 없다.
   {
-    files: ["src/background.js"],
+    files: ["src/background.{js,ts}"],
     languageOptions: {
       globals: {
         ...globals.serviceworker,
@@ -114,7 +121,12 @@ export default defineConfig([
   // Playwright 를 띄우는 스크립트는 page.evaluate 안에 브라우저 코드가 들어가
   // document/window 를 참조하므로 브라우저 전역도 함께 허용한다.
   {
-    files: ["scripts/**/*.mjs", "*.config.js", "vite.config.js", "manifest.config.js"],
+    files: [
+      "scripts/**/*.mjs",
+      "*.config.{js,ts}",
+      "vite.config.{js,ts}",
+      "manifest.config.{js,ts}",
+    ],
     languageOptions: {
       ecmaVersion: 2025,
       sourceType: "module",
@@ -131,7 +143,7 @@ export default defineConfig([
 
   // 테스트: Node(Playwright 러너) + 브라우저(page.evaluate 안쪽) 양쪽 전역이 쓰인다.
   {
-    files: ["tests/**/*.js"],
+    files: ["tests/**/*.{js,ts}"],
     languageOptions: {
       ecmaVersion: 2023,
       sourceType: "module",
@@ -146,6 +158,17 @@ export default defineConfig([
       // 픽스처 구성에 else/삼항이 자연스럽게 쓰인다.
       "no-restricted-syntax": "off",
       "id-denylist": "off",
+    },
+  },
+
+  // TS 전환 초기(2.5-B)에는 느슨하게. 조이는 건 5단계.
+  {
+    files: ["**/*.ts"],
+    rules: {
+      "@typescript-eslint/no-explicit-any": "warn",
+      "@typescript-eslint/no-unused-vars": ["warn", { argsIgnorePattern: "^_" }],
+      // JS 규칙과 중복되므로 TS 버전만 남긴다.
+      "no-unused-vars": "off",
     },
   },
 
