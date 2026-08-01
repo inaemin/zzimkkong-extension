@@ -606,8 +606,8 @@
       return null;
     }
 
-    // legacy는 경로에 spaceId가 들어간다. 개편 서비스는 본문의 spaceId를 쓰므로
-    // 여기서는 못 찾고, body 기반 추출 결과와 병합된다.
+    // lms+ 는 경로가 아니라 본문의 spaceId 를 쓰므로 여기서는 못 찾고,
+    // body 기반 추출 결과와 병합된다.
     const roomMatch = parsed.pathname.match(/\/spaces\/(\d+)\/reserv/i);
     if (!roomMatch) {
       return null;

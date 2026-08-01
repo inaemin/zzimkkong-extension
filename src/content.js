@@ -5060,7 +5060,7 @@
   function resolveMapCalendarRoomFloor(room) {
     const roomName = typeof room?.name === "string" ? room.name.trim() : "";
     // 개편 서비스는 서버가 floor를 내려주므로 그걸 우선 쓰고,
-    // legacy는 하드코딩된 회의실 메타데이터 표에서 층을 찾는다.
+    // 하드코딩된 회의실 메타데이터 표에서 층을 찾는다.
     const serverFloor =
       typeof room?.floorLabel === "string" && room.floorLabel.trim() !== ""
         ? room.floorLabel.trim()
@@ -5402,7 +5402,6 @@
     return false;
   }
 
-  // 개편 서비스(lms+) 예약 폼은 legacy 와 DOM 이 완전히 다르다.
   //  - 회의실: 이름이 적힌 <button> (선택 시 bg-primary 클래스)
   //  - 시작 시간: <select>, option value 가 "HH:MM"
   //  - 이용 시간: <select>, option value 가 30분 단위 개수 ("1"=30분, "2"=60분)
@@ -5491,8 +5490,8 @@
   }
 
   async function syncLmsReservationForm(payload, requestId = null) {
-    // legacy(syncHostReservationForm)와 동일하게, 타임블록 연속 클릭 시 이전 sync 가
-    // 나중 선택을 덮어쓰지 않도록 각 await 뒤에서 최신 요청인지 확인한다.
+    // 타임블록 연속 클릭 시 이전 sync 가 나중 선택을 덮어쓰지 않도록
+    // 각 await 뒤에서 최신 요청인지 확인한다.
     const isStaleRequest = () =>
       requestId != null && !isLatestTimelineSelectionRequest(requestId);
 
@@ -8682,8 +8681,7 @@
     };
   }
 
-  // lms+ 예약 페이지에는 legacy 게스트 페이지 같은 지연 마운트 조건이 없어
-  // 레이더 UI 를 바로 띄울 수 있다.
+  // lms+ 예약 페이지에는 지연 마운트 조건이 없어 레이더 UI 를 바로 띄울 수 있다.
   function shouldDelayGuestMapCalendarUi() {
     return false;
   }

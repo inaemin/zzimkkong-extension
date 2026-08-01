@@ -4,7 +4,6 @@
   }
 
   // 개편 서비스(techcourse-lms-plus) 응답을 레이더가 쓰는 공통 형태로 바꾼다.
-  // legacy(guest-data) 정규화기와 출력 계약이 같아야 content.js가 분기 없이 렌더링한다.
   function createLmsDataNormalizers(deps) {
     const {
       getProperty,
@@ -25,7 +24,7 @@
     }
 
     // "HH:MM:SS" / "HH:MM" -> 분. 개편 API는 이미 KST 벽시계 시각을 주므로
-    // legacy처럼 ISO 문자열을 타임존 변환할 필요가 없다.
+    // 이미 KST 벽시계 시각이라 타임존 변환이 필요 없다.
     function parseTimeToMinute(value) {
       if (typeof value !== "string") {
         return null;
@@ -70,7 +69,7 @@
           return {
             id,
             name,
-            // 개편 API는 색상을 주지 않으므로 legacy와 같은 기본 회색을 쓴다.
+            // API 가 색상을 주지 않으므로 기본 회색을 쓴다.
             color: "#9CA3AF",
             floor: Number.isInteger(floor) ? floor : null,
             floorLabel: normalizeFloorLabel(getProperty(space, "floor")),
@@ -140,7 +139,7 @@
         .sort((a, b) => a.startMinute - b.startMinute);
     }
 
-    // 개편 서비스에는 legacy의 /spaces/availability 대응 API가 없어서
+    // lms+ 에는 /spaces/availability 에 대응하는 API가 없어서
     // 예약 목록과 요청 구간의 겹침으로 예약 가능 여부를 직접 판정한다.
     function isRoomAvailableInWindow(reservations, startMinute, endMinute) {
       if (!Array.isArray(reservations)) {
