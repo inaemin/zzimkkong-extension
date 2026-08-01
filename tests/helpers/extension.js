@@ -1,6 +1,5 @@
 import fs from "node:fs";
 import path from "node:path";
-import { execFileSync } from "node:child_process";
 
 // 테스트 공용 하네스.
 //
@@ -14,22 +13,9 @@ export const API_ORIGIN = "https://techcourse-lms-plus-api.woowahan.com";
 
 const DIST_DIR = path.resolve(process.cwd(), "dist/extension");
 
-let buildPromise = null;
-
-// 스펙마다 빌드하면 느리므로 프로세스당 한 번만 빌드한다.
-export function ensureExtensionBuild() {
-  if (!buildPromise) {
-    buildPromise = new Promise((resolve, reject) => {
-      try {
-        execFileSync("npx", ["vite", "build"], { cwd: process.cwd(), stdio: "pipe" });
-        resolve();
-      } catch (error) {
-        reject(error);
-      }
-    });
-  }
-  return buildPromise;
-}
+// 빌드는 playwright globalSetup 이 전체에서 한 번만 수행한다.
+// 스펙들이 이미 beforeAll(ensureExtensionBuild) 를 걸어두고 있어 호환용으로 남긴다.
+export function ensureExtensionBuild() {}
 
 export function readBuiltManifest() {
   return JSON.parse(fs.readFileSync(path.join(DIST_DIR, "manifest.json"), "utf8"));

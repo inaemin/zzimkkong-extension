@@ -30,6 +30,7 @@
   const {
     LMS_API_BASE_URL,
     LMS_TIME_STEP_MINUTES,
+    RESERVATION_SCHEDULE_STALE_MS,
     TARGET_ROOM_METADATA_BY_NORMALIZED_NAME,
     MAP_CALENDAR_SPACE_TAB_MEETING,
     normalizeTargetRoomName,
@@ -68,15 +69,59 @@
     };
   }
 
+  // 방·날짜별 예약 목록 캐시.
+  //
+  // fetchAvailability 와 fetchDailySchedule 이 똑같은
+  // /api/space-reservations?date=&spaceId= 를 부른다(전자는 겹침 여부만 계산).
+  // 레이더를 한 번 열거나 타임블록을 누를 때마다 회의실 수 x 2 만큼 요청이 나가므로,
+  // 짧은 TTL 로 같은 요청을 합친다. inflight 도 함께 묶어 응답 전 중복 호출을 막는다.
+  const reservationCache = new Map();
+  const reservationInflight = new Map();
+
+  function readCachedReservations(cacheKey) {
+    const entry = reservationCache.get(cacheKey);
+    if (!entry) {
+      return null;
+    }
+    if (Date.now() - entry.fetchedAt >= RESERVATION_SCHEDULE_STALE_MS) {
+      reservationCache.delete(cacheKey);
+      return null;
+    }
+    return entry.reservations;
+  }
+
   async function fetchReservationsForRoom(roomId, date) {
     const query = new URLSearchParams({
       date,
       spaceId: String(roomId),
     }).toString();
 
-    const response = await fetchApiJson(`${LMS_API_BASE_URL}/api/space-reservations?${query}`);
-    const reservationsValue = Array.isArray(response) ? response : response?.reservations;
-    return lmsDataNormalizers.normalizeReservations(reservationsValue);
+    const cached = readCachedReservations(query);
+    if (cached) {
+      return cached;
+    }
+
+    const pending = reservationInflight.get(query);
+    if (pending) {
+      return pending;
+    }
+
+    const request = (async () => {
+      const response = await fetchApiJson(`${LMS_API_BASE_URL}/api/space-reservations?${query}`);
+      const reservationsValue = Array.isArray(response) ? response : response?.reservations;
+      const reservations = lmsDataNormalizers.normalizeReservations(reservationsValue);
+      reservationCache.set(query, { reservations, fetchedAt: Date.now() });
+      return reservations;
+    })();
+
+    reservationInflight.set(query, request);
+    try {
+      return await request;
+    } finally {
+      if (reservationInflight.get(query) === request) {
+        reservationInflight.delete(query);
+      }
+    }
   }
 
   // 개편 서비스에는 availability 엔드포인트가 없어서, 각 공간의 당일 예약을 받아와
