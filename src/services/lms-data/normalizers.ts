@@ -1,5 +1,17 @@
-// 개편 서비스(techcourse-lms-plus) 응답을 레이더가 쓰는 공통 형태로 바꾼다.
-export function createLmsDataNormalizers(deps) {
+import type { SpaceTab } from "../../constants/runtime.js";
+import type { Reservation, Room, ReservationQuota, TimelineRange, TimelineSlot } from "./types.js";
+
+// content.js 와 background.js 가 각자 구현을 주입한다(서비스워커에는 DOM 이 없다).
+export interface LmsDataNormalizerDeps {
+  getProperty: (source: unknown, key: string) => unknown;
+  normalizeRoomType: (value: unknown) => SpaceTab | null;
+  getRoomTypeForRoomName: (roomName: string) => SpaceTab;
+  timelineSlotMinutes: number;
+  minuteToHourMinute: (totalMinute: number) => string;
+}
+
+// lms+ 응답을 레이더가 쓰는 공통 형태로 바꾼다.
+export function createLmsDataNormalizers(deps: LmsDataNormalizerDeps) {
   const {
     getProperty,
     normalizeRoomType,
@@ -8,7 +20,7 @@ export function createLmsDataNormalizers(deps) {
     minuteToHourMinute,
   } = deps;
 
-  function normalizeSpaces(spacesResponse) {
+  function normalizeSpaces(spacesResponse: unknown): unknown[] {
     if (Array.isArray(spacesResponse)) {
       return spacesResponse;
     }
@@ -18,7 +30,7 @@ export function createLmsDataNormalizers(deps) {
 
   // "HH:MM:SS" / "HH:MM" -> 분. 개편 API는 이미 KST 벽시계 시각을 주므로
   // 이미 KST 벽시계 시각이라 타임존 변환이 필요 없다.
-  function parseTimeToMinute(value) {
+  function parseTimeToMinute(value: unknown): number | null {
     if (typeof value !== "string") {
       return null;
     }
@@ -40,12 +52,12 @@ export function createLmsDataNormalizers(deps) {
     return hour * 60 + minute;
   }
 
-  function normalizeFloorLabel(floorValue) {
+  function normalizeFloorLabel(floorValue: unknown): string {
     const floor = Number(floorValue);
     return Number.isInteger(floor) ? `${floor}층` : "";
   }
 
-  function buildTargetRooms(spaces, roomType = null) {
+  function buildTargetRooms(spaces: unknown[], roomType: SpaceTab | null = null): Room[] {
     const normalizedRoomType = normalizeRoomType(roomType);
 
     return spaces
@@ -90,7 +102,7 @@ export function createLmsDataNormalizers(deps) {
       });
   }
 
-  function normalizeReservations(reservationsValue) {
+  function normalizeReservations(reservationsValue: unknown): Reservation[] {
     if (!Array.isArray(reservationsValue)) {
       return [];
     }
@@ -127,7 +139,11 @@ export function createLmsDataNormalizers(deps) {
 
   // lms+ 에는 /spaces/availability 에 대응하는 API가 없어서
   // 예약 목록과 요청 구간의 겹침으로 예약 가능 여부를 직접 판정한다.
-  function isRoomAvailableInWindow(reservations, startMinute, endMinute) {
+  function isRoomAvailableInWindow(
+    reservations: Reservation[],
+    startMinute: number,
+    endMinute: number,
+  ): boolean {
     if (!Array.isArray(reservations)) {
       return true;
     }
@@ -141,7 +157,9 @@ export function createLmsDataNormalizers(deps) {
     );
   }
 
-  function computeTimelineRange(rooms) {
+  function computeTimelineRange(
+    rooms: Array<Pick<Room, "windowStartMinute" | "windowEndMinute">>,
+  ): TimelineRange {
     const fallbackStartMinute = 7 * 60;
     const fallbackEndMinute = 23 * 60;
 
@@ -178,8 +196,12 @@ export function createLmsDataNormalizers(deps) {
     };
   }
 
-  function buildTimelineSlots(startMinute, endMinute, slotMinutes) {
-    const slots = [];
+  function buildTimelineSlots(
+    startMinute: number,
+    endMinute: number,
+    slotMinutes: number,
+  ): TimelineSlot[] {
+    const slots: TimelineSlot[] = [];
 
     for (let minute = startMinute; minute < endMinute; minute += slotMinutes) {
       slots.push({
@@ -193,12 +215,12 @@ export function createLmsDataNormalizers(deps) {
     return slots;
   }
 
-  function normalizeQuota(quotaResponse) {
+  function normalizeQuota(quotaResponse: unknown): ReservationQuota | null {
     if (quotaResponse == null || typeof quotaResponse !== "object") {
       return null;
     }
 
-    const toMinutes = (key) => {
+    const toMinutes = (key: string) => {
       const value = Number(getProperty(quotaResponse, key));
       return Number.isFinite(value) ? value : null;
     };

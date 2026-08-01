@@ -13,8 +13,32 @@ import {
   sanitizeTimeForApi,
 } from "../../utils/date-time.js";
 import { createLmsDataNormalizers } from "./normalizers.js";
+import type { SpaceTab } from "../../constants/runtime.js";
+import type {
+  AvailabilityResult,
+  DailyScheduleResult,
+  ReservationQuota,
+  Reservation,
+  Room,
+} from "./types.js";
 
-function getRoomTypeForRoomName(roomName) {
+/** 공간 목록 + 표시용 맵 정보. */
+interface SpaceContext {
+  mapId: number | null;
+  mapName: string;
+  targetRooms: Room[];
+}
+
+/** 조회 요청 페이로드. content.js 와 background.js 가 같은 형태로 보낸다. */
+interface FetchPayload {
+  date?: unknown;
+  startTime?: unknown;
+  endTime?: unknown;
+  roomType?: unknown;
+  allowPastDate?: boolean;
+}
+
+function getRoomTypeForRoomName(roomName: string): SpaceTab {
   const normalizedName = normalizeTargetRoomName(roomName);
   const metadata = TARGET_ROOM_METADATA_BY_NORMALIZED_NAME.get(normalizedName);
   return (
@@ -35,7 +59,7 @@ const lmsDataNormalizers = createLmsDataNormalizers({
   minuteToHourMinute,
 });
 
-export async function loadSpaceContext(roomType = null) {
+export async function loadSpaceContext(roomType: SpaceTab | null = null): Promise<SpaceContext> {
   const spacesResponse = await fetchApiJson(`${LMS_API_BASE_URL}/api/spaces`);
   const spaces = lmsDataNormalizers.normalizeSpaces(spacesResponse);
 
@@ -56,12 +80,12 @@ const reservationCache = new Map();
 const reservationInflight = new Map();
 
 // 예약이 생성/변경되면 캐시가 곧바로 낡는다. TTL(3초)을 기다리지 않고 비운다.
-export function clearReservationCache() {
+export function clearReservationCache(): void {
   reservationCache.clear();
   reservationInflight.clear();
 }
 
-function readCachedReservations(cacheKey) {
+function readCachedReservations(cacheKey: string): Reservation[] | null {
   const entry = reservationCache.get(cacheKey);
   if (!entry) {
     return null;
@@ -73,7 +97,10 @@ function readCachedReservations(cacheKey) {
   return entry.reservations;
 }
 
-export async function fetchReservationsForRoom(roomId, date) {
+export async function fetchReservationsForRoom(
+  roomId: number,
+  date: string,
+): Promise<Reservation[]> {
   const query = new URLSearchParams({
     date,
     spaceId: String(roomId),
@@ -91,7 +118,9 @@ export async function fetchReservationsForRoom(roomId, date) {
 
   const request = (async () => {
     const response = await fetchApiJson(`${LMS_API_BASE_URL}/api/space-reservations?${query}`);
-    const reservationsValue = Array.isArray(response) ? response : response?.reservations;
+    const reservationsValue = Array.isArray(response)
+      ? response
+      : (response as { reservations?: unknown } | null)?.reservations;
     const reservations = lmsDataNormalizers.normalizeReservations(reservationsValue);
     reservationCache.set(query, { reservations, fetchedAt: Date.now() });
     return reservations;
@@ -109,7 +138,7 @@ export async function fetchReservationsForRoom(roomId, date) {
 
 // 개편 서비스에는 availability 엔드포인트가 없어서, 각 공간의 당일 예약을 받아와
 // 요청 구간과 겹치는지로 예약 가능 여부를 계산한다.
-export async function fetchAvailability(payload) {
+export async function fetchAvailability(payload: FetchPayload): Promise<AvailabilityResult> {
   const date = sanitizeDateForApi(payload && payload.date, {
     allowPastDate: payload?.allowPastDate === true,
   });
@@ -164,7 +193,7 @@ export async function fetchAvailability(payload) {
   };
 }
 
-export async function fetchDailySchedule(payload) {
+export async function fetchDailySchedule(payload: FetchPayload): Promise<DailyScheduleResult> {
   const date = sanitizeDateForApi(payload && payload.date, {
     allowPastDate: payload?.allowPastDate === true,
   });
@@ -203,7 +232,7 @@ export async function fetchDailySchedule(payload) {
 }
 
 // 개편 서비스 전용. 일/월 예약 한도 잔량을 보여줄 때 쓴다.
-export async function fetchQuota(payload) {
+export async function fetchQuota(payload: FetchPayload): Promise<ReservationQuota | null> {
   const date = sanitizeDateForApi(payload && payload.date, {
     allowPastDate: payload?.allowPastDate === true,
   });
@@ -220,11 +249,11 @@ export async function fetchQuota(payload) {
 // 요청 시점에 읽어 헤더로 붙인다. 토큰을 코드에 하드코딩하지 않는다.
 const JWT_PATTERN = /eyJ[\w-]+\.[\w-]+\.[\w-]+/;
 
-function stripBearer(value) {
+function stripBearer(value: unknown): string {
   return typeof value === "string" ? value.replace(/^Bearer\s+/i, "").trim() : "";
 }
 
-function extractJwtFromValue(rawValue) {
+function extractJwtFromValue(rawValue: unknown): string {
   if (typeof rawValue !== "string" || rawValue === "") {
     return "";
   }
@@ -237,7 +266,7 @@ function extractJwtFromValue(rawValue) {
   return match ? match[0] : "";
 }
 
-function readLmsAuthToken() {
+function readLmsAuthToken(): string {
   const stores = [];
   try {
     if (typeof localStorage !== "undefined") stores.push(localStorage);
@@ -286,8 +315,8 @@ function readLmsAuthToken() {
   return "";
 }
 
-export async function fetchApiJson(url) {
-  const headers = {
+export async function fetchApiJson(url: string): Promise<unknown> {
+  const headers: Record<string, string> = {
     accept: "application/json",
   };
   const token = readLmsAuthToken();
