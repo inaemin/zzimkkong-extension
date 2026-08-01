@@ -24,15 +24,15 @@ export default defineManifest({
     {
       matches: [LMS_WEB_ORIGIN],
       // 전역 기반 IIFE 들을 순서대로 import 하는 단일 진입점.
-      // 로드 순서는 src/content-bundle.js 안에서 관리한다.
-      js: ["src/content-bundle.js"],
+      // 나머지는 모듈 그래프를 번들러가 따라간다.
+      js: ["src/content-bundle.ts"],
       run_at: "document_idle",
     },
     {
       matches: [LMS_WEB_ORIGIN],
       // 예약 네트워크 훅은 페이지의 fetch/XHR 을 패치해야 하므로 MAIN world 에서 돈다.
       // document_start 로 페이지 앱보다 먼저 떠야 초기 요청을 놓치지 않는다.
-      js: ["src/page-hook-bundle.js"],
+      js: ["src/page-hook-bundle.ts"],
       world: "MAIN",
       run_at: "document_start",
     },

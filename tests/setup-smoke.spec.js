@@ -19,7 +19,7 @@ test("playwright local setup works", async ({ page }) => {
 test("번들 진입점은 모듈 그래프에 맡기고 수동 나열을 하지 않는다", async () => {
   // 2.5-A 이전에는 전역 기반이라 진입점이 17개를 순서대로 import 했다.
   // 모듈 그래프로 바뀐 뒤로는 번들러가 순서를 판단하므로 나열이 되살아나면 안 된다.
-  for (const entry of ["src/content-bundle.js", "src/page-hook-bundle.js"]) {
+  for (const entry of ["src/content-bundle.ts", "src/page-hook-bundle.ts"]) {
     const source = fs.readFileSync(path.resolve(process.cwd(), entry), "utf8");
     const imports = Array.from(source.matchAll(/^import "(\.\/[^"]+)";$/gm));
     expect(imports, `${entry} 는 진입점 하나만 import 해야 한다`).toHaveLength(1);
