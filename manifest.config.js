@@ -28,15 +28,20 @@ export default defineManifest({
       js: ["src/content-bundle.js"],
       run_at: "document_idle",
     },
+    {
+      matches: [LMS_WEB_ORIGIN],
+      // 예약 네트워크 훅은 페이지의 fetch/XHR 을 패치해야 하므로 MAIN world 에서 돈다.
+      // document_start 로 페이지 앱보다 먼저 떠야 초기 요청을 놓치지 않는다.
+      js: ["src/page-hook-bundle.js"],
+      world: "MAIN",
+      run_at: "document_start",
+    },
   ],
   web_accessible_resources: [
     {
-      resources: [
-        "src/page-hook/shared.js",
-        "src/page-network-hook.js",
-        "src/page-network-restore.js",
-        "assets/basecoat-dialog.css",
-      ],
+      // 훅은 이제 content script 로 실행되므로 공개할 필요가 없다.
+      // Slack 모달 스타일만 런타임에 URL 로 불러온다.
+      resources: ["assets/basecoat-dialog.css"],
       matches: [LMS_WEB_ORIGIN],
     },
   ],

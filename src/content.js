@@ -110,7 +110,6 @@
     MAP_CALENDAR_STYLE_ID,
     MAP_CALENDAR_OVERLAY_TAB_MEETING_ID,
     MAP_CALENDAR_OVERLAY_TAB_PAIR_ID,
-    PAGE_RESERVATION_HOOK_SCRIPT_ID,
     PAGE_RESERVATION_EVENT_TYPE,
     SLACK_COPY_MODAL_ID,
     FLOOR_MAP_ZOOM_ID,
@@ -435,9 +434,6 @@
     editReservationBaselineConstraint: null,
     editReservationBaselinePathKey: "",
     latestMapName: "",
-    reservationHookInstalled: false,
-    reservationHookInstalling: false,
-    reservationHookInstallGeneration: 0,
     reservationIntentWatcherInstalled: false,
     reservationMessageListenerInstalled: false,
     reservationOwnerWatcherInstalled: false,
@@ -496,9 +492,6 @@
     installHostTimePickerInteractionWatcher();
 
     if (isRadarSupportedPage()) {
-      if (shouldInstallPageReservationNetworkHook()) {
-        installPageReservationNetworkHook();
-      }
       if (!isGuestUiReadyForActivation()) {
         removeMapCalendarLauncher();
         removeMapCalendarOverlay();
@@ -598,12 +591,8 @@
       return;
     }
     if (!isRadarSupportedPage()) {
-      restorePageReservationNetworkHook();
       teardownGuestUi();
       return;
-    }
-    if (shouldInstallPageReservationNetworkHook()) {
-      installPageReservationNetworkHook();
     }
     queueSlackModalFromPersistedEditSubmitIfNeeded('mutation-observer');
     if (!isGuestUiReadyForActivation()) {
@@ -6936,7 +6925,6 @@
     state.lastObservedRouteKey = getCurrentRouteKey();
     if (!isRadarSupportedPage()) {
       resetEditReservationBaselineConstraint();
-      restorePageReservationNetworkHook();
       teardownGuestUi();
       return;
     }
@@ -6946,9 +6934,6 @@
     state.lastGuestRouteChangeAt = Date.now();
     state.lastObservedPathname = location.pathname;
 
-    if (shouldInstallPageReservationNetworkHook()) {
-      installPageReservationNetworkHook();
-    }
 
     syncMapCalendarAlwaysOpenPreference();
     if (!isGuestUiReadyForActivation()) {
@@ -7059,158 +7044,6 @@
       handleHistoryMethodLocationChange();
       return result;
     };
-  }
-
-  function installPageReservationNetworkHook() {
-    if (state.reservationHookInstalled || state.reservationHookInstalling) {
-      return;
-    }
-
-    if (!(document.documentElement instanceof HTMLElement)) {
-      return;
-    }
-
-    const existing = document.getElementById(PAGE_RESERVATION_HOOK_SCRIPT_ID);
-    if (existing instanceof HTMLScriptElement) {
-      return;
-    }
-
-    if (
-      typeof chrome === "undefined" ||
-      !chrome.runtime ||
-      typeof chrome.runtime.getURL !== "function"
-    ) {
-      return;
-    }
-
-    state.reservationHookInstalling = true;
-    const installGeneration = state.reservationHookInstallGeneration;
-
-    const mountTarget =
-      document.head instanceof HTMLElement
-        ? document.head
-        : document.documentElement;
-
-    const injectScript = (scriptPath, scriptId = "") =>
-      new Promise((resolve, reject) => {
-        const script = document.createElement("script");
-        if (scriptId) {
-          script.id = scriptId;
-        }
-        script.src = chrome.runtime.getURL(scriptPath);
-        script.async = false;
-        script.dataset.zzkInjected = "true";
-        script.addEventListener(
-          "load",
-          () => {
-            script.remove();
-            resolve();
-          },
-          { once: true },
-        );
-        script.addEventListener(
-          "error",
-          () => {
-            script.remove();
-            reject(new Error(`Failed to load ${scriptPath}`));
-          },
-          { once: true },
-        );
-        mountTarget.appendChild(script);
-      });
-
-    injectScript("src/page-hook/shared.js")
-      .then(() => {
-        if (
-          installGeneration !== state.reservationHookInstallGeneration ||
-          !shouldInstallPageReservationNetworkHook()
-        ) {
-          return false;
-        }
-
-        return injectScript("src/page-network-hook.js", PAGE_RESERVATION_HOOK_SCRIPT_ID)
-          .then(() => true);
-      })
-      .then((hookLoaded) => {
-        if (hookLoaded !== true) {
-          if (installGeneration === state.reservationHookInstallGeneration) {
-            state.reservationHookInstalling = false;
-          }
-          return;
-        }
-
-        state.reservationHookInstalling = false;
-        state.reservationHookInstalled = true;
-        if (
-          installGeneration !== state.reservationHookInstallGeneration ||
-          !shouldInstallPageReservationNetworkHook()
-        ) {
-          restorePageReservationNetworkHook();
-        }
-      })
-      .catch(() => {
-        if (installGeneration === state.reservationHookInstallGeneration) {
-          state.reservationHookInstalling = false;
-          state.reservationHookInstalled = false;
-        }
-      });
-  }
-
-  function restorePageReservationNetworkHook() {
-    state.reservationHookInstallGeneration += 1;
-    const shouldAttemptRestore =
-      state.reservationHookInstalled ||
-      state.reservationHookInstalling ||
-      window.__zzkReservationHookLoaded === true;
-    state.reservationHookInstalling = false;
-    state.reservationHookInstalled = false;
-
-    if (!shouldAttemptRestore) {
-      return;
-    }
-
-    if (typeof window.__zzkReservationHookRestore === "function") {
-      try {
-        window.__zzkReservationHookRestore();
-        return;
-      } catch (error) {
-        debugLog("Failed to restore page reservation hook directly", getErrorMessage(error));
-      }
-    }
-
-    if (!(document.documentElement instanceof HTMLElement)) {
-      return;
-    }
-
-    if (
-      typeof chrome === "undefined" ||
-      !chrome.runtime ||
-      typeof chrome.runtime.getURL !== "function"
-    ) {
-      return;
-    }
-
-    const restoreScriptId = `${PAGE_RESERVATION_HOOK_SCRIPT_ID}-restore`;
-    if (document.getElementById(restoreScriptId)) {
-      return;
-    }
-
-    const mountTarget =
-      document.head instanceof HTMLElement
-        ? document.head
-        : document.documentElement;
-    const script = document.createElement("script");
-    script.id = restoreScriptId;
-    script.src = chrome.runtime.getURL("src/page-network-restore.js");
-    script.async = false;
-    script.dataset.zzkInjected = "true";
-    script.addEventListener("load", () => script.remove(), { once: true });
-    script.addEventListener("error", () => script.remove(), { once: true });
-    mountTarget.appendChild(script);
-  }
-
-  function shouldInstallPageReservationNetworkHook() {
-    return isRadarSupportedPage();
   }
 
   function installReservationIntentWatcher() {

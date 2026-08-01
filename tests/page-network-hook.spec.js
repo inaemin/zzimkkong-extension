@@ -433,43 +433,6 @@ test("page network hook registers restore before XHR patch failure can strand fe
   expect(snapshot.loaded).toBeFalsy();
 });
 
-test("page network restore bridge restores page-context hook", async ({ page }) => {
-  await gotoReservationPage(page);
-  await injectPageNetworkHookBundle(page);
-
-  const loadedBefore = await page.evaluate(() => {
-    window.__zzkRestoreBridgeTestSnapshot = {
-      fetch: window.fetch,
-      open: XMLHttpRequest.prototype.open,
-      send: XMLHttpRequest.prototype.send,
-    };
-    return window.__zzkReservationHookLoaded === true;
-  });
-
-  expect(loadedBefore).toBeTruthy();
-
-  await page.addScriptTag({ path: path.resolve(process.cwd(), "src/page-network-restore.js") });
-
-  const afterRestore = await page.evaluate(() => {
-    const snapshot = window.__zzkRestoreBridgeTestSnapshot || {};
-    return {
-      loaded: window.__zzkReservationHookLoaded === true,
-      hasRestore: typeof window.__zzkReservationHookRestore === "function",
-      fetchRestored: window.fetch !== snapshot.fetch,
-      openRestored: XMLHttpRequest.prototype.open !== snapshot.open,
-      sendRestored: XMLHttpRequest.prototype.send !== snapshot.send,
-    };
-  });
-
-  expect(afterRestore).toMatchObject({
-    loaded: false,
-    hasRestore: false,
-    fetchRestored: true,
-    openRestored: true,
-    sendRestored: true,
-  });
-});
-
 test("lms+ 예약 생성 POST 성공 시 응답 body 를 이벤트에 담아 emit 한다", async ({ page }) => {
   await gotoReservationPage(page);
 

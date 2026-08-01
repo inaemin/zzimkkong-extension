@@ -59,9 +59,6 @@ test("런타임에 경로로 직접 불러오는 파일들이 산출물에 그�
   // content.js 가 chrome.runtime.getURL 로 이 경로들을 문자열 그대로 부른다.
   // 번들러가 경로를 바꿔버리면 예약 훅과 Slack 모달 스타일이 조용히 깨진다.
   const runtimeLoadedPaths = [
-    "src/page-hook/shared.js",
-    "src/page-network-hook.js",
-    "src/page-network-restore.js",
     "assets/basecoat-dialog.css",
   ];
 
@@ -72,6 +69,83 @@ test("런타임에 경로로 직접 불러오는 파일들이 산출물에 그�
     expect(fs.existsSync(path.join(DIST_DIR, relativePath)), `${relativePath} 파일 없음`).toBeTruthy();
     expect(exposed, `${relativePath} 가 web_accessible_resources 에 없음`).toContain(relativePath);
   }
+});
+
+test("예약 훅이 MAIN world content script 로 선언된다", () => {
+  const manifest = readBuiltManifest();
+
+  // 페이지의 fetch/XHR 을 패치하려면 페이지와 같은 실행 환경이어야 한다.
+  const mainWorldScript = manifest.content_scripts?.find((entry) => entry.world === "MAIN");
+  expect(mainWorldScript, "world: MAIN content script 가 없음").toBeTruthy();
+  expect(mainWorldScript.js).toHaveLength(1);
+  expect(fs.existsSync(path.join(DIST_DIR, mainWorldScript.js[0]))).toBeTruthy();
+
+  // 페이지 앱보다 먼저 떠야 초기 요청을 놓치지 않는다.
+  expect(mainWorldScript.run_at).toBe("document_start");
+
+  // 더 이상 <script> 주입을 안 하므로 훅 파일을 공개할 필요가 없다.
+  const exposed = manifest.web_accessible_resources?.[0]?.resources ?? [];
+  expect(exposed).not.toContain("src/page-hook/shared.js");
+  expect(exposed).not.toContain("src/page-network-hook.js");
+});
+
+test("MAIN world 번들이 페이지 fetch 를 패치해 예약 이벤트를 emit 한다", async ({ page }) => {
+  const manifest = readBuiltManifest();
+  const mainWorldScript = manifest.content_scripts.find((entry) => entry.world === "MAIN");
+  const bundlePath = path.join(DIST_DIR, mainWorldScript.js[0]);
+
+  await page.route(`${WEB_ORIGIN}/**`, async (route) => {
+    if (route.request().resourceType() !== "document") {
+      await route.continue();
+      return;
+    }
+    await route.fulfill({
+      status: 200,
+      contentType: "text/html",
+      body: "<html><body></body></html>",
+    });
+  });
+  await page.route(`${API_ORIGIN}/api/space-reservations**`, async (route) => {
+    await route.fulfill({
+      status: 201,
+      headers: {
+        "access-control-allow-origin": WEB_ORIGIN,
+        "access-control-allow-credentials": "true",
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({ id: 175, spaceName: "보이저", floor: 12 }),
+    });
+  });
+
+  await page.goto(`${WEB_ORIGIN}/space-reservations`, { waitUntil: "domcontentloaded" });
+  await page.addScriptTag({ path: bundlePath, type: "module" });
+
+  const messages = await page.evaluate(async (apiOrigin) => {
+    const collected = [];
+    const handleMessage = (event) => {
+      const data = event.data;
+      if (data?.source === "zzk-page-reservation-hook") {
+        collected.push(data.payload || {});
+      }
+    };
+    window.addEventListener("message", handleMessage);
+    try {
+      await fetch(`${apiOrigin}/api/space-reservations`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ spaceId: 5, purpose: "학습" }),
+      });
+      await new Promise((resolve) => window.setTimeout(resolve, 150));
+      return collected;
+    } finally {
+      window.removeEventListener("message", handleMessage);
+    }
+  }, API_ORIGIN);
+
+  const withBody = messages.find((m) => m && m.responseBody);
+  expect(withBody).toBeTruthy();
+  expect(withBody.method).toBe("POST");
+  expect(withBody.responseBody).toMatchObject({ spaceName: "보이저", floor: 12 });
 });
 
 test("번들된 content script 가 전역 부트스트랩을 동일하게 올린다", async ({ page }) => {
