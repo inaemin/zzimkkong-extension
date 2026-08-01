@@ -24,9 +24,12 @@
   const SLACK_COPY_MODAL_STYLE_ID = "zzk-slack-copy-modal-style";
   const SLACK_COPY_MODAL_BASECOAT_STYLE_ID = "zzk-slack-copy-modal-basecoat-style";
   const SLACK_COPY_MODAL_BASECOAT_STYLE_PATH = "assets/basecoat-dialog.css";
-  const X_ICON_SVG = '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-x-icon lucide-x"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>';
-  const CHEVRON_LEFT_ICON_SVG = '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-chevron-left-icon lucide-chevron-left"><path d="m15 18-6-6 6-6"/></svg>';
-  const CHEVRON_RIGHT_ICON_SVG = '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-chevron-right-icon lucide-chevron-right"><path d="m9 18 6-6-6-6"/></svg>';
+  const X_ICON_SVG =
+    '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-x-icon lucide-x"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>';
+  const CHEVRON_LEFT_ICON_SVG =
+    '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-chevron-left-icon lucide-chevron-left"><path d="m15 18-6-6 6-6"/></svg>';
+  const CHEVRON_RIGHT_ICON_SVG =
+    '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-chevron-right-icon lucide-chevron-right"><path d="m9 18 6-6-6-6"/></svg>';
   const SLACK_CHANNEL_MENTION_STORAGE_KEY = "zzk-slack-channel-mention-v1";
   const SLACK_CHANNEL_HISTORY_STORAGE_KEY = "zzk-slack-channel-history-v1";
   const SLACK_REMINDER_LEAD_TIME_STORAGE_KEY = "zzk-slack-reminder-lead-time-v1";
@@ -46,9 +49,23 @@
   const RUNTIME_MESSAGE_TIMEOUT_MS = 3000;
   const RESERVATION_SCHEDULE_STALE_MS = 3000;
   const SEOUL_TIMEZONE = "Asia/Seoul";
-  const KST_DATE_PARTS_FORMATTER = new Intl.DateTimeFormat("en-GB", { timeZone: SEOUL_TIMEZONE, year: "numeric", month: "2-digit", day: "2-digit" });
-  const KST_TIME_PARTS_FORMATTER = new Intl.DateTimeFormat("en-GB", { timeZone: SEOUL_TIMEZONE, hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false });
-  const KST_WEEKDAY_FORMATTER = new Intl.DateTimeFormat("ko-KR", { timeZone: SEOUL_TIMEZONE, weekday: "short" });
+  const KST_DATE_PARTS_FORMATTER = new Intl.DateTimeFormat("en-GB", {
+    timeZone: SEOUL_TIMEZONE,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  });
+  const KST_TIME_PARTS_FORMATTER = new Intl.DateTimeFormat("en-GB", {
+    timeZone: SEOUL_TIMEZONE,
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hour12: false,
+  });
+  const KST_WEEKDAY_FORMATTER = new Intl.DateTimeFormat("ko-KR", {
+    timeZone: SEOUL_TIMEZONE,
+    weekday: "short",
+  });
   const DEFAULT_SLACK_REMINDER_LEAD_TIME_MINUTES = 10;
   const SLACK_REMINDER_LEAD_TIME_OPTIONS = [1, 5, 10, 15, 30, 60];
   const TIME_STEP_MINUTES = 10;
@@ -72,7 +89,9 @@
   const DRAG_SAFE_TOP = 56;
   const NAV_SAFE_Z_INDEX = 2147483647;
   const ROOM_TAG_METADATA = [{ key: "window", label: "창", description: "창문 있음" }];
-  const ROOM_TAG_METADATA_BY_KEY = new Map(ROOM_TAG_METADATA.map((entry) => [normalizeRoomTagKey(entry.key), entry]));
+  const ROOM_TAG_METADATA_BY_KEY = new Map(
+    ROOM_TAG_METADATA.map((entry) => [normalizeRoomTagKey(entry.key), entry]),
+  );
   const TARGET_ROOM_METADATA = [
     { name: "금성", floor: "11층", kind: MAP_CALENDAR_SPACE_TAB_MEETING, tags: ["window"] },
     { name: "지구", floor: "11층", kind: MAP_CALENDAR_SPACE_TAB_MEETING, tags: ["window"] },
@@ -100,14 +119,25 @@
     { name: "페어룸 13", floor: "12층", kind: MAP_CALENDAR_SPACE_TAB_PAIR, tags: [] },
     { name: "페어룸 14", floor: "12층", kind: MAP_CALENDAR_SPACE_TAB_PAIR, tags: [] },
   ];
-  const TARGET_ROOM_METADATA_BY_NORMALIZED_NAME = new Map(TARGET_ROOM_METADATA.map((entry, index) => [normalizeTargetRoomName(entry.name), { ...entry, index }]));
-  const MAP_CALENDAR_ROOM_FLOOR_BY_NAME = new Map(TARGET_ROOM_METADATA.map((entry) => [normalizeTargetRoomName(entry.name), entry.floor]));
+  const TARGET_ROOM_METADATA_BY_NORMALIZED_NAME = new Map(
+    TARGET_ROOM_METADATA.map((entry, index) => [
+      normalizeTargetRoomName(entry.name),
+      { ...entry, index },
+    ]),
+  );
+  const MAP_CALENDAR_ROOM_FLOOR_BY_NAME = new Map(
+    TARGET_ROOM_METADATA.map((entry) => [normalizeTargetRoomName(entry.name), entry.floor]),
+  );
   const TARGET_ROOM_NAMES = TARGET_ROOM_METADATA.map((entry) => entry.name);
   const TARGET_ROOM_SET = new Set(TARGET_ROOM_NAMES.map((name) => normalizeTargetRoomName(name)));
-  const TARGET_ROOM_ORDER = new Map(TARGET_ROOM_METADATA.map((entry, index) => [normalizeTargetRoomName(entry.name), index]));
+  const TARGET_ROOM_ORDER = new Map(
+    TARGET_ROOM_METADATA.map((entry, index) => [normalizeTargetRoomName(entry.name), index]),
+  );
 
   function normalizeMapCalendarSpaceTab(value) {
-    return value === MAP_CALENDAR_SPACE_TAB_PAIR ? MAP_CALENDAR_SPACE_TAB_PAIR : MAP_CALENDAR_SPACE_TAB_MEETING;
+    return value === MAP_CALENDAR_SPACE_TAB_PAIR
+      ? MAP_CALENDAR_SPACE_TAB_PAIR
+      : MAP_CALENDAR_SPACE_TAB_MEETING;
   }
 
   function normalizeFetchRoomType(value) {

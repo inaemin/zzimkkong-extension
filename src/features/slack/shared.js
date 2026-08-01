@@ -3,11 +3,10 @@
     return;
   }
 
-  const {
-    DEFAULT_SLACK_REMINDER_LEAD_TIME_MINUTES,
-    SLACK_REMINDER_LEAD_TIME_OPTIONS,
-  } = globalThis.__zzkSharedConstants;
-  const { isDateString, addDaysToDateString, parseHourMinute, minuteToHourMinute } = globalThis.__zzkDateTimeUtils;
+  const { DEFAULT_SLACK_REMINDER_LEAD_TIME_MINUTES, SLACK_REMINDER_LEAD_TIME_OPTIONS } =
+    globalThis.__zzkSharedConstants;
+  const { isDateString, addDaysToDateString, parseHourMinute, minuteToHourMinute } =
+    globalThis.__zzkDateTimeUtils;
 
   function normalizeSlackFieldText(value) {
     if (typeof value !== "string") {

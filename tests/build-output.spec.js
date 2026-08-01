@@ -59,15 +59,16 @@ test("빌드 산출물 manifest 가 확장 로드에 필요한 형태를 갖춘�
 test("런타임에 경로로 직접 불러오는 파일들이 산출물에 그대로 있다", () => {
   // content.js 가 chrome.runtime.getURL 로 이 경로들을 문자열 그대로 부른다.
   // 번들러가 경로를 바꿔버리면 예약 훅과 Slack 모달 스타일이 조용히 깨진다.
-  const runtimeLoadedPaths = [
-    "assets/basecoat-dialog.css",
-  ];
+  const runtimeLoadedPaths = ["assets/basecoat-dialog.css"];
 
   const manifest = readBuiltManifest();
   const exposed = manifest.web_accessible_resources?.[0]?.resources ?? [];
 
   for (const relativePath of runtimeLoadedPaths) {
-    expect(fs.existsSync(path.join(DIST_DIR, relativePath)), `${relativePath} 파일 없음`).toBeTruthy();
+    expect(
+      fs.existsSync(path.join(DIST_DIR, relativePath)),
+      `${relativePath} 파일 없음`,
+    ).toBeTruthy();
     expect(exposed, `${relativePath} 가 web_accessible_resources 에 없음`).toContain(relativePath);
   }
 });
@@ -119,7 +120,6 @@ test("예약 훅이 MAIN world content script 로 선언된다", () => {
 });
 
 test("MAIN world 번들이 페이지 fetch 를 패치해 예약 이벤트를 emit 한다", async ({ page }) => {
-
   await page.route(`${WEB_ORIGIN}/**`, async (route) => {
     if (route.request().resourceType() !== "document") {
       await route.continue();
@@ -175,7 +175,6 @@ test("MAIN world 번들이 페이지 fetch 를 패치해 예약 이벤트를 emi
 });
 
 test("번들된 content script 가 전역 부트스트랩을 동일하게 올린다", async ({ page }) => {
-
   const pageErrors = [];
   page.on("pageerror", (error) => pageErrors.push(error.message));
 
@@ -205,12 +204,15 @@ test("번들된 content script 가 전역 부트스트랩을 동일하게 올린
   await page.goto(`${WEB_ORIGIN}/space-reservations`, { waitUntil: "domcontentloaded" });
   await loadContentBundle(page);
 
-  const snapshot = await page.evaluate((globalNames) => ({
-    loaded: window.__zzkAvailabilityLensLoaded === true,
-    loadError: window.__zzkAvailabilityLensLoadError || null,
-    bootstrapErrors: window.__zzkBootstrapLoadErrors || [],
-    missing: globalNames.filter((name) => !globalThis[name]),
-  }), REQUIRED_GLOBALS);
+  const snapshot = await page.evaluate(
+    (globalNames) => ({
+      loaded: window.__zzkAvailabilityLensLoaded === true,
+      loadError: window.__zzkAvailabilityLensLoadError || null,
+      bootstrapErrors: window.__zzkBootstrapLoadErrors || [],
+      missing: globalNames.filter((name) => !globalThis[name]),
+    }),
+    REQUIRED_GLOBALS,
+  );
 
   expect(pageErrors).toEqual([]);
   expect(snapshot.loadError).toBeNull();
@@ -220,7 +222,6 @@ test("번들된 content script 가 전역 부트스트랩을 동일하게 올린
 });
 
 test("번들된 content script 가 레이더 UI 를 실제로 마운트한다", async ({ page }) => {
-
   const spaces = [
     {
       accessRole: "ALL",
@@ -264,7 +265,9 @@ test("번들된 content script 가 레이더 UI 를 실제로 마운트한다", 
 
   // 스크립트 나열 방식과 동일하게 런처와 오버레이가 뜬다.
   await expect
-    .poll(() => page.evaluate(() => Boolean(document.getElementById("zzk-map-calendar-radar-launcher"))))
+    .poll(() =>
+      page.evaluate(() => Boolean(document.getElementById("zzk-map-calendar-radar-launcher"))),
+    )
     .toBe(true);
   await expect
     .poll(() => page.evaluate(() => Boolean(document.getElementById("zzk-map-calendar-overlay"))))

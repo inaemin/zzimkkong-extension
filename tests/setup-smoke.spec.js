@@ -22,9 +22,9 @@ test("content bundle import order preserves global bootstrap dependencies", asyn
     path.resolve(process.cwd(), "src/content-bundle.js"),
     "utf8",
   );
-  const importedPaths = Array.from(
-    bundleSource.matchAll(/^import "(\.\/[^"]+)";$/gm),
-  ).map((match) => match[1].replace(/^\.\//, "src/"));
+  const importedPaths = Array.from(bundleSource.matchAll(/^import "(\.\/[^"]+)";$/gm)).map(
+    (match) => match[1].replace(/^\.\//, "src/"),
+  );
 
   expect(importedPaths).toEqual([
     "src/constants/debug.js",
@@ -52,15 +52,12 @@ test("MAIN world 번들도 의존 순서를 지킨다", async () => {
     path.resolve(process.cwd(), "src/page-hook-bundle.js"),
     "utf8",
   );
-  const importedPaths = Array.from(
-    bundleSource.matchAll(/^import "(\.\/[^"]+)";$/gm),
-  ).map((match) => match[1].replace(/^\.\//, "src/"));
+  const importedPaths = Array.from(bundleSource.matchAll(/^import "(\.\/[^"]+)";$/gm)).map(
+    (match) => match[1].replace(/^\.\//, "src/"),
+  );
 
   // shared 가 globalThis.__zzkPageHookShared 를 올리고 hook 이 그걸 읽는다.
-  expect(importedPaths).toEqual([
-    "src/page-hook/shared.js",
-    "src/page-network-hook.js",
-  ]);
+  expect(importedPaths).toEqual(["src/page-hook/shared.js", "src/page-network-hook.js"]);
 });
 
 test("background service worker reuses shared room policy constants", async () => {
@@ -130,7 +127,9 @@ test("storage helpers report debug events when browser storage throws", async ({
       window.__zzkStorageUtils.writeStoredText("zzk-test-text", "");
       return {
         boolValue,
-        events: window.__zzkSharedUtils.getDebugEvents().filter((entry) => entry.scope === "storage"),
+        events: window.__zzkSharedUtils
+          .getDebugEvents()
+          .filter((entry) => entry.scope === "storage"),
       };
     } finally {
       Storage.prototype.getItem = originalGetItem;

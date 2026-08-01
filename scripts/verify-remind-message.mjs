@@ -24,7 +24,7 @@ if (!fs.existsSync(manifestPath)) {
       "Extension manifest not found. ZZK_EXTENSION_PATH must point to the unpacked extension root.",
       `extensionPath=${extensionPath}`,
       `expectedManifest=${manifestPath}`,
-    ].join("\n")
+    ].join("\n"),
   );
 }
 
@@ -39,9 +39,7 @@ async function waitForExtensionLoaded(context) {
       context.serviceWorkers()[0] ||
       (await context.waitForEvent("serviceworker", { timeout: 10000 }));
     const workerUrl = worker.url();
-    const extensionId = workerUrl.startsWith("chrome-extension://")
-      ? new URL(workerUrl).host
-      : "";
+    const extensionId = workerUrl.startsWith("chrome-extension://") ? new URL(workerUrl).host : "";
     if (!extensionId) {
       throw new Error(`Unexpected extension service worker URL: ${workerUrl}`);
     }
@@ -55,7 +53,7 @@ async function waitForExtensionLoaded(context) {
         `extensionPath=${extensionPath}`,
         `browserChannel=${browserChannel}`,
         `원인: ${error instanceof Error ? error.message : String(error)}`,
-      ].join("\n")
+      ].join("\n"),
     );
     return "";
   }
@@ -78,14 +76,16 @@ async function waitForManualLogin(page) {
   });
 
   try {
-    const terminalPromise = terminal.question(
-      [
-        "\n브라우저 창에서 OAuth 로그인을 완료하고 검증할 guest 페이지로 돌아오세요.",
-        "준비되면 터미널에서 Enter를 누르면 /remind 메시지 검증을 시작합니다.",
-        "터미널 입력이 먹지 않으면 DevTools Console에서 window.zzkStartManualVerification()을 실행해도 됩니다.",
-        "> ",
-      ].join("\n")
-    ).then(() => "terminal");
+    const terminalPromise = terminal
+      .question(
+        [
+          "\n브라우저 창에서 OAuth 로그인을 완료하고 검증할 guest 페이지로 돌아오세요.",
+          "준비되면 터미널에서 Enter를 누르면 /remind 메시지 검증을 시작합니다.",
+          "터미널 입력이 먹지 않으면 DevTools Console에서 window.zzkStartManualVerification()을 실행해도 됩니다.",
+          "> ",
+        ].join("\n"),
+      )
+      .then(() => "terminal");
     const resumedBy = await Promise.race([terminalPromise, pageResumePromise]);
     console.log(`\n수동 검증을 시작합니다. resumedBy=${resumedBy}`);
   } finally {
@@ -123,7 +123,7 @@ async function waitForManualSlackModal(page) {
         "브라우저에서 예약 생성/수정 성공 흐름을 직접 완료해 Slack 복사 모달을 띄워 주세요.",
         "Slack 복사 모달이 보이면 터미널에서 Enter를 누르면 /remind 메시지 검증을 계속합니다.",
         "> ",
-      ].join("\n")
+      ].join("\n"),
     );
   } finally {
     terminal.close();
@@ -144,16 +144,21 @@ function validateReminderPayload(payload) {
 
   const normalizedPayload = payload.trim();
   if (!normalizedPayload.startsWith("/remind ")) {
-    throw new Error(`Slack 메시지가 /remind 명령으로 시작하지 않습니다. payload=${normalizedPayload}`);
+    throw new Error(
+      `Slack 메시지가 /remind 명령으로 시작하지 않습니다. payload=${normalizedPayload}`,
+    );
   }
 
-  const reminderPattern = /^\/remind\s+(me|#[^\s]+)\s+"[^"]+"\s+on\s+\d{4}-\d{2}-\d{2}\s+at\s+\d{2}:\d{2}$/;
+  const reminderPattern =
+    /^\/remind\s+(me|#[^\s]+)\s+"[^"]+"\s+on\s+\d{4}-\d{2}-\d{2}\s+at\s+\d{2}:\d{2}$/;
   if (!reminderPattern.test(normalizedPayload)) {
     throw new Error(`Slack /remind 메시지 형식이 올바르지 않습니다. payload=${normalizedPayload}`);
   }
 
   if (normalizedPayload.includes("at HH:MM")) {
-    throw new Error(`Slack /remind 메시지에 placeholder 시간이 남아 있습니다. payload=${normalizedPayload}`);
+    throw new Error(
+      `Slack /remind 메시지에 placeholder 시간이 남아 있습니다. payload=${normalizedPayload}`,
+    );
   }
 
   return normalizedPayload;
@@ -164,7 +169,7 @@ async function waitForUiReady(page, selector, description) {
     await page.waitForFunction(
       (targetSelector) => document.querySelector(targetSelector) instanceof HTMLElement,
       selector,
-      { timeout: uiWaitTimeoutMs }
+      { timeout: uiWaitTimeoutMs },
     );
   } catch (error) {
     const snapshot = await page.evaluate((targetSelector) => {
@@ -173,11 +178,14 @@ async function waitForUiReady(page, selector, description) {
         title: document.title,
         readyState: document.readyState,
         hasTarget: document.querySelector(targetSelector) instanceof HTMLElement,
-        bodyText: (document.body && document.body.innerText ? document.body.innerText : "").slice(0, 500),
+        bodyText: (document.body && document.body.innerText ? document.body.innerText : "").slice(
+          0,
+          500,
+        ),
       };
     }, selector);
     throw new Error(
-      `${description}를 찾지 못했습니다. selector=${selector}, state=${JSON.stringify(snapshot)}`
+      `${description}를 찾지 못했습니다. selector=${selector}, state=${JSON.stringify(snapshot)}`,
     );
   }
 }
@@ -185,8 +193,7 @@ async function waitForUiReady(page, selector, description) {
 function createBrowserLaunchError(error) {
   const message = error instanceof Error ? error.message : String(error);
   const isBrokenPlaywrightBrowser =
-    message.includes("Google Chrome for Testing Framework") &&
-    message.includes("no such file");
+    message.includes("Google Chrome for Testing Framework") && message.includes("no such file");
 
   const isMissingPlaywrightBrowser =
     message.includes("Executable doesn't exist") ||
@@ -202,7 +209,7 @@ function createBrowserLaunchError(error) {
         "2. 그래도 실패하면 npm run pw:install",
         "3. 다시 node scripts/verify-remind-message.mjs --pause-before-check 실행",
         `원본 오류: ${message}`,
-      ].join("\n")
+      ].join("\n"),
     );
   }
 
@@ -220,7 +227,7 @@ function createBrowserLaunchError(error) {
       "2. 그래도 실패하면 rm -rf ~/Library/Caches/ms-playwright 후 npm run pw:install",
       "3. 다시 node scripts/verify-remind-message.mjs --pause-before-check 실행",
       `원본 오류: ${message}`,
-    ].join("\n")
+    ].join("\n"),
   );
 }
 
@@ -229,10 +236,7 @@ async function launchVerificationContext() {
     return await chromium.launchPersistentContext(userDataDir, {
       channel: browserChannel,
       headless: false,
-      args: [
-        `--disable-extensions-except=${extensionPath}`,
-        `--load-extension=${extensionPath}`,
-      ],
+      args: [`--disable-extensions-except=${extensionPath}`, `--load-extension=${extensionPath}`],
     });
   } catch (error) {
     throw createBrowserLaunchError(error);
@@ -269,9 +273,13 @@ try {
 
   const reminderState = await page.evaluate(() => {
     const modal = document.getElementById("zzk-slack-copy-modal");
-    const copyButton = document.querySelector("#zzk-slack-copy-modal .zzk-slack-copy-button.primary");
+    const copyButton = document.querySelector(
+      "#zzk-slack-copy-modal .zzk-slack-copy-button.primary",
+    );
     const textarea = document.querySelector("#zzk-slack-copy-modal .zzk-slack-copy-textarea");
-    const channelInput = document.querySelector("#zzk-slack-copy-modal .zzk-slack-copy-channel-input");
+    const channelInput = document.querySelector(
+      "#zzk-slack-copy-modal .zzk-slack-copy-channel-input",
+    );
     const reminderSelect = document.querySelector("#zzk-slack-reminder-lead-time");
 
     return {
@@ -286,7 +294,9 @@ try {
           ? Array.from(reminderSelect.options).map((option) => option.textContent || "")
           : [],
       copyButtonBackground:
-        copyButton instanceof HTMLElement ? window.getComputedStyle(copyButton).backgroundColor : null,
+        copyButton instanceof HTMLElement
+          ? window.getComputedStyle(copyButton).backgroundColor
+          : null,
     };
   });
 
@@ -302,7 +312,9 @@ try {
     typeof reminderState.copyButtonBackground !== "string" ||
     !reminderState.copyButtonBackground.includes("255, 136, 51")
   ) {
-    throw new Error(`Copy button is not orange. background=${String(reminderState.copyButtonBackground)}`);
+    throw new Error(
+      `Copy button is not orange. background=${String(reminderState.copyButtonBackground)}`,
+    );
   }
 
   const normalizedPayload = validateReminderPayload(reminderState.payload);
@@ -319,14 +331,12 @@ try {
           ...reminderState,
           payload: normalizedPayload,
         },
-        screenshots: [
-          path.relative(process.cwd(), reminderScreenshot),
-        ],
+        screenshots: [path.relative(process.cwd(), reminderScreenshot)],
         payloadFile: path.relative(process.cwd(), reminderPayloadPath),
       },
       null,
-      2
-    )
+      2,
+    ),
   );
 } finally {
   if (context) {

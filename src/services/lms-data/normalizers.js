@@ -59,9 +59,7 @@
           const id = Number(getProperty(space, "id"));
           const rawName = getProperty(space, "name");
           const name =
-            typeof rawName === "string" && rawName.trim() !== ""
-              ? rawName.trim()
-              : `공간 ${id}`;
+            typeof rawName === "string" && rawName.trim() !== "" ? rawName.trim() : `공간 ${id}`;
           const floor = Number(getProperty(space, "floor"));
 
           return {

@@ -157,7 +157,10 @@ export async function loadBackgroundBundle(page) {
 }
 
 // 가장 흔한 셋업: 문서 스텁 + API 스텁 + 예약 페이지 이동 + 번들 로드.
-export async function mountReservationPage(page, { spaces = [], handler = null, testHooks = true } = {}) {
+export async function mountReservationPage(
+  page,
+  { spaces = [], handler = null, testHooks = true } = {},
+) {
   if (testHooks) {
     await enableTestHooks(page);
   }

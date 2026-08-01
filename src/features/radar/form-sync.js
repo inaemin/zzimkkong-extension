@@ -105,22 +105,25 @@
       const requestId = createTimelineSelectionRequestId();
       const hadPendingApply = state.timelineSelectionApplyTimer != null;
       clearTimeout(state.timelineSelectionApplyTimer);
-      state.timelineSelectionApplyTimer = setTimeout(() => {
-        state.timelineSelectionApplyTimer = null;
+      state.timelineSelectionApplyTimer = setTimeout(
+        () => {
+          state.timelineSelectionApplyTimer = null;
 
-        if (!isLatestTimelineSelectionRequest(requestId)) {
-          return;
-        }
-
-        applyTimelineReservationSelection(selection, requestId).catch((error) => {
           if (!isLatestTimelineSelectionRequest(requestId)) {
             return;
           }
-          if (state.elements) {
-            setStatus(getErrorMessage(error), "error");
-          }
-        });
-      }, hadPendingApply ? 80 : 0);
+
+          applyTimelineReservationSelection(selection, requestId).catch((error) => {
+            if (!isLatestTimelineSelectionRequest(requestId)) {
+              return;
+            }
+            if (state.elements) {
+              setStatus(getErrorMessage(error), "error");
+            }
+          });
+        },
+        hadPendingApply ? 80 : 0,
+      );
     }
 
     function withInternalHostDateSync(task) {
@@ -148,7 +151,10 @@
       createTimelineSelectionRequestId();
     }
 
-    async function applyTimelineReservationSelection(selection, requestId = state.timelineSelectionRequestId) {
+    async function applyTimelineReservationSelection(
+      selection,
+      requestId = state.timelineSelectionRequestId,
+    ) {
       if (!isLatestTimelineSelectionRequest(requestId)) {
         return;
       }
@@ -189,7 +195,9 @@
         return;
       }
 
-      const timelineSelectionCached = state.scheduleOverlayEnabled ? getFreshScheduleCache(normalizedDate) : null;
+      const timelineSelectionCached = state.scheduleOverlayEnabled
+        ? getFreshScheduleCache(normalizedDate)
+        : null;
       if (timelineSelectionCached) {
         state.activeScheduleDate = normalizedDate;
         setScheduleLoadingDate(normalizedDate, false);
@@ -242,7 +250,12 @@
       refreshAvailability();
     }
 
-    function shouldUpdateStartBeforeEnd(observedStartTime, observedEndTime, targetStartTime, targetEndTime) {
+    function shouldUpdateStartBeforeEnd(
+      observedStartTime,
+      observedEndTime,
+      targetStartTime,
+      targetEndTime,
+    ) {
       const observedStartMinute = parseHourMinute(String(observedStartTime || ""));
       const observedEndMinute = parseHourMinute(String(observedEndTime || ""));
       const targetStartMinute = parseHourMinute(String(targetStartTime || ""));
@@ -277,7 +290,14 @@
       return targetStartMinute <= observedStartMinute;
     }
 
-    function applyHostTimeRangeByInputs(startInput, endInput, observedStartTime, observedEndTime, targetStartTime, targetEndTime) {
+    function applyHostTimeRangeByInputs(
+      startInput,
+      endInput,
+      observedStartTime,
+      observedEndTime,
+      targetStartTime,
+      targetEndTime,
+    ) {
       if (!(startInput instanceof HTMLInputElement) || !(endInput instanceof HTMLInputElement)) {
         return;
       }

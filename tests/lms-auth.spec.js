@@ -35,14 +35,26 @@ test("attaches Authorization: Bearer from a JWT in localStorage", async ({ page 
         "access-control-allow-credentials": "true",
         "content-type": "application/json",
       },
-      body: JSON.stringify([{ id: 1, name: "금성", floor: 11, active: true, openTime: "07:00:00", closeTime: "23:00:00" }]),
+      body: JSON.stringify([
+        {
+          id: 1,
+          name: "금성",
+          floor: 11,
+          active: true,
+          openTime: "07:00:00",
+          closeTime: "23:00:00",
+        },
+      ]),
     });
   });
 
   await page.goto(`${WEB_ORIGIN}/space-reservations`, { waitUntil: "domcontentloaded" });
   // 앱이 흔히 하듯 JSON 래핑된 토큰으로 저장해도 추출되는지 확인한다.
   await page.evaluate((jwt) => {
-    localStorage.setItem("some-app-auth", JSON.stringify({ accessToken: jwt, tokenType: "Bearer" }));
+    localStorage.setItem(
+      "some-app-auth",
+      JSON.stringify({ accessToken: jwt, tokenType: "Bearer" }),
+    );
   }, FAKE_JWT);
   await loadScripts(page);
 

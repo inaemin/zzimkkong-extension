@@ -127,9 +127,11 @@
     }
 
     if (control.id) {
-      const forLabelCandidates = Array.from(document.querySelectorAll("label[for]")).filter((label) => {
-        return label instanceof HTMLLabelElement && label.htmlFor === control.id;
-      });
+      const forLabelCandidates = Array.from(document.querySelectorAll("label[for]")).filter(
+        (label) => {
+          return label instanceof HTMLLabelElement && label.htmlFor === control.id;
+        },
+      );
       forLabelCandidates.forEach((label) => {
         labels.push(label.textContent || "");
       });
@@ -189,7 +191,8 @@
     }
 
     if (control instanceof HTMLSelectElement) {
-      const selectedOption = control.selectedIndex >= 0 ? control.options[control.selectedIndex] : null;
+      const selectedOption =
+        control.selectedIndex >= 0 ? control.options[control.selectedIndex] : null;
       if (selectedOption instanceof HTMLOptionElement) {
         const selectedText = normalizeSlackFieldText(selectedOption.textContent || "");
         if (selectedText) {

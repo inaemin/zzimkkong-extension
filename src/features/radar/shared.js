@@ -7,9 +7,7 @@
 
   function findGuestReservationTabContainer({ isInsideExtensionSurface, isElementVisible }) {
     const buttons = Array.from(document.querySelectorAll("button")).filter(
-      (candidate) =>
-        candidate instanceof HTMLButtonElement &&
-        !isInsideExtensionSurface(candidate),
+      (candidate) => candidate instanceof HTMLButtonElement && !isInsideExtensionSurface(candidate),
     );
 
     const parentCandidates = new Set();
@@ -31,9 +29,7 @@
         return;
       }
 
-      const labels = childButtons.map((button) =>
-        normalizeTextForMatch(button.textContent || ""),
-      );
+      const labels = childButtons.map((button) => normalizeTextForMatch(button.textContent || ""));
       const hasReserve = labels.some((label) => label === "예약하기");
       const hasStatus = labels.some((label) => label === "예약현황");
       if (!hasReserve || !hasStatus) {

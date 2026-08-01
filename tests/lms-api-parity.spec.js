@@ -224,7 +224,9 @@ test("route utils treat the lms+ reservation page as radar-supported", async ({ 
   });
 });
 
-test("lms daily schedule normalizes reservations and sorts rooms by server floor", async ({ page }) => {
+test("lms daily schedule normalizes reservations and sorts rooms by server floor", async ({
+  page,
+}) => {
   const payload = {
     serviceKind: "lms",
     date: "2099-01-02",

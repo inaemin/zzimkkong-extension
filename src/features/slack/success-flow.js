@@ -94,7 +94,8 @@
 
     function queuePendingSlackCopyModal(context, options = {}) {
       cancelPendingSlackModalTimer();
-      state.pendingSlackModalContext = context && typeof context === "object" ? { ...context } : null;
+      state.pendingSlackModalContext =
+        context && typeof context === "object" ? { ...context } : null;
       state.pendingSlackModalRequiresNonEditPage = options?.requireNonEditPage === true;
       state.pendingSlackModalReloadAttempted = false;
       persistPendingSlackModalState();
@@ -138,7 +139,12 @@
           return;
         }
         const parsed = JSON.parse(rawValue);
-        if (!parsed || typeof parsed !== "object" || !parsed.context || typeof parsed.context !== "object") {
+        if (
+          !parsed ||
+          typeof parsed !== "object" ||
+          !parsed.context ||
+          typeof parsed.context !== "object"
+        ) {
           window.sessionStorage.removeItem(PENDING_SLACK_MODAL_STORAGE_KEY);
           return;
         }

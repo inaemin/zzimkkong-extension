@@ -30,52 +30,61 @@ async function routeReservationApi(page, body = "{}", status = 200) {
 }
 
 async function collectReservationHookMessages(page, action, actionArgument = null) {
-  return await page.evaluate(async ({ actionSource, argument }) => {
-    const actionFn = new Function("argument", `return (${actionSource})(argument);`);
-    const messages = [];
-    const handleMessage = (event) => {
-      const data = event.data;
-      if (
-        !data ||
-        typeof data !== "object" ||
-        data.source !== "zzk-page-reservation-hook" ||
-        data.type !== "ZZK_RESERVATION_NETWORK_EVENT"
-      ) {
-        return;
-      }
-      messages.push(data.payload || {});
-    };
+  return await page.evaluate(
+    async ({ actionSource, argument }) => {
+      const actionFn = new Function("argument", `return (${actionSource})(argument);`);
+      const messages = [];
+      const handleMessage = (event) => {
+        const data = event.data;
+        if (
+          !data ||
+          typeof data !== "object" ||
+          data.source !== "zzk-page-reservation-hook" ||
+          data.type !== "ZZK_RESERVATION_NETWORK_EVENT"
+        ) {
+          return;
+        }
+        messages.push(data.payload || {});
+      };
 
-    window.addEventListener("message", handleMessage);
-    try {
-      await actionFn(argument);
-      await new Promise((resolve) => window.setTimeout(resolve, 120));
-      return messages;
-    } finally {
-      window.removeEventListener("message", handleMessage);
-    }
-  }, { actionSource: action.toString(), argument: actionArgument });
+      window.addEventListener("message", handleMessage);
+      try {
+        await actionFn(argument);
+        await new Promise((resolve) => window.setTimeout(resolve, 120));
+        return messages;
+      } finally {
+        window.removeEventListener("message", handleMessage);
+      }
+    },
+    { actionSource: action.toString(), argument: actionArgument },
+  );
 }
 
-test("page network hook emits ownerNameCandidate from reservation request body", async ({ page }) => {
+test("page network hook emits ownerNameCandidate from reservation request body", async ({
+  page,
+}) => {
   await gotoReservationPage(page);
   await routeReservationApi(page);
   await injectPageNetworkHookBundle(page);
 
-  const messages = await collectReservationHookMessages(page, async (url) => {
-    await fetch(url, {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({
-        reserverName: "애니",
-        startDateTime: "2026-03-02T10:00:00+09:00",
-        endDateTime: "2026-03-02T10:30:00+09:00",
-        purpose: "연극연습",
-        spaceName: "11층 금성",
-        spaceId: 263,
-      }),
-    });
-  }, RESERVATIONS_URL);
+  const messages = await collectReservationHookMessages(
+    page,
+    async (url) => {
+      await fetch(url, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          reserverName: "애니",
+          startDateTime: "2026-03-02T10:00:00+09:00",
+          endDateTime: "2026-03-02T10:30:00+09:00",
+          purpose: "연극연습",
+          spaceName: "11층 금성",
+          spaceId: 263,
+        }),
+      });
+    },
+    RESERVATIONS_URL,
+  );
 
   expect(messages).toHaveLength(1);
   expect(messages[0]).toMatchObject({
@@ -99,33 +108,37 @@ test("page network hook includes reservationAttemptId from document dataset", as
   await routeReservationApi(page);
   await injectPageNetworkHookBundle(page);
 
-  const messages = await collectReservationHookMessages(page, async (url) => {
-    document.documentElement.dataset.zzkReservationAttemptId = "attempt-fetch-1";
-    await fetch(url, {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({
-        startDateTime: "2026-03-02T10:00:00+09:00",
-        endDateTime: "2026-03-02T10:30:00+09:00",
-        purpose: "attempt fetch",
-      }),
-    });
-
-    document.documentElement.dataset.zzkReservationAttemptId = "attempt-xhr-2";
-    const xhr = new XMLHttpRequest();
-    xhr.open("POST", url);
-    xhr.setRequestHeader("content-type", "application/json");
-    await new Promise((resolve) => {
-      xhr.addEventListener("loadend", resolve, { once: true });
-      xhr.send(
-        JSON.stringify({
-          startDateTime: "2026-03-02T11:00:00+09:00",
-          endDateTime: "2026-03-02T11:30:00+09:00",
-          purpose: "attempt xhr",
+  const messages = await collectReservationHookMessages(
+    page,
+    async (url) => {
+      document.documentElement.dataset.zzkReservationAttemptId = "attempt-fetch-1";
+      await fetch(url, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          startDateTime: "2026-03-02T10:00:00+09:00",
+          endDateTime: "2026-03-02T10:30:00+09:00",
+          purpose: "attempt fetch",
         }),
-      );
-    });
-  }, RESERVATIONS_URL);
+      });
+
+      document.documentElement.dataset.zzkReservationAttemptId = "attempt-xhr-2";
+      const xhr = new XMLHttpRequest();
+      xhr.open("POST", url);
+      xhr.setRequestHeader("content-type", "application/json");
+      await new Promise((resolve) => {
+        xhr.addEventListener("loadend", resolve, { once: true });
+        xhr.send(
+          JSON.stringify({
+            startDateTime: "2026-03-02T11:00:00+09:00",
+            endDateTime: "2026-03-02T11:30:00+09:00",
+            purpose: "attempt xhr",
+          }),
+        );
+      });
+    },
+    RESERVATIONS_URL,
+  );
 
   expect(messages).toHaveLength(2);
   expect(messages[0]).toMatchObject({
@@ -211,7 +224,9 @@ for (const { name, bodyType, headers } of roomIdBodyCases) {
   });
 }
 
-test("page network hook ignores non-reservation API mutations even with an attempt id", async ({ page }) => {
+test("page network hook ignores non-reservation API mutations even with an attempt id", async ({
+  page,
+}) => {
   await gotoReservationPage(page);
 
   await page.route(`${API_ORIGIN}/api/notifications`, async (route) => {
@@ -228,27 +243,31 @@ test("page network hook ignores non-reservation API mutations even with an attem
 
   await injectPageNetworkHookBundle(page);
 
-  const messages = await collectReservationHookMessages(page, async (origin) => {
-    document.documentElement.dataset.zzkReservationAttemptId = "attempt-unrelated-path";
-    await fetch(`${origin}/api/notifications`, {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ message: "not a reservation" }),
-    });
+  const messages = await collectReservationHookMessages(
+    page,
+    async (origin) => {
+      document.documentElement.dataset.zzkReservationAttemptId = "attempt-unrelated-path";
+      await fetch(`${origin}/api/notifications`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ message: "not a reservation" }),
+      });
 
-    delete document.documentElement.dataset.zzkReservationAttemptId;
-    await fetch(`${origin}/api/notifications`, {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({
-        date: "2026-03-02",
-        startTime: "09:30",
-        endTime: "10:30",
-        purpose: "필드는 완전하지만 예약 API 가 아님",
-        spaceName: "11층 수성",
-      }),
-    });
-  }, API_ORIGIN);
+      delete document.documentElement.dataset.zzkReservationAttemptId;
+      await fetch(`${origin}/api/notifications`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          date: "2026-03-02",
+          startTime: "09:30",
+          endTime: "10:30",
+          purpose: "필드는 완전하지만 예약 API 가 아님",
+          spaceName: "11층 수성",
+        }),
+      });
+    },
+    API_ORIGIN,
+  );
 
   expect(messages).toHaveLength(0);
 });
@@ -258,17 +277,21 @@ test("page network hook extracts ownerNameCandidate from Request(FormData)", asy
   await routeReservationApi(page);
   await injectPageNetworkHookBundle(page);
 
-  const messages = await collectReservationHookMessages(page, async (url) => {
-    const formData = new FormData();
-    formData.set("reserverName", "애니");
-    formData.set("startDateTime", "2026-03-02T15:20:00+09:00");
-    formData.set("endDateTime", "2026-03-02T15:50:00+09:00");
-    formData.set("purpose", "팀 미팅");
-    formData.set("spaceName", "12층 보이저");
-    formData.set("spaceId", "987");
+  const messages = await collectReservationHookMessages(
+    page,
+    async (url) => {
+      const formData = new FormData();
+      formData.set("reserverName", "애니");
+      formData.set("startDateTime", "2026-03-02T15:20:00+09:00");
+      formData.set("endDateTime", "2026-03-02T15:50:00+09:00");
+      formData.set("purpose", "팀 미팅");
+      formData.set("spaceName", "12층 보이저");
+      formData.set("spaceId", "987");
 
-    await fetch(new Request(url, { method: "POST", body: formData }));
-  }, RESERVATIONS_URL);
+      await fetch(new Request(url, { method: "POST", body: formData }));
+    },
+    RESERVATIONS_URL,
+  );
 
   expect(messages).toHaveLength(1);
   expect(messages[0]).toMatchObject({
@@ -291,18 +314,22 @@ test("page network hook can restore original fetch and XHR patches", async ({ pa
   await routeReservationApi(page);
   await injectPageNetworkHookBundle(page);
 
-  const beforeRestore = await collectReservationHookMessages(page, async (url) => {
-    await fetch(url, {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({
-        reserverName: "애니",
-        startDateTime: "2026-03-02T10:00:00+09:00",
-        endDateTime: "2026-03-02T10:30:00+09:00",
-        purpose: "복구 전",
-      }),
-    });
-  }, RESERVATIONS_URL);
+  const beforeRestore = await collectReservationHookMessages(
+    page,
+    async (url) => {
+      await fetch(url, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          reserverName: "애니",
+          startDateTime: "2026-03-02T10:00:00+09:00",
+          endDateTime: "2026-03-02T10:30:00+09:00",
+          purpose: "복구 전",
+        }),
+      });
+    },
+    RESERVATIONS_URL,
+  );
 
   expect(beforeRestore).toHaveLength(1);
   expect(beforeRestore[0]).toMatchObject({ via: "fetch", method: "POST" });
@@ -329,38 +356,44 @@ test("page network hook can restore original fetch and XHR patches", async ({ pa
     sendRestored: true,
   });
 
-  const afterRestore = await collectReservationHookMessages(page, async (url) => {
-    await fetch(url, {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({
-        reserverName: "애니",
-        startDateTime: "2026-03-02T11:00:00+09:00",
-        endDateTime: "2026-03-02T11:30:00+09:00",
-        purpose: "복구 후",
-      }),
-    });
-
-    const xhr = new XMLHttpRequest();
-    xhr.open("POST", url);
-    xhr.setRequestHeader("content-type", "application/json");
-    await new Promise((resolve) => {
-      xhr.addEventListener("loadend", resolve, { once: true });
-      xhr.send(
-        JSON.stringify({
+  const afterRestore = await collectReservationHookMessages(
+    page,
+    async (url) => {
+      await fetch(url, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
           reserverName: "애니",
-          startDateTime: "2026-03-02T12:00:00+09:00",
-          endDateTime: "2026-03-02T12:30:00+09:00",
-          purpose: "XHR 복구 후",
+          startDateTime: "2026-03-02T11:00:00+09:00",
+          endDateTime: "2026-03-02T11:30:00+09:00",
+          purpose: "복구 후",
         }),
-      );
-    });
-  }, RESERVATIONS_URL);
+      });
+
+      const xhr = new XMLHttpRequest();
+      xhr.open("POST", url);
+      xhr.setRequestHeader("content-type", "application/json");
+      await new Promise((resolve) => {
+        xhr.addEventListener("loadend", resolve, { once: true });
+        xhr.send(
+          JSON.stringify({
+            reserverName: "애니",
+            startDateTime: "2026-03-02T12:00:00+09:00",
+            endDateTime: "2026-03-02T12:30:00+09:00",
+            purpose: "XHR 복구 후",
+          }),
+        );
+      });
+    },
+    RESERVATIONS_URL,
+  );
 
   expect(afterRestore).toHaveLength(0);
 });
 
-test("page network hook registers restore before XHR patch failure can strand fetch", async ({ page }) => {
+test("page network hook registers restore before XHR patch failure can strand fetch", async ({
+  page,
+}) => {
   await gotoReservationPage(page);
   // 번들 전체를 소스로 평가한다(shared + hook 이 한 청크에 들어있다).
   const hookSource = fs.readFileSync(getPageHookBundlePath(), "utf8");
@@ -440,21 +473,25 @@ test("lms+ 예약 생성 POST 성공 시 응답 body 를 이벤트에 담아 emi
 
   await injectPageNetworkHookBundle(page);
 
-  const messages = await collectReservationHookMessages(page, async (url) => {
-    // 페이지 앱이 원본 응답을 소비할 수 있는지도 함께 확인한다.
-    const res = await fetch(url, {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({
-        spaceId: 5,
-        date: "2099-01-02",
-        startTime: "20:00:00",
-        endTime: "21:00:00",
-        purpose: "학습",
-      }),
-    });
-    window.__zzkConsumedBody = await res.json();
-  }, RESERVATIONS_URL);
+  const messages = await collectReservationHookMessages(
+    page,
+    async (url) => {
+      // 페이지 앱이 원본 응답을 소비할 수 있는지도 함께 확인한다.
+      const res = await fetch(url, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          spaceId: 5,
+          date: "2099-01-02",
+          startTime: "20:00:00",
+          endTime: "21:00:00",
+          purpose: "학습",
+        }),
+      });
+      window.__zzkConsumedBody = await res.json();
+    },
+    RESERVATIONS_URL,
+  );
 
   const withBody = messages.find((m) => m && m.responseBody);
   expect(withBody).toBeTruthy();

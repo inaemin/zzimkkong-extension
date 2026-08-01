@@ -49,9 +49,7 @@ for (const relativePath of contentScripts) {
 
 // 런타임에 chrome.runtime.getURL 로 직접 부르는 파일들.
 // 번들러가 경로를 바꾸면 예약 훅과 Slack 모달 스타일이 조용히 깨지므로 여기서 막는다.
-const runtimeLoadedPaths = [
-  "assets/basecoat-dialog.css",
-];
+const runtimeLoadedPaths = ["assets/basecoat-dialog.css"];
 for (const relativePath of runtimeLoadedPaths) {
   if (!fs.existsSync(path.join(buildDir, relativePath))) {
     throw new Error(`Missing runtime-loaded resource in build output: ${relativePath}`);

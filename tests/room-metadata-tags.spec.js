@@ -13,8 +13,6 @@ test.beforeAll(ensureExtensionBuild);
 // 하드코딩된 방 메타데이터(TARGET_ROOM_METADATA)는 legacy 제거 후에도 lms+ 에서 계속 쓰인다.
 // 창 태그·크루 제외·회의실 정렬 순서가 lms+ /api/spaces 응답 기준으로도 유지되는지 검증한다.
 
-
-
 function buildSpace(id, name, floor, overrides = {}) {
   return {
     accessRole: "ALL",
@@ -130,7 +128,9 @@ test("active:false 인 방은 레이더에서 걸러진다", async ({ page }) =>
   expect(roomLabels.some((label) => label.includes("천왕성"))).toBeFalsy();
 });
 
-test("페어룸은 API 이름(페어룸 01)으로 메타데이터에 매칭돼 페어룸 탭으로 분류된다", async ({ page }) => {
+test("페어룸은 API 이름(페어룸 01)으로 메타데이터에 매칭돼 페어룸 탭으로 분류된다", async ({
+  page,
+}) => {
   await mountRadar(page, [
     buildSpace(9, "은하수", 13),
     buildSpace(10, "페어룸 01", 13),
@@ -170,10 +170,7 @@ test("12층 회의실은 API 순서가 아니라 크루 기준 순서로 정렬�
 });
 
 test("메타데이터에 없는 방도 spaces API 가 주면 그대로 보여준다", async ({ page }) => {
-  await mountRadar(page, [
-    buildSpace(1, "수성", 11),
-    buildSpace(500, "새회의실", 11),
-  ]);
+  await mountRadar(page, [buildSpace(1, "수성", 11), buildSpace(500, "새회의실", 11)]);
 
   const roomLabels = await readRoomLabels(page);
 

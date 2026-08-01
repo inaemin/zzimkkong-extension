@@ -13,7 +13,6 @@ test.beforeAll(ensureExtensionBuild);
 
 const WIDTH_STORAGE_KEY = "zzk-map-calendar-width-v1";
 
-
 async function injectContentScriptBundle(page, beforeContentScript) {
   // 번들이 한 덩어리라 "content.js 직전"이 곧 "번들 로드 직전"이다.
   if (typeof beforeContentScript === "function") {
@@ -145,7 +144,7 @@ async function openRadar(page) {
   await page.waitForFunction(
     () => document.getElementById("zzk-map-calendar-radar-launcher") instanceof HTMLElement,
     undefined,
-    { timeout: 5000 }
+    { timeout: 5000 },
   );
   await page.waitForTimeout(1200);
 
@@ -213,10 +212,7 @@ test("clampMapCalendarWidth keeps widths inside the supported range", async ({ p
   // 숫자로 해석 가능한 값은 clamp 되어 살아남는다.
   expect(result.negative).toBe(result.bounds.min);
   expect(result.zero).toBe(result.bounds.min);
-  const expectedFromString = Math.min(
-    result.bounds.max,
-    Math.max(result.bounds.min, 640),
-  );
+  const expectedFromString = Math.min(result.bounds.max, Math.max(result.bounds.min, 640));
   expect(result.stringNumeric).toBe(expectedFromString);
   expect(Number.isFinite(result.stringNumeric)).toBe(true);
 });
@@ -228,7 +224,7 @@ test("resize handle is rendered on the radar modal", async ({ page }) => {
 
   const handle = await page.evaluate(() => {
     const node = document.querySelector(
-      "#zzk-map-calendar-overlay .zzk-map-calendar-resize-handle"
+      "#zzk-map-calendar-overlay .zzk-map-calendar-resize-handle",
     );
     if (!(node instanceof HTMLElement)) {
       return null;
@@ -260,9 +256,9 @@ test("dragging the resize handle changes the modal width live", async ({ page })
     return card.getBoundingClientRect().width;
   });
 
-  const handleBox = await page.locator(
-    "#zzk-map-calendar-overlay .zzk-map-calendar-resize-handle"
-  ).boundingBox();
+  const handleBox = await page
+    .locator("#zzk-map-calendar-overlay .zzk-map-calendar-resize-handle")
+    .boundingBox();
   expect(handleBox).not.toBeNull();
 
   // 핸들은 좌측 가장자리에 있으므로 오른쪽으로 끌면 너비가 줄어든다.
@@ -271,7 +267,7 @@ test("dragging the resize handle changes the modal width live", async ({ page })
   await page.mouse.move(
     handleBox.x + handleBox.width / 2 + 160,
     handleBox.y + handleBox.height / 2,
-    { steps: 12 }
+    { steps: 12 },
   );
 
   const during = await page.evaluate(() => {
@@ -294,9 +290,9 @@ test("dragging the resize handle changes the modal width live", async ({ page })
 test("resizing never shrinks the modal below the minimum width", async ({ page }) => {
   await mountAndOpenRadar(page);
 
-  const handleBox = await page.locator(
-    "#zzk-map-calendar-overlay .zzk-map-calendar-resize-handle"
-  ).boundingBox();
+  const handleBox = await page
+    .locator("#zzk-map-calendar-overlay .zzk-map-calendar-resize-handle")
+    .boundingBox();
 
   await page.mouse.move(handleBox.x + handleBox.width / 2, handleBox.y + handleBox.height / 2);
   await page.mouse.down();
@@ -320,16 +316,16 @@ test("resizing never shrinks the modal below the minimum width", async ({ page }
 test("resized width is written to localStorage", async ({ page }) => {
   await mountAndOpenRadar(page);
 
-  const handleBox = await page.locator(
-    "#zzk-map-calendar-overlay .zzk-map-calendar-resize-handle"
-  ).boundingBox();
+  const handleBox = await page
+    .locator("#zzk-map-calendar-overlay .zzk-map-calendar-resize-handle")
+    .boundingBox();
 
   await page.mouse.move(handleBox.x + handleBox.width / 2, handleBox.y + handleBox.height / 2);
   await page.mouse.down();
   await page.mouse.move(
     handleBox.x + handleBox.width / 2 + 140,
     handleBox.y + handleBox.height / 2,
-    { steps: 10 }
+    { steps: 10 },
   );
   await page.mouse.up();
 
@@ -349,10 +345,10 @@ test("stored width is restored when the radar opens again", async ({ page }) => 
 
   await mountAndOpenRadar(page, {
     seedStorage: async () => {
-      await page.evaluate(
-        ({ key, value }) => window.localStorage.setItem(key, String(value)),
-        { key: WIDTH_STORAGE_KEY, value: targetWidth }
-      );
+      await page.evaluate(({ key, value }) => window.localStorage.setItem(key, String(value)), {
+        key: WIDTH_STORAGE_KEY,
+        value: targetWidth,
+      });
     },
   });
 
@@ -369,17 +365,20 @@ test("stored width survives a full page reload", async ({ page }) => {
 
   await mountAndOpenRadar(page, {
     seedStorage: async () => {
-      await page.evaluate(
-        ({ key, value }) => window.localStorage.setItem(key, String(value)),
-        { key: WIDTH_STORAGE_KEY, value: targetWidth }
-      );
+      await page.evaluate(({ key, value }) => window.localStorage.setItem(key, String(value)), {
+        key: WIDTH_STORAGE_KEY,
+        value: targetWidth,
+      });
     },
   });
 
   // 새로고침을 흉내내기 위해 같은 origin 으로 다시 mount 한다.
   // localStorage 는 origin 단위로 유지되므로 값이 살아있어야 한다.
   await mountGuestMap(page);
-  const persisted = await page.evaluate((key) => window.localStorage.getItem(key), WIDTH_STORAGE_KEY);
+  const persisted = await page.evaluate(
+    (key) => window.localStorage.getItem(key),
+    WIDTH_STORAGE_KEY,
+  );
   expect(Number(persisted)).toBe(targetWidth);
 
   await injectContentScriptBundle(page);
@@ -416,10 +415,10 @@ test("corrupt stored widths fall back to the default layout", async ({ page }) =
   for (const badValue of ["not-a-number", "NaN", "", "1e9999"]) {
     await mountGuestMap(page);
     await injectContentScriptBundle(page, async () => {
-      await page.evaluate(
-        ({ key, value }) => window.localStorage.setItem(key, value),
-        { key: WIDTH_STORAGE_KEY, value: badValue }
-      );
+      await page.evaluate(({ key, value }) => window.localStorage.setItem(key, value), {
+        key: WIDTH_STORAGE_KEY,
+        value: badValue,
+      });
     });
     await openRadar(page);
 
@@ -446,10 +445,10 @@ test("out-of-range stored widths are clamped into the supported range", async ({
   ]) {
     await mountGuestMap(page);
     await injectContentScriptBundle(page, async () => {
-      await page.evaluate(
-        ({ key, value }) => window.localStorage.setItem(key, value),
-        { key: WIDTH_STORAGE_KEY, value: outOfRange }
-      );
+      await page.evaluate(({ key, value }) => window.localStorage.setItem(key, value), {
+        key: WIDTH_STORAGE_KEY,
+        value: outOfRange,
+      });
     });
     await openRadar(page);
 
@@ -473,17 +472,17 @@ test("out-of-range stored widths are clamped into the supported range", async ({
 test("narrow widths make the timeline body horizontally scrollable", async ({ page }) => {
   await mountAndOpenRadar(page, {
     seedStorage: async () => {
-      await page.evaluate(
-        ({ key, value }) => window.localStorage.setItem(key, String(value)),
-        { key: WIDTH_STORAGE_KEY, value: 620 }
-      );
+      await page.evaluate(({ key, value }) => window.localStorage.setItem(key, String(value)), {
+        key: WIDTH_STORAGE_KEY,
+        value: 620,
+      });
     },
   });
 
   const result = await page.evaluate(() => {
     // 2-pane 구조: 가로 스크롤은 타임블록 pane 에서 일어난다.
     const pane = document.querySelector(
-      "#zzk-map-calendar-overlay .zzk-map-calendar-timeline-pane"
+      "#zzk-map-calendar-overlay .zzk-map-calendar-timeline-pane",
     );
     const style = window.getComputedStyle(pane);
     return {
@@ -497,13 +496,15 @@ test("narrow widths make the timeline body horizontally scrollable", async ({ pa
   expect(result.scrollWidth).toBeGreaterThan(result.clientWidth);
 });
 
-test("가로 스크롤바는 마지막 타임블록 행 아래 빈 공간에 놓여 슬롯 클릭을 방해하지 않는다", async ({ page }) => {
+test("가로 스크롤바는 마지막 타임블록 행 아래 빈 공간에 놓여 슬롯 클릭을 방해하지 않는다", async ({
+  page,
+}) => {
   await mountAndOpenRadar(page, {
     seedStorage: async () => {
-      await page.evaluate(
-        ({ key, value }) => window.localStorage.setItem(key, String(value)),
-        { key: WIDTH_STORAGE_KEY, value: 620 }
-      );
+      await page.evaluate(({ key, value }) => window.localStorage.setItem(key, String(value)), {
+        key: WIDTH_STORAGE_KEY,
+        value: 620,
+      });
     },
   });
 
@@ -512,7 +513,7 @@ test("가로 스크롤바는 마지막 타임블록 행 아래 빈 공간에 놓
     const pane = overlay.querySelector(".zzk-map-calendar-timeline-pane");
     const grid = overlay.querySelector(".zzk-map-calendar-timeline-grid");
     const rows = Array.from(
-      overlay.querySelectorAll(".zzk-map-calendar-row.zzk-map-calendar-timeline-row")
+      overlay.querySelectorAll(".zzk-map-calendar-row.zzk-map-calendar-timeline-row"),
     );
     const lastRow = rows[rows.length - 1].getBoundingClientRect();
     const paneRect = pane.getBoundingClientRect();
@@ -524,8 +525,7 @@ test("가로 스크롤바는 마지막 타임블록 행 아래 빈 공간에 놓
       // 스크롤바가 마지막 행 위에 겹치지 않는다.
       slackBelowLastRow: paneRect.bottom - lastRow.bottom,
       // 그리드(타임블록 콘텐츠)는 마지막 행에서 끝난다. 그 아래 gutter 는 트랙 padding.
-      gridBottomAtLastRow:
-        Math.abs(grid.getBoundingClientRect().bottom - lastRow.bottom) < 2,
+      gridBottomAtLastRow: Math.abs(grid.getBoundingClientRect().bottom - lastRow.bottom) < 2,
     };
   });
 
@@ -539,16 +539,16 @@ test("가로 스크롤바는 마지막 타임블록 행 아래 빈 공간에 놓
 test("the timeline body can actually be scrolled horizontally", async ({ page }) => {
   await mountAndOpenRadar(page, {
     seedStorage: async () => {
-      await page.evaluate(
-        ({ key, value }) => window.localStorage.setItem(key, String(value)),
-        { key: WIDTH_STORAGE_KEY, value: 620 }
-      );
+      await page.evaluate(({ key, value }) => window.localStorage.setItem(key, String(value)), {
+        key: WIDTH_STORAGE_KEY,
+        value: 620,
+      });
     },
   });
 
   const scrolled = await page.evaluate(() => {
     const pane = document.querySelector(
-      "#zzk-map-calendar-overlay .zzk-map-calendar-timeline-pane"
+      "#zzk-map-calendar-overlay .zzk-map-calendar-timeline-pane",
     );
     pane.scrollLeft = 0;
     pane.scrollLeft = 200;
@@ -563,23 +563,23 @@ test("the timeline body can actually be scrolled horizontally", async ({ page })
 test("floor and room columns stay pinned while the timeline scrolls", async ({ page }) => {
   await mountAndOpenRadar(page, {
     seedStorage: async () => {
-      await page.evaluate(
-        ({ key, value }) => window.localStorage.setItem(key, String(value)),
-        { key: WIDTH_STORAGE_KEY, value: 620 }
-      );
+      await page.evaluate(({ key, value }) => window.localStorage.setItem(key, String(value)), {
+        key: WIDTH_STORAGE_KEY,
+        value: 620,
+      });
     },
   });
 
   const before = await page.evaluate(() => {
     const pane = document.querySelector(
-      "#zzk-map-calendar-overlay .zzk-map-calendar-timeline-pane"
+      "#zzk-map-calendar-overlay .zzk-map-calendar-timeline-pane",
     );
     pane.scrollLeft = 0;
     const floorName = document.querySelector(
-      "#zzk-map-calendar-overlay .zzk-map-calendar-floor-name:not(.axis)"
+      "#zzk-map-calendar-overlay .zzk-map-calendar-floor-name:not(.axis)",
     );
     const roomName = document.querySelector(
-      "#zzk-map-calendar-overlay .zzk-map-calendar-label-pane .zzk-map-calendar-room-name"
+      "#zzk-map-calendar-overlay .zzk-map-calendar-label-pane .zzk-map-calendar-room-name",
     );
     return {
       floorLeft: floorName.getBoundingClientRect().left,
@@ -589,17 +589,17 @@ test("floor and room columns stay pinned while the timeline scrolls", async ({ p
 
   const after = await page.evaluate(() => {
     const pane = document.querySelector(
-      "#zzk-map-calendar-overlay .zzk-map-calendar-timeline-pane"
+      "#zzk-map-calendar-overlay .zzk-map-calendar-timeline-pane",
     );
     pane.scrollLeft = 260;
     const floorName = document.querySelector(
-      "#zzk-map-calendar-overlay .zzk-map-calendar-floor-name:not(.axis)"
+      "#zzk-map-calendar-overlay .zzk-map-calendar-floor-name:not(.axis)",
     );
     const roomName = document.querySelector(
-      "#zzk-map-calendar-overlay .zzk-map-calendar-label-pane .zzk-map-calendar-room-name"
+      "#zzk-map-calendar-overlay .zzk-map-calendar-label-pane .zzk-map-calendar-room-name",
     );
     const slot = document.querySelector(
-      "#zzk-map-calendar-overlay .zzk-map-calendar-timeline-row .zzk-map-calendar-slots > *"
+      "#zzk-map-calendar-overlay .zzk-map-calendar-timeline-row .zzk-map-calendar-slots > *",
     );
     return {
       scrollLeft: pane.scrollLeft,
@@ -623,10 +623,10 @@ test("floor and room columns stay pinned while the timeline scrolls", async ({ p
 test("회의실 열과 타임블록 사이에 세로 구분선이 있고, 스크롤해도 고정된다", async ({ page }) => {
   await mountAndOpenRadar(page, {
     seedStorage: async () => {
-      await page.evaluate(
-        ({ key, value }) => window.localStorage.setItem(key, String(value)),
-        { key: WIDTH_STORAGE_KEY, value: 620 }
-      );
+      await page.evaluate(({ key, value }) => window.localStorage.setItem(key, String(value)), {
+        key: WIDTH_STORAGE_KEY,
+        value: 620,
+      });
     },
   });
 
@@ -651,8 +651,7 @@ test("회의실 열과 타임블록 사이에 세로 구분선이 있고, 스크
 
     return {
       hasBoundaryBorder:
-        labelPaneStyle.borderRightWidth !== "0px" &&
-        labelPaneStyle.borderRightStyle === "solid",
+        labelPaneStyle.borderRightWidth !== "0px" && labelPaneStyle.borderRightStyle === "solid",
       hasBaseDivider: Boolean(baseDivider),
       // 라벨 pane 오른쪽 = 타임블록 pane 왼쪽(경계가 맞닿는다).
       boundaryGap: Math.abs(labelRight0 - timelineLeft0),
@@ -678,10 +677,10 @@ test("라벨 pane 은 타임블록 스크롤 영역 밖이라 타임블록이 �
 }) => {
   await mountAndOpenRadar(page, {
     seedStorage: async () => {
-      await page.evaluate(
-        ({ key, value }) => window.localStorage.setItem(key, String(value)),
-        { key: WIDTH_STORAGE_KEY, value: 620 }
-      );
+      await page.evaluate(({ key, value }) => window.localStorage.setItem(key, String(value)), {
+        key: WIDTH_STORAGE_KEY,
+        value: 620,
+      });
     },
   });
 
@@ -717,10 +716,10 @@ test("라벨 pane 은 타임블록 스크롤 영역 밖이라 타임블록이 �
 test("같은 층 안의 회의실 행들은 세로 간격 없이 바짝 붙는다", async ({ page }) => {
   await mountAndOpenRadar(page, {
     seedStorage: async () => {
-      await page.evaluate(
-        ({ key, value }) => window.localStorage.setItem(key, String(value)),
-        { key: WIDTH_STORAGE_KEY, value: 620 }
-      );
+      await page.evaluate(({ key, value }) => window.localStorage.setItem(key, String(value)), {
+        key: WIDTH_STORAGE_KEY,
+        value: 620,
+      });
     },
   });
 
@@ -749,10 +748,10 @@ test("같은 층 안의 회의실 행들은 세로 간격 없이 바짝 붙는�
 test("정시 세로선이 층/회의실 세로선처럼 헤더 맨 위까지 올라온다", async ({ page }) => {
   await mountAndOpenRadar(page, {
     seedStorage: async () => {
-      await page.evaluate(
-        ({ key, value }) => window.localStorage.setItem(key, String(value)),
-        { key: WIDTH_STORAGE_KEY, value: 620 }
-      );
+      await page.evaluate(({ key, value }) => window.localStorage.setItem(key, String(value)), {
+        key: WIDTH_STORAGE_KEY,
+        value: 620,
+      });
     },
   });
 
@@ -766,9 +765,7 @@ test("정시 세로선이 층/회의실 세로선처럼 헤더 맨 위까지 올
     // 층/회의실 세로 구분선(divider-track)의 top 위치.
     const gridWrapTop = gridWrap.getBoundingClientRect().top;
     const dividerTrack = overlay.querySelector(".zzk-map-calendar-divider-track");
-    const dividerTop = dividerTrack
-      ? dividerTrack.getBoundingClientRect().top - gridWrapTop
-      : null;
+    const dividerTop = dividerTrack ? dividerTrack.getBoundingClientRect().top - gridWrapTop : null;
 
     return { axisHeight, clipTop, dividerTop };
   });
@@ -783,14 +780,13 @@ test("정시 세로선이 층/회의실 세로선처럼 헤더 맨 위까지 올
   }
 });
 
-
 test("the radar body does not grow a vertical scrollbar when rows fit", async ({ page }) => {
   await mountAndOpenRadar(page, {
     seedStorage: async () => {
-      await page.evaluate(
-        ({ key, value }) => window.localStorage.setItem(key, String(value)),
-        { key: WIDTH_STORAGE_KEY, value: 620 }
-      );
+      await page.evaluate(({ key, value }) => window.localStorage.setItem(key, String(value)), {
+        key: WIDTH_STORAGE_KEY,
+        value: 620,
+      });
     },
   });
 
@@ -818,13 +814,15 @@ test("the radar body does not grow a vertical scrollbar when rows fit", async ({
   expect(result.overflowY).toBe("hidden");
 });
 
-test("가로 스크롤바는 타임블록 pane 에만 생기고 라벨 pane 아래로 번지지 않는다", async ({ page }) => {
+test("가로 스크롤바는 타임블록 pane 에만 생기고 라벨 pane 아래로 번지지 않는다", async ({
+  page,
+}) => {
   await mountAndOpenRadar(page, {
     seedStorage: async () => {
-      await page.evaluate(
-        ({ key, value }) => window.localStorage.setItem(key, String(value)),
-        { key: WIDTH_STORAGE_KEY, value: 620 }
-      );
+      await page.evaluate(({ key, value }) => window.localStorage.setItem(key, String(value)), {
+        key: WIDTH_STORAGE_KEY,
+        value: 620,
+      });
     },
   });
 
@@ -856,10 +854,10 @@ test("가로 스크롤바는 타임블록 pane 에만 생기고 라벨 pane 아�
 test("the axis header labels also stay pinned while scrolling", async ({ page }) => {
   await mountAndOpenRadar(page, {
     seedStorage: async () => {
-      await page.evaluate(
-        ({ key, value }) => window.localStorage.setItem(key, String(value)),
-        { key: WIDTH_STORAGE_KEY, value: 620 }
-      );
+      await page.evaluate(({ key, value }) => window.localStorage.setItem(key, String(value)), {
+        key: WIDTH_STORAGE_KEY,
+        value: 620,
+      });
     },
   });
 
@@ -867,7 +865,7 @@ test("the axis header labels also stay pinned while scrolling", async ({ page })
     const body = document.querySelector("#zzk-map-calendar-overlay .zzk-map-calendar-body");
     body.scrollLeft = 0;
     const axisRoom = document.querySelector(
-      "#zzk-map-calendar-overlay .zzk-map-calendar-room-name.axis"
+      "#zzk-map-calendar-overlay .zzk-map-calendar-room-name.axis",
     );
     return axisRoom.getBoundingClientRect().left;
   });
@@ -876,7 +874,7 @@ test("the axis header labels also stay pinned while scrolling", async ({ page })
     const body = document.querySelector("#zzk-map-calendar-overlay .zzk-map-calendar-body");
     body.scrollLeft = 260;
     const axisRoom = document.querySelector(
-      "#zzk-map-calendar-overlay .zzk-map-calendar-room-name.axis"
+      "#zzk-map-calendar-overlay .zzk-map-calendar-room-name.axis",
     );
     return axisRoom.getBoundingClientRect().left;
   });
@@ -1113,10 +1111,10 @@ test("today's radar scrolls the timeline near the current time on open", async (
   await mountAndOpenRadar(page, {
     reservationDate: today,
     seedStorage: async () => {
-      await page.evaluate(
-        ({ key, value }) => window.localStorage.setItem(key, String(value)),
-        { key: WIDTH_STORAGE_KEY, value: 620 }
-      );
+      await page.evaluate(({ key, value }) => window.localStorage.setItem(key, String(value)), {
+        key: WIDTH_STORAGE_KEY,
+        value: 620,
+      });
     },
   });
 
@@ -1124,7 +1122,7 @@ test("today's radar scrolls the timeline near the current time on open", async (
 
   const result = await page.evaluate(() => {
     const pane = document.querySelector(
-      "#zzk-map-calendar-overlay .zzk-map-calendar-timeline-pane"
+      "#zzk-map-calendar-overlay .zzk-map-calendar-timeline-pane",
     );
     return {
       scrollLeft: pane.scrollLeft,
@@ -1149,10 +1147,10 @@ test("a non-today date opens the timeline at the start", async ({ page }) => {
   await mountAndOpenRadar(page, {
     reservationDate: "2026-12-02",
     seedStorage: async () => {
-      await page.evaluate(
-        ({ key, value }) => window.localStorage.setItem(key, String(value)),
-        { key: WIDTH_STORAGE_KEY, value: 620 }
-      );
+      await page.evaluate(({ key, value }) => window.localStorage.setItem(key, String(value)), {
+        key: WIDTH_STORAGE_KEY,
+        value: 620,
+      });
     },
   });
 
@@ -1175,23 +1173,23 @@ test("resizing keeps the radar rows and legend intact", async ({ page }) => {
     rows: document.querySelectorAll("#zzk-map-calendar-overlay .zzk-map-calendar-row").length,
   }));
 
-  const handleBox = await page.locator(
-    "#zzk-map-calendar-overlay .zzk-map-calendar-resize-handle"
-  ).boundingBox();
+  const handleBox = await page
+    .locator("#zzk-map-calendar-overlay .zzk-map-calendar-resize-handle")
+    .boundingBox();
 
   await page.mouse.move(handleBox.x + handleBox.width / 2, handleBox.y + handleBox.height / 2);
   await page.mouse.down();
   await page.mouse.move(
     handleBox.x + handleBox.width / 2 + 120,
     handleBox.y + handleBox.height / 2,
-    { steps: 10 }
+    { steps: 10 },
   );
   await page.mouse.up();
 
   const after = await page.evaluate(() => ({
     rows: document.querySelectorAll("#zzk-map-calendar-overlay .zzk-map-calendar-row").length,
     roomNames: Array.from(
-      document.querySelectorAll("#zzk-map-calendar-overlay .zzk-map-calendar-room-name")
+      document.querySelectorAll("#zzk-map-calendar-overlay .zzk-map-calendar-room-name"),
     ).length,
   }));
 
@@ -1208,16 +1206,16 @@ test("dragging the resize handle does not move the modal", async ({ page }) => {
     return overlay.style.transform;
   });
 
-  const handleBox = await page.locator(
-    "#zzk-map-calendar-overlay .zzk-map-calendar-resize-handle"
-  ).boundingBox();
+  const handleBox = await page
+    .locator("#zzk-map-calendar-overlay .zzk-map-calendar-resize-handle")
+    .boundingBox();
 
   await page.mouse.move(handleBox.x + handleBox.width / 2, handleBox.y + handleBox.height / 2);
   await page.mouse.down();
   await page.mouse.move(
     handleBox.x + handleBox.width / 2 + 100,
     handleBox.y + handleBox.height / 2 + 60,
-    { steps: 10 }
+    { steps: 10 },
   );
   await page.mouse.up();
 
@@ -1235,10 +1233,10 @@ test("리사이즈로 넓어져 화면을 벗어나면 다시 뷰포트 안으�
   await page.setViewportSize({ width: 760, height: 720 });
   await mountAndOpenRadar(page, {
     seedStorage: async () => {
-      await page.evaluate(
-        ({ key, value }) => window.localStorage.setItem(key, String(value)),
-        { key: WIDTH_STORAGE_KEY, value: 500 }
-      );
+      await page.evaluate(({ key, value }) => window.localStorage.setItem(key, String(value)), {
+        key: WIDTH_STORAGE_KEY,
+        value: 500,
+      });
     },
   });
 
@@ -1251,8 +1249,8 @@ test("리사이즈로 넓어져 화면을 벗어나면 다시 뷰포트 안으�
   await page.mouse.move(30, 80, { steps: 12 });
   await page.mouse.up();
 
-  const widthBefore = await page.evaluate(
-    () => Math.round(document.getElementById("zzk-map-calendar-overlay").getBoundingClientRect().width)
+  const widthBefore = await page.evaluate(() =>
+    Math.round(document.getElementById("zzk-map-calendar-overlay").getBoundingClientRect().width),
   );
 
   // 핸들(좌측 가장자리)을 왼쪽으로 끌어 폭을 최대까지 넓힌다.
@@ -1289,16 +1287,14 @@ test("리사이즈로 넓어져 화면을 벗어나면 다시 뷰포트 안으�
   expect(result.bottom).toBeLessThanOrEqual(result.vh + 2);
 });
 
-
 test("마운트 시 저장된 위치가 현재 뷰포트를 벗어나면 화면 안으로 재조정된다", async ({ page }) => {
   // 좁은 뷰포트에서, 화면 밖을 가리키는 큰 offset 을 미리 저장해두고 연다.
   await page.setViewportSize({ width: 760, height: 720 });
   await mountAndOpenRadar(page, {
     seedStorage: async () => {
       await page.evaluate(
-        ({ key }) =>
-          window.localStorage.setItem(key, JSON.stringify({ x: -600, y: -500 })),
-        { key: "zzk-map-calendar-offset-v1" }
+        ({ key }) => window.localStorage.setItem(key, JSON.stringify({ x: -600, y: -500 })),
+        { key: "zzk-map-calendar-offset-v1" },
       );
     },
   });
