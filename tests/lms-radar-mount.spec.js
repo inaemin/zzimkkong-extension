@@ -1,32 +1,15 @@
-import path from "node:path";
 import { expect, test } from "@playwright/test";
-
-const WEB_ORIGIN = "https://techcourse-lms-plus-web.woowahan.com";
-const API_ORIGIN = "https://techcourse-lms-plus-api.woowahan.com";
+import {
+  API_ORIGIN,
+  WEB_ORIGIN,
+  ensureExtensionBuild,
+  jsonResponse,
+  loadContentBundle,
+  stubServiceDocument,
+} from "./helpers/extension.js";
 
 const MAP_CALENDAR_OVERLAY_ID = "zzk-map-calendar-overlay";
 const MAP_CALENDAR_LAUNCHER_ID = "zzk-map-calendar-radar-launcher";
-
-// manifest 의 content_scripts 순서와 동일해야 한다.
-const CONTENT_SCRIPT_BUNDLE = [
-  "src/constants/debug.js",
-  "src/utils/shared.js",
-  "src/utils/storage.js",
-  "src/constants/runtime.js",
-  "src/utils/date-time.js",
-  "src/utils/routes.js",
-  "src/features/slack/shared.js",
-  "src/features/slack/workflow.js",
-  "src/features/slack/success-flow.js",
-  "src/features/form-fields/shared.js",
-  "src/services/lms-data/normalizers.js",
-  "src/services/lms-data/shared.js",
-  "src/features/radar/floor-maps.js",
-  "src/features/radar/shared.js",
-  "src/features/radar/workflow.js",
-  "src/features/radar/form-sync.js",
-  "src/content.js",
-];
 
 const spacesFixture = [
   {
@@ -53,44 +36,16 @@ const spacesFixture = [
   },
 ];
 
-async function mountServicePage(page) {
-  // 실제 사이트는 미인증 요청을 로그인 페이지로 돌려보내므로 문서 응답을 고정한다.
-  await page.route(`${WEB_ORIGIN}/**`, async (route) => {
-    if (route.request().resourceType() !== "document") {
-      await route.continue();
-      return;
-    }
-    await route.fulfill({
-      status: 200,
-      contentType: "text/html",
-      body: "<html><body><main></main></body></html>",
-    });
-  });
+test.beforeAll(ensureExtensionBuild);
 
+async function mountServicePage(page) {
+  await stubServiceDocument(page);
   await page.route(`${API_ORIGIN}/api/**`, async (route) => {
     const url = new URL(route.request().url());
-    const body = url.pathname === "/api/spaces" ? spacesFixture : [];
-    await route.fulfill({
-      status: 200,
-      headers: {
-        // credentials: "include" 요청은 와일드카드 origin 을 허용하지 않는다.
-        "access-control-allow-origin": WEB_ORIGIN,
-        "access-control-allow-credentials": "true",
-        "content-type": "application/json",
-      },
-      body: JSON.stringify(body),
-    });
+    await route.fulfill(jsonResponse(url.pathname === "/api/spaces" ? spacesFixture : []));
   });
-
   await page.goto(`${WEB_ORIGIN}/space-reservations`, { waitUntil: "domcontentloaded" });
-
-  for (const scriptPath of CONTENT_SCRIPT_BUNDLE) {
-    await page.addScriptTag({ path: path.resolve(process.cwd(), scriptPath) });
-  }
-
-  await page.waitForFunction(() => window.__zzkAvailabilityLensLoaded === true, undefined, {
-    timeout: 3000,
-  });
+  await loadContentBundle(page);
 }
 
 test("radar launcher and modal mount on the new service reservation page", async ({ page }) => {
@@ -185,12 +140,7 @@ test("API 403 still renders the modal shell with an error message, not a blank",
   });
 
   await page.goto(`${WEB_ORIGIN}/space-reservations`, { waitUntil: "domcontentloaded" });
-  for (const scriptPath of CONTENT_SCRIPT_BUNDLE) {
-    await page.addScriptTag({ path: path.resolve(process.cwd(), scriptPath) });
-  }
-  await page.waitForFunction(() => window.__zzkAvailabilityLensLoaded === true, undefined, {
-    timeout: 3000,
-  });
+  await loadContentBundle(page);
 
   // API 가 실패해도 오버레이(모달 껍데기)는 떠야 하고, 에러 메시지가 보여야 한다.
   await expect
@@ -226,12 +176,7 @@ test("radar stays unmounted on unrelated paths of the new service", async ({ pag
   });
 
   await page.goto(`${WEB_ORIGIN}/mypage`, { waitUntil: "domcontentloaded" });
-  for (const scriptPath of CONTENT_SCRIPT_BUNDLE) {
-    await page.addScriptTag({ path: path.resolve(process.cwd(), scriptPath) });
-  }
-  await page.waitForFunction(() => window.__zzkAvailabilityLensLoaded === true, undefined, {
-    timeout: 3000,
-  });
+  await loadContentBundle(page);
 
   expect(
     await page.evaluate((id) => Boolean(document.getElementById(id)), MAP_CALENDAR_LAUNCHER_ID),

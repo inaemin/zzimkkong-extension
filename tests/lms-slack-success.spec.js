@@ -1,28 +1,14 @@
-import path from "node:path";
 import { expect, test } from "@playwright/test";
+import {
+  API_ORIGIN,
+  WEB_ORIGIN,
+  ensureExtensionBuild,
+  jsonResponse,
+  loadContentBundle,
+  stubServiceDocument,
+} from "./helpers/extension.js";
 
-const WEB_ORIGIN = "https://techcourse-lms-plus-web.woowahan.com";
-const API_ORIGIN = "https://techcourse-lms-plus-api.woowahan.com";
-
-const CONTENT_SCRIPT_BUNDLE = [
-  "src/constants/debug.js",
-  "src/utils/shared.js",
-  "src/utils/storage.js",
-  "src/constants/runtime.js",
-  "src/utils/date-time.js",
-  "src/utils/routes.js",
-  "src/features/slack/shared.js",
-  "src/features/slack/workflow.js",
-  "src/features/slack/success-flow.js",
-  "src/features/form-fields/shared.js",
-  "src/services/lms-data/normalizers.js",
-  "src/services/lms-data/shared.js",
-  "src/features/radar/floor-maps.js",
-  "src/features/radar/shared.js",
-  "src/features/radar/workflow.js",
-  "src/features/radar/form-sync.js",
-  "src/content.js",
-];
+test.beforeAll(ensureExtensionBuild);
 
 const spacesFixture = [
   { id: 5, name: "보이저", floor: 12, active: true, openTime: "07:00:00", closeTime: "23:00:00" },
@@ -69,12 +55,7 @@ async function mountLmsPage(page) {
   });
 
   await page.goto(`${WEB_ORIGIN}/space-reservations`, { waitUntil: "domcontentloaded" });
-  for (const scriptPath of CONTENT_SCRIPT_BUNDLE) {
-    await page.addScriptTag({ path: path.resolve(process.cwd(), scriptPath) });
-  }
-  await page.waitForFunction(() => window.__zzkAvailabilityLensLoaded === true, undefined, {
-    timeout: 3000,
-  });
+  await loadContentBundle(page);
 }
 
 function emitReservationSuccess(page, payloadOverrides = {}) {

@@ -1,28 +1,14 @@
-import path from "node:path";
 import { expect, test } from "@playwright/test";
+import {
+  API_ORIGIN,
+  WEB_ORIGIN,
+  ensureExtensionBuild,
+  jsonResponse,
+  loadContentBundle,
+  stubServiceDocument,
+} from "./helpers/extension.js";
 
-const WEB_ORIGIN = "https://techcourse-lms-plus-web.woowahan.com";
-const API_ORIGIN = "https://techcourse-lms-plus-api.woowahan.com";
-
-const CONTENT_SCRIPT_BUNDLE = [
-  "src/constants/debug.js",
-  "src/utils/shared.js",
-  "src/utils/storage.js",
-  "src/constants/runtime.js",
-  "src/utils/date-time.js",
-  "src/utils/routes.js",
-  "src/features/slack/shared.js",
-  "src/features/slack/workflow.js",
-  "src/features/slack/success-flow.js",
-  "src/features/form-fields/shared.js",
-  "src/services/lms-data/normalizers.js",
-  "src/services/lms-data/shared.js",
-  "src/features/radar/floor-maps.js",
-  "src/features/radar/shared.js",
-  "src/features/radar/workflow.js",
-  "src/features/radar/form-sync.js",
-  "src/content.js",
-];
+test.beforeAll(ensureExtensionBuild);
 
 // 개편 서비스 실제 예약 폼(주신 HTML)을 축약해 재현한다.
 const LMS_FORM_HTML = `
@@ -116,12 +102,7 @@ async function mountFormPage(page, reservationsBySpaceId = {}) {
     `,
   });
   await page.addScriptTag({ content: "window.__ZZK_DEBUG_MODE__ = true;" });
-  for (const scriptPath of CONTENT_SCRIPT_BUNDLE) {
-    await page.addScriptTag({ path: path.resolve(process.cwd(), scriptPath) });
-  }
-  await page.waitForFunction(() => window.__zzkAvailabilityLensLoaded === true, undefined, {
-    timeout: 3000,
-  });
+  await loadContentBundle(page);
   await page.waitForFunction(() => Boolean(window.__zzkTestApi), undefined, { timeout: 3000 });
 }
 
@@ -478,12 +459,7 @@ test("드래그로 옮긴 모달 위치가 저장되고 재로드 시 복원된�
   // 재로드해도 저장된 오프셋으로 시작해야 한다.
   await page.reload({ waitUntil: "domcontentloaded" });
   await page.addScriptTag({ content: "window.__ZZK_DEBUG_MODE__ = true;" });
-  for (const scriptPath of CONTENT_SCRIPT_BUNDLE) {
-    await page.addScriptTag({ path: path.resolve(process.cwd(), scriptPath) });
-  }
-  await page.waitForFunction(() => window.__zzkAvailabilityLensLoaded === true, undefined, {
-    timeout: 3000,
-  });
+  await loadContentBundle(page);
   await page.waitForSelector("#zzk-map-calendar-overlay", { timeout: 4000 });
 
   const restored = await page.evaluate(() => {
