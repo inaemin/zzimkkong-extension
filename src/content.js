@@ -210,121 +210,6 @@ import { createSlackSuccessFlow } from "./features/slack/success-flow.js";
 
   // 타임라인 아래에 층별 평면도(SVG)를 접이식으로 붙인다. lms+ 에는 지도가 없어
   // 공간의 물리적 위치를 알 수 없으므로, 평면도로 페어룸 등의 위치를 확인하게 한다.
-  function renderMapCalendarFloorMapSection(body, preservedScrollLeft = 0) {
-    if (!(body instanceof HTMLElement)) {
-      return;
-    }
-    const floorMaps = { getAvailableFloorMapFloors, getFloorMapDataUri };
-    if (!floorMaps || typeof floorMaps.getAvailableFloorMapFloors !== "function") {
-      return;
-    }
-    const floors = floorMaps.getAvailableFloorMapFloors();
-    if (!Array.isArray(floors) || floors.length === 0) {
-      return;
-    }
-
-    const section = document.createElement("section");
-    section.className = "zzk-map-calendar-floormap-section";
-
-    const open = isFloorMapSectionOpen();
-
-    // 접기/펼치기 헤더(버튼).
-    const header = document.createElement("button");
-    header.type = "button";
-    header.className = "zzk-map-calendar-floormap-header";
-    header.setAttribute("aria-expanded", open ? "true" : "false");
-
-    const caret = document.createElement("span");
-    caret.className = "zzk-map-calendar-floormap-caret";
-    caret.setAttribute("aria-hidden", "true");
-    caret.textContent = "▸";
-
-    const title = document.createElement("span");
-    title.className = "zzk-map-calendar-floormap-title";
-    title.textContent = "평면도";
-
-    header.append(caret, title);
-    section.appendChild(header);
-
-    // 층별 평면도를 가로로 나열하는 스크롤 컨테이너.
-    const scroller = document.createElement("div");
-    scroller.className = "zzk-map-calendar-floormap-scroller";
-
-    floors.forEach((floor) => {
-      const dataUri = floorMaps.getFloorMapDataUri(floor);
-      if (!dataUri) {
-        return;
-      }
-      const card = document.createElement("figure");
-      card.className = "zzk-map-calendar-floormap-card";
-
-      const img = document.createElement("img");
-      img.className = "zzk-map-calendar-floormap-image";
-      img.src = dataUri;
-      img.alt = `${floor}층 평면도`;
-      img.loading = "lazy";
-      img.draggable = false;
-
-      // 마우스로 누르고 있는 동안에만 확대 모달로 크게 보여준다.
-      img.addEventListener("pointerdown", (event) => {
-        // 주 버튼(좌클릭)/터치만 처리한다.
-        if (event.button != null && event.button !== 0) {
-          return;
-        }
-        event.preventDefault();
-        openFloorMapZoom(floor, dataUri);
-
-        const release = () => {
-          closeFloorMapZoom();
-          window.removeEventListener("pointerup", release);
-          window.removeEventListener("pointercancel", release);
-          window.removeEventListener("blur", release);
-        };
-        // 이미지 밖에서 손을 떼도 닫히도록 window 에 한 번만 건다.
-        window.addEventListener("pointerup", release);
-        window.addEventListener("pointercancel", release);
-        window.addEventListener("blur", release);
-      });
-
-      const caption = document.createElement("figcaption");
-      caption.className = "zzk-map-calendar-floormap-caption";
-      caption.textContent = `${floor}F`;
-
-      card.append(img, caption);
-      scroller.appendChild(card);
-    });
-
-    section.appendChild(scroller);
-
-    const applyOpenState = (nextOpen) => {
-      section.classList.toggle("open", nextOpen);
-      header.setAttribute("aria-expanded", nextOpen ? "true" : "false");
-      caret.textContent = nextOpen ? "▾" : "▸";
-    };
-    applyOpenState(open);
-
-    // 리렌더로 스크롤러가 새로 만들어졌으므로, 펼쳐진 상태면 이전 가로 스크롤 위치를
-    // 복원한다. 이미지 레이아웃이 잡힌 뒤라야 scrollLeft 가 먹으므로 다음 프레임에서 한다.
-    if (open && preservedScrollLeft > 0) {
-      window.requestAnimationFrame(() => {
-        scroller.scrollLeft = preservedScrollLeft;
-      });
-    }
-
-    header.addEventListener("click", () => {
-      const nextOpen = !section.classList.contains("open");
-      applyOpenState(nextOpen);
-      persistFloorMapSectionOpen(nextOpen);
-      // 평면도를 펼치면 모달이 세로로 길어지는(=리사이즈) 것이므로, 뷰포트를
-      // 벗어났으면 화면 안으로 다시 끌어들인다. 새 높이가 레이아웃에 반영된 뒤
-      // 측정하도록 다음 프레임에서 실행한다.
-      window.requestAnimationFrame(() => {
-        reclampMapCalendarOffsetToViewport();
-      });
-    });
-
-    body.appendChild(section);
-  }
 
   const state = {
     mounted: false,
@@ -1448,18 +1333,6 @@ import { createSlackSuccessFlow } from "./features/slack/success-flow.js";
     card.appendChild(body);
   }
 
-  /** 본문 안의 소유 구역을 만들어(또는 찾아) 돌려준다. */
-  function ensureBodyChild(body, className) {
-    const existing = body.querySelector(`:scope > .${className}`);
-    if (existing instanceof HTMLElement) {
-      return existing;
-    }
-    const host = document.createElement("div");
-    host.className = className;
-    body.appendChild(host);
-    return host;
-  }
-
   function renderMapCalendarOverlay(scheduleData) {
     if (!state.scheduleOverlayEnabled) {
       removeMapCalendarOverlay();
@@ -1519,11 +1392,6 @@ import { createSlackSuccessFlow } from "./features/slack/success-flow.js";
       left: previousScrollEl instanceof HTMLElement ? previousScrollEl.scrollLeft : 0,
       top: previousBody instanceof HTMLElement ? previousBody.scrollTop : 0,
     };
-    // 평면도 스크롤러도 매 리렌더마다 새로 그려지므로, 슬롯 hover 등으로 자주 재렌더될 때
-    // 가로 스크롤 위치가 맨 앞으로 튀지 않도록 이전 위치를 보존한다.
-    const previousFloorMapScroller = overlay.querySelector(".zzk-map-calendar-floormap-scroller");
-    const preservedFloorMapScrollLeft =
-      previousFloorMapScroller instanceof HTMLElement ? previousFloorMapScroller.scrollLeft : 0;
 
     applyMapCalendarOverlayOffset(overlay);
     updateMapCalendarLauncherState();
@@ -1697,17 +1565,11 @@ import { createSlackSuccessFlow } from "./features/slack/success-flow.js";
     }
 
     // 본문 엘리먼트는 React 가 그린다(카드의 직계 자식이어야 CSS 높이 배분이 맞다).
-    //
-    // 본문 안은 둘로 나눈다: 그리드는 React 루트가, 평면도는 아직 명령형 코드가
-    // 소유한다. 한 컨테이너를 공유하면 서로의 DOM 을 지운다(비우면 React 가 자기
-    // 노드가 사라진 줄 모르고, React 가 렌더하면 명령형으로 붙인 게 날아간다).
+    // 그리드와 평면도가 모두 컴포넌트라 본문 전체를 React 루트가 소유한다.
     const body = shellRefs.body;
     if (!(body instanceof HTMLElement)) {
       return;
     }
-    const gridHost = ensureBodyChild(body, "zzk-map-calendar-grid-host");
-    const floorMapHost = ensureBodyChild(body, "zzk-map-calendar-floormap-host");
-    floorMapHost.textContent = "";
     syncMapCalendarBodyLoadingState();
 
     if (state.mapCalendarCollapsed) {
@@ -1769,7 +1631,7 @@ import { createSlackSuccessFlow } from "./features/slack/success-flow.js";
     );
 
     flushSync(() => {
-      renderRadarGrid(gridHost, {
+      renderRadarGrid(body, {
         timeline,
         floorGroups: gridRoomsByFloor,
         layout: timelineLayout,
@@ -1785,6 +1647,22 @@ import { createSlackSuccessFlow } from "./features/slack/success-flow.js";
             titleMode: "overlay",
           });
         },
+        floorMaps: {
+          floors: getAvailableFloorMapFloors(),
+          getFloorMapDataUri,
+          open: isFloorMapSectionOpen(),
+          onOpenChange: (nextOpen) => {
+            persistFloorMapSectionOpen(nextOpen);
+            // 평면도를 펼치면 모달이 세로로 길어진다. 뷰포트를 벗어났으면
+            // 화면 안으로 다시 끌어들인다(새 높이가 반영된 뒤 측정).
+            window.requestAnimationFrame(() => {
+              reclampMapCalendarOffsetToViewport();
+            });
+            renderMapCalendarOverlay(scheduleData);
+          },
+          onZoomStart: openFloorMapZoom,
+          onZoomEnd: closeFloorMapZoom,
+        },
         onSlotClick: (room, startIndex, endIndex) => {
           queueTimelineSelectionApply({
             date: selectionDate,
@@ -1795,10 +1673,6 @@ import { createSlackSuccessFlow } from "./features/slack/success-flow.js";
         },
       });
     });
-
-    // lms+ 에는 지도가 없어 공간의 물리적 위치를 알 수 없다. 타임라인 아래에
-    // 층별 평면도(SVG)를 접이식으로 붙여, 페어룸 등이 실제 어디인지 확인할 수 있게 한다.
-    renderMapCalendarFloorMapSection(floorMapHost, preservedFloorMapScrollLeft);
 
     const scrollEl = getMapCalendarScrollElement(overlay);
     syncMapCalendarBodyScrollState(body);

@@ -9,6 +9,7 @@ import {
   type SlotState,
 } from "@/features/radar/slot-model";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/ui/components/ui/tooltip";
+import { RadarFloorMaps, type RadarFloorMapsProps } from "@/ui/components/radar-floor-maps";
 
 // 레이더의 슬롯 그리드.
 //
@@ -51,6 +52,8 @@ export interface RadarGridProps {
   /** 타임라인 pane. 가로 스크롤 위치를 바깥에서 읽고 되돌린다. */
   timelinePaneRef?: React.Ref<HTMLDivElement>;
   minTrackWidth: number;
+  /** 타임라인 아래 평면도. 같은 트리에 있어야 본문 소유권이 하나로 정리된다. */
+  floorMaps: RadarFloorMapsProps;
 }
 
 export function RadarGrid({
@@ -63,6 +66,7 @@ export function RadarGrid({
   renderRoomLabel,
   timelinePaneRef,
   minTrackWidth,
+  floorMaps,
 }: RadarGridProps) {
   // hover 는 그리드 안에서만 쓰인다. 바깥 상태로 두면 hover 한 번에 오버레이
   // 전체가 다시 그려지는데, 여기서 들고 있으면 React 가 바뀐 행만 갱신한다.
@@ -78,114 +82,122 @@ export function RadarGrid({
   }, [roomIds]);
 
   return (
-    <div className="zzk-map-calendar-grid-wrap">
-      <div className="zzk-map-calendar-label-pane">
-        <div className="zzk-map-calendar-grid zzk-map-calendar-label-grid">
-          <div className="zzk-map-calendar-axis-row zzk-map-calendar-label-row">
-            <div className="zzk-map-calendar-floor-name axis">층</div>
-            <div className="zzk-map-calendar-room-name axis">{roomColumnLabel}</div>
-          </div>
-
-          {floorGroups.map((floorGroup) => (
-            <div
-              key={floorGroup.floorKey}
-              className={`zzk-map-calendar-floor-group floor-boundary${
-                floorGroup.isFloorDivider ? " floor-divider" : ""
-              }`}
-            >
-              <div className="zzk-map-calendar-floor-name">{floorGroup.floorLabel}</div>
-              <div className="zzk-map-calendar-floor-rooms">
-                {floorGroup.rooms.map(({ room }) => (
-                  <div
-                    key={room.id}
-                    className={`zzk-map-calendar-row zzk-map-calendar-label-row${
-                      hover?.roomId === room.id ? " hovered" : ""
-                    }`}
-                  >
-                    <RoomNameCell room={room} render={renderRoomLabel} />
-                  </div>
-                ))}
-              </div>
-            </div>
-          ))}
-        </div>
-
-        {/* 층↔회의실 세로 구분선. 헤더부터 마지막 행까지 덮어야 해서 별도 레이어다. */}
-        <div className="zzk-map-calendar-divider-layer">
-          <div className="zzk-map-calendar-divider-track" />
-        </div>
-      </div>
-
-      <div className="zzk-map-calendar-timeline-pane" ref={timelinePaneRef}>
-        <div className="zzk-map-calendar-timeline-track" style={{ minWidth: `${minTrackWidth}px` }}>
-          {/* 정시 세로 경계선. 슬롯과 같은 그리드를 써서 열을 맞춘다. */}
-          <div className="zzk-map-calendar-hour-boundary-layer">
-            <div
-              className="zzk-map-calendar-hour-boundary-track"
-              style={{ gridTemplateColumns: layout.templateColumns }}
-            >
-              {layout.boundaryColumnStarts
-                .filter((columnStart) => Number.isInteger(columnStart) && columnStart >= 1)
-                .map((columnStart) => (
-                  <div
-                    key={columnStart}
-                    className="zzk-map-calendar-hour-boundary-cell"
-                    style={{ gridColumn: String(columnStart) }}
-                  />
-                ))}
-            </div>
-          </div>
-
-          <div className="zzk-map-calendar-grid zzk-map-calendar-timeline-grid">
-            <div className="zzk-map-calendar-axis-row zzk-map-calendar-timeline-row">
-              <div
-                className="zzk-map-calendar-slots"
-                style={{ gridTemplateColumns: layout.templateColumns }}
-              >
-                {timeline.map((slot, index) => (
-                  <div
-                    key={slot.startMinute}
-                    className={`zzk-map-calendar-hour-label${slot.isHourMark ? " hour-boundary" : ""}`}
-                    style={{ gridColumn: String(layout.slotColumnStarts[index]) }}
-                  >
-                    {slot.isHourMark ? slot.label : ""}
-                  </div>
-                ))}
-              </div>
+    <>
+      <div className="zzk-map-calendar-grid-wrap">
+        <div className="zzk-map-calendar-label-pane">
+          <div className="zzk-map-calendar-grid zzk-map-calendar-label-grid">
+            <div className="zzk-map-calendar-axis-row zzk-map-calendar-label-row">
+              <div className="zzk-map-calendar-floor-name axis">층</div>
+              <div className="zzk-map-calendar-room-name axis">{roomColumnLabel}</div>
             </div>
 
             {floorGroups.map((floorGroup) => (
               <div
                 key={floorGroup.floorKey}
-                className={`zzk-map-calendar-floor-group floor-boundary zzk-map-calendar-floor-group-timeline${
+                className={`zzk-map-calendar-floor-group floor-boundary${
                   floorGroup.isFloorDivider ? " floor-divider" : ""
                 }`}
               >
+                <div className="zzk-map-calendar-floor-name">{floorGroup.floorLabel}</div>
                 <div className="zzk-map-calendar-floor-rooms">
-                  {floorGroup.rooms.map((gridRoom) => (
-                    <RadarGridRow
-                      key={gridRoom.room.id}
-                      gridRoom={gridRoom}
-                      layout={layout}
-                      isHovered={hover?.roomId === gridRoom.room.id}
-                      hoveredStartMinute={hover?.startMinute ?? null}
-                      onSlotHover={(room, slot) => {
-                        setHover({ roomId: room.id, startMinute: slot.startMinute });
-                      }}
-                      onRoomLeave={(room) => {
-                        setHover((current) => (current?.roomId === room.id ? null : current));
-                      }}
-                      onSlotClick={onSlotClick}
-                      defaultReservationMinutes={defaultReservationMinutes}
-                    />
+                  {floorGroup.rooms.map(({ room }) => (
+                    <div
+                      key={room.id}
+                      className={`zzk-map-calendar-row zzk-map-calendar-label-row${
+                        hover?.roomId === room.id ? " hovered" : ""
+                      }`}
+                    >
+                      <RoomNameCell room={room} render={renderRoomLabel} />
+                    </div>
                   ))}
                 </div>
               </div>
             ))}
           </div>
+
+          {/* 층↔회의실 세로 구분선. 헤더부터 마지막 행까지 덮어야 해서 별도 레이어다. */}
+          <div className="zzk-map-calendar-divider-layer">
+            <div className="zzk-map-calendar-divider-track" />
+          </div>
+        </div>
+
+        <div className="zzk-map-calendar-timeline-pane" ref={timelinePaneRef}>
+          <div
+            className="zzk-map-calendar-timeline-track"
+            style={{ minWidth: `${minTrackWidth}px` }}
+          >
+            {/* 정시 세로 경계선. 슬롯과 같은 그리드를 써서 열을 맞춘다. */}
+            <div className="zzk-map-calendar-hour-boundary-layer">
+              <div
+                className="zzk-map-calendar-hour-boundary-track"
+                style={{ gridTemplateColumns: layout.templateColumns }}
+              >
+                {layout.boundaryColumnStarts
+                  .filter((columnStart) => Number.isInteger(columnStart) && columnStart >= 1)
+                  .map((columnStart) => (
+                    <div
+                      key={columnStart}
+                      className="zzk-map-calendar-hour-boundary-cell"
+                      style={{ gridColumn: String(columnStart) }}
+                    />
+                  ))}
+              </div>
+            </div>
+
+            <div className="zzk-map-calendar-grid zzk-map-calendar-timeline-grid">
+              <div className="zzk-map-calendar-axis-row zzk-map-calendar-timeline-row">
+                <div
+                  className="zzk-map-calendar-slots"
+                  style={{ gridTemplateColumns: layout.templateColumns }}
+                >
+                  {timeline.map((slot, index) => (
+                    <div
+                      key={slot.startMinute}
+                      className={`zzk-map-calendar-hour-label${slot.isHourMark ? " hour-boundary" : ""}`}
+                      style={{ gridColumn: String(layout.slotColumnStarts[index]) }}
+                    >
+                      {slot.isHourMark ? slot.label : ""}
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {floorGroups.map((floorGroup) => (
+                <div
+                  key={floorGroup.floorKey}
+                  className={`zzk-map-calendar-floor-group floor-boundary zzk-map-calendar-floor-group-timeline${
+                    floorGroup.isFloorDivider ? " floor-divider" : ""
+                  }`}
+                >
+                  <div className="zzk-map-calendar-floor-rooms">
+                    {floorGroup.rooms.map((gridRoom) => (
+                      <RadarGridRow
+                        key={gridRoom.room.id}
+                        gridRoom={gridRoom}
+                        layout={layout}
+                        isHovered={hover?.roomId === gridRoom.room.id}
+                        hoveredStartMinute={hover?.startMinute ?? null}
+                        onSlotHover={(room, slot) => {
+                          setHover({ roomId: room.id, startMinute: slot.startMinute });
+                        }}
+                        onRoomLeave={(room) => {
+                          setHover((current) => (current?.roomId === room.id ? null : current));
+                        }}
+                        onSlotClick={onSlotClick}
+                        defaultReservationMinutes={defaultReservationMinutes}
+                      />
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
         </div>
       </div>
-    </div>
+
+      {/* lms+ 에는 지도가 없어 공간의 물리적 위치를 알 수 없다. 평면도로 보완한다. */}
+      <RadarFloorMaps {...floorMaps} />
+    </>
   );
 }
 
