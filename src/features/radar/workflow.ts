@@ -15,6 +15,7 @@ export function createRadarWorkflow(deps: Deps) {
     DEBUG_MODE,
     MAP_CALENDAR_ALWAYS_OPEN_STORAGE_KEY,
     NAV_SAFE_Z_INDEX,
+    RADAR_LAUNCHER_Z_INDEX,
     TARGET_ROOM_NAMES,
     findGuestReservationTabContainer,
     findGuestReservationTabStyleSource,
@@ -246,7 +247,7 @@ export function createRadarWorkflow(deps: Deps) {
     launcher.style.setProperty("gap", "0", "important");
     launcher.style.setProperty("cursor", "pointer", "important");
     launcher.style.setProperty("pointer-events", "auto", "important");
-    launcher.style.setProperty("z-index", String(NAV_SAFE_Z_INDEX), "important");
+    launcher.style.setProperty("z-index", String(RADAR_LAUNCHER_Z_INDEX), "important");
     launcher.style.setProperty("transform", "none", "important");
     launcher.style.setProperty(
       "transition",
@@ -323,8 +324,9 @@ export function createRadarWorkflow(deps: Deps) {
       return;
     }
 
-    // lms+ 플로팅 런처는 오버레이(모달)와 z-index 가 같으므로, 항상 body 의 마지막
-    // 자식으로 두어 열린 모달 위에 겹쳐 클릭 가능하게 유지한다.
+    // 런처는 오버레이보다 한 층 위(RADAR_LAUNCHER_Z_INDEX)라 순서에 기대지 않아도
+    // 위에 뜬다. 다만 lms+ 가 SPA 라 body 하위를 갈아끼우면 런처가 떨어져 나갈 수
+    // 있어, 붙어 있는지만 확인해 다시 붙인다.
     if (
       launcher.dataset.zzkMountType === "lms-floating" &&
       document.body instanceof HTMLBodyElement &&

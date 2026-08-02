@@ -2,6 +2,7 @@ import * as React from "react";
 import { createRoot, type Root } from "react-dom/client";
 // ?inline 은 CSS 를 <link> 로 만들지 않고 문자열로 준다.
 // shadow root 안에 넣어야 해서 파일이 아니라 문자열이 필요하다.
+import { RADAR_MODAL_Z_INDEX } from "../constants/runtime.js";
 import styleText from "./styles.css?inline";
 
 import { bridgeHostTheme } from "./host-theme.js";
@@ -30,7 +31,7 @@ export function createShadowMount(hostId: string): ShadowMount {
   // 컨테이너 자체는 레이아웃에 영향을 주지 않는다. 실제 위치는 안쪽에서 잡는다.
   host.style.position = "fixed";
   host.style.inset = "0";
-  host.style.zIndex = "2147483647";
+  host.style.zIndex = String(RADAR_MODAL_Z_INDEX);
   // 컨테이너는 클릭을 통과시키고, 안쪽 실제 UI 만 이벤트를 받는다.
   host.style.pointerEvents = "none";
   document.body.appendChild(host);

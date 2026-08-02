@@ -80,7 +80,32 @@ export const CALENDAR_ROW_GAP = 4;
 // (07:00 시각 텍스트 잘림은 hour-label 의 padding-left 로 방지한다.)
 export const CALENDAR_SIDE_MARGIN = 0;
 export const DRAG_SAFE_TOP = 56;
-export const NAV_SAFE_Z_INDEX = 2147483647;
+
+// z-index 층.
+//
+// 예전에는 전부 2147483647(32비트 최대값)이었다. "확실히 위로"라는 의도였지만
+// 최대값이라 그 위에 아무것도 못 올려서, 날짜 팝오버가 오버레이에 가려지는 문제가
+// 있었다(팝오버에도 같은 값을 줘 동점 + DOM 순서로 이기게 해둔 상태였다).
+//
+// 실제 호스트(lms+) 스타일시트를 재보니 일반 UI 는 최대 200 이고, 그 위는
+// 마크다운 에디터 전체화면(99999) 하나뿐이다. 그건 "화면 전체를 덮는" 의도이므로
+// 우리가 이겨서는 안 된다. 그래서 200 위, 99999 아래에 층을 잡는다.
+const HOST_UI_MAX_Z_INDEX = 200;
+
+/** 레이더 오버레이. 호스트 일반 UI 보다 위. */
+export const RADAR_OVERLAY_Z_INDEX = HOST_UI_MAX_Z_INDEX + 100;
+/** 플로팅 런처. 열린 오버레이 위에서도 눌려야 한다. */
+export const RADAR_LAUNCHER_Z_INDEX = RADAR_OVERLAY_Z_INDEX + 10;
+/** Slack 모달·평면도 확대처럼 화면을 덮는 것. */
+export const RADAR_MODAL_Z_INDEX = RADAR_LAUNCHER_Z_INDEX + 10;
+
+/**
+ * 호스트 상단 네비를 우리 UI 위로 올릴 때 쓴다.
+ *
+ * 오버레이가 화면 오른쪽 아래에 뜨는데 네비는 위에 있어 실제로 겹치지 않지만,
+ * 겹치는 경우에도 로그아웃·마이페이지는 눌려야 한다.
+ */
+export const NAV_SAFE_Z_INDEX = RADAR_MODAL_Z_INDEX + 10;
 // 공간 종류. lms+ API 는 안 주므로 이름 기반 메타데이터로 분류한다.
 export type SpaceTab = typeof MAP_CALENDAR_SPACE_TAB_MEETING | typeof MAP_CALENDAR_SPACE_TAB_PAIR;
 

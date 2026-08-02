@@ -6,6 +6,7 @@ import {
   CALENDAR_SLOT_GAP,
   MAP_CALENDAR_MIN_WIDTH,
   MAP_CALENDAR_VIEWPORT_MARGIN,
+  RADAR_OVERLAY_Z_INDEX,
 } from "../constants/runtime.js";
 
 // 레이더 오버레이 CSS.
@@ -26,7 +27,7 @@ export const RADAR_OVERLAY_CSS = `
   width: max-content;
   max-width: calc(100vw - 24px);
   max-height: calc(100vh - 24px);
-  z-index: 2147483647;
+  z-index: ${RADAR_OVERLAY_Z_INDEX};
   pointer-events: auto;
   overflow: visible;
   display: flex;
