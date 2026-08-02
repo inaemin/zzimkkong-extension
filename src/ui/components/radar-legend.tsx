@@ -80,7 +80,6 @@ export function RadarLegend({ container }: RadarLegendProps) {
         sideOffset={8}
         container={container ?? undefined}
       >
-        <p className="mb-2 text-xs font-medium">타임블록 색</p>
         <ul className="flex flex-col gap-2">
           {LEGEND_ITEMS.map((item) => (
             <li key={item.colorVariable} className="flex items-start gap-2">

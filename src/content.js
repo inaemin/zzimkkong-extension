@@ -2212,10 +2212,6 @@ import { createSlackSuccessFlow } from "./features/slack/success-flow.js";
       }
 
       #${MAP_CALENDAR_OVERLAY_ID} .zzk-map-calendar-control,
-      #${MAP_CALENDAR_OVERLAY_ID} .zzk-map-calendar-toggle {
-        user-select: auto;
-      }
-
       #${MAP_CALENDAR_OVERLAY_ID} .zzk-map-calendar-control.zzk-date {
         min-width: 122px;
       }
@@ -2317,10 +2313,6 @@ import { createSlackSuccessFlow } from "./features/slack/success-flow.js";
         text-overflow: ellipsis;
       }
 
-      #${MAP_CALENDAR_OVERLAY_ID} .zzk-map-calendar-toggle {
-        user-select: auto;
-      }
-
       #${MAP_CALENDAR_OVERLAY_ID} .zzk-map-calendar-control.zzk-date {
         min-width: 122px;
       }
@@ -2420,21 +2412,6 @@ import { createSlackSuccessFlow } from "./features/slack/success-flow.js";
         min-width: 0;
         overflow: hidden;
         text-overflow: ellipsis;
-      }
-
-      #${MAP_CALENDAR_OVERLAY_ID} .zzk-map-calendar-toggle {
-        border: 1px solid rgba(15, 23, 42, 0.2);
-        border-radius: 999px;
-        background: rgba(248, 250, 252, 0.95);
-        color: #0f172a;
-        font-size: 13px;
-        font-weight: 700;
-        padding: 4px 9px;
-        cursor: pointer;
-      }
-
-      #${MAP_CALENDAR_OVERLAY_ID} .zzk-map-calendar-toggle:hover {
-        background: rgba(226, 232, 240, 0.95);
       }
 
       #${MAP_CALENDAR_OVERLAY_ID} .zzk-map-calendar-resize-handle {

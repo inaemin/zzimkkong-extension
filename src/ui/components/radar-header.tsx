@@ -147,7 +147,7 @@ export function RadarHeader({
           type="button"
           variant="outline"
           size="sm"
-          className="zzk-map-calendar-toggle h-7 px-2 text-xs"
+          className="h-7 px-2 text-xs"
           aria-label="지도 타임블록 접기/펼치기"
           onClick={onToggleCollapsed}
         >

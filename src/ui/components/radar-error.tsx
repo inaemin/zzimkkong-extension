@@ -42,7 +42,7 @@ export function RadarError({ message, onRetry, onClose, headerRef }: RadarErrorP
               type="button"
               variant="outline"
               size="sm"
-              className="zzk-map-calendar-toggle h-7 px-2 text-xs"
+              className="h-7 px-2 text-xs"
               aria-label="레이더 닫기"
               onClick={onClose}
             >
