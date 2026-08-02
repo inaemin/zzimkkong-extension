@@ -73,20 +73,23 @@ test("lms+ 런처는 오른쪽 하단 40x40 원형 아이콘 버튼이다", asyn
   await page.waitForSelector(`#${MAP_CALENDAR_LAUNCHER_ID}`);
 
   const style = await page.evaluate((id) => {
-    const el = document.getElementById(id);
-    const cs = getComputedStyle(el);
-    const rect = el.getBoundingClientRect();
-    const label = el.querySelector(".zzk-map-calendar-radar-label");
+    const host = document.getElementById(id);
+    // 버튼은 shadow root 안에 있다. 위치는 호스트가, 모양은 버튼이 갖는다.
+    const button = host.shadowRoot.querySelector("button");
+    const rect = button.getBoundingClientRect();
     return {
-      position: cs.position,
+      position: getComputedStyle(host).position,
       width: Math.round(rect.width),
       height: Math.round(rect.height),
-      borderRadius: cs.borderRadius,
+      borderRadius: getComputedStyle(button).borderRadius,
       // 오른쪽/아래 여백 24px 근처에 붙어 있는가
       rightGap: Math.round(window.innerWidth - rect.right),
       bottomGap: Math.round(window.innerHeight - rect.bottom),
-      labelHidden: label ? getComputedStyle(label).display === "none" : true,
-      hasIcon: Boolean(el.querySelector(".zzk-map-calendar-radar-icon")),
+      // 아이콘만 있고 글자는 없다.
+      textContent: button.textContent.trim(),
+      hasIcon: Boolean(button.querySelector("svg")),
+      // 토글이므로 눌림 상태를 노출한다.
+      pressed: button.getAttribute("aria-pressed"),
     };
   }, MAP_CALENDAR_LAUNCHER_ID);
 
@@ -97,9 +100,10 @@ test("lms+ 런처는 오른쪽 하단 40x40 원형 아이콘 버튼이다", asyn
   expect(style.rightGap).toBeLessThanOrEqual(28);
   expect(style.bottomGap).toBeGreaterThanOrEqual(20);
   expect(style.bottomGap).toBeLessThanOrEqual(28);
-  // 아이콘만: 텍스트 라벨은 숨김.
-  expect(style.labelHidden).toBe(true);
+  // 아이콘만: 글자는 없다.
+  expect(style.textContent).toBe("");
   expect(style.hasIcon).toBe(true);
+  expect(style.pressed).not.toBeNull();
 });
 
 test("radar launcher toggles the modal closed and open on the new service", async ({ page }) => {

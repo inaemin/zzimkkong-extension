@@ -8,6 +8,9 @@ type Deps = Record<string, any>;
 export function createRadarWorkflow(deps: Deps) {
   const {
     state,
+    renderRadarLauncher,
+    removeRadarLauncher,
+    getRadarLauncherHost,
     queryRadarOverlay,
     MAP_CALENDAR_OVERLAY_ID,
     MAP_CALENDAR_LAUNCHER_ID,
@@ -15,7 +18,6 @@ export function createRadarWorkflow(deps: Deps) {
     DEBUG_MODE,
     MAP_CALENDAR_ALWAYS_OPEN_STORAGE_KEY,
     NAV_SAFE_Z_INDEX,
-    RADAR_LAUNCHER_Z_INDEX,
     TARGET_ROOM_NAMES,
     findGuestReservationTabContainer,
     findGuestReservationTabStyleSource,
@@ -188,15 +190,14 @@ export function createRadarWorkflow(deps: Deps) {
       return;
     }
 
-    const existingLauncher = document.getElementById(MAP_CALENDAR_LAUNCHER_ID);
-    let launcher: HTMLButtonElement;
-    if (existingLauncher instanceof HTMLButtonElement) {
-      launcher = existingLauncher;
-    } else {
-      launcher = document.createElement("button");
-      launcher.id = MAP_CALENDAR_LAUNCHER_ID;
-      launcher.type = "button";
-      launcher.addEventListener("click", () => {
+    const isOpen =
+      !state.mapCalendarSuppressedBySlack &&
+      isMapCalendarModalOpenRequested() &&
+      state.scheduleOverlayEnabled;
+
+    const launcher = renderRadarLauncher({
+      open: isOpen,
+      onOpenChange: (nextOpen) => {
         if (!state.scheduleOverlayEnabled) {
           state.scheduleOverlayEnabled = true;
           if (state.elements?.scheduleToggle instanceof HTMLInputElement) {
@@ -204,56 +205,17 @@ export function createRadarWorkflow(deps: Deps) {
           }
         }
 
-        state.mapCalendarVisible = !state.mapCalendarVisible;
-        updateMapCalendarLauncherState(launcher);
-        if (state.mapCalendarVisible) {
+        state.mapCalendarVisible = nextOpen;
+        if (nextOpen) {
           openMapCalendarModal();
         } else {
           removeMapCalendarOverlay();
         }
-      });
-    }
+        updateMapCalendarLauncherState();
+      },
+    });
 
-    // lms+ 는 호스트 폼에 인라인으로 붙일 자리가 없어, 화면 오른쪽 하단에
-    // 40x40 원형 아이콘 버튼(플로팅)으로 띄우고 토글로 열고 닫는다.
-    styleLmsFloatingLauncher(launcher);
-    ensureMapCalendarLauncherContent(launcher);
-    updateMapCalendarLauncherState(launcher);
     scheduleAutoOpenMapCalendarLauncher(launcher);
-  }
-
-  // lms+ 전용 플로팅 런처: 오른쪽 하단 고정, 40x40 원형, 아이콘만.
-  function styleLmsFloatingLauncher(launcher) {
-    if (launcher.parentElement !== document.body) {
-      document.body.appendChild(launcher);
-    }
-    launcher.dataset.zzkMountType = "lms-floating";
-    launcher.className = "zzk-map-calendar-radar-launcher-floating";
-    launcher.style.setProperty("position", "fixed", "important");
-    launcher.style.setProperty("right", "24px", "important");
-    launcher.style.setProperty("bottom", "24px", "important");
-    launcher.style.setProperty("left", "auto", "important");
-    launcher.style.setProperty("top", "auto", "important");
-    launcher.style.setProperty("width", "40px", "important");
-    launcher.style.setProperty("height", "40px", "important");
-    launcher.style.setProperty("min-width", "40px", "important");
-    launcher.style.setProperty("min-height", "40px", "important");
-    launcher.style.setProperty("padding", "0", "important");
-    launcher.style.setProperty("margin", "0", "important");
-    launcher.style.setProperty("border-radius", "999px", "important");
-    launcher.style.setProperty("display", "inline-flex", "important");
-    launcher.style.setProperty("align-items", "center", "important");
-    launcher.style.setProperty("justify-content", "center", "important");
-    launcher.style.setProperty("gap", "0", "important");
-    launcher.style.setProperty("cursor", "pointer", "important");
-    launcher.style.setProperty("pointer-events", "auto", "important");
-    launcher.style.setProperty("z-index", String(RADAR_LAUNCHER_Z_INDEX), "important");
-    launcher.style.setProperty("transform", "none", "important");
-    launcher.style.setProperty(
-      "transition",
-      "background-color 140ms ease, color 140ms ease, border-color 140ms ease, box-shadow 140ms ease, transform 140ms ease",
-      "important",
-    );
   }
 
   function scheduleAutoOpenMapCalendarLauncher(launcher) {
@@ -311,77 +273,20 @@ export function createRadarWorkflow(deps: Deps) {
   }
 
   function removeMapCalendarLauncher() {
-    const launcher = document.getElementById(MAP_CALENDAR_LAUNCHER_ID);
-    if (launcher) {
-      launcher.remove();
-    }
+    removeRadarLauncher();
   }
 
-  function updateMapCalendarLauncherState(
-    launcher = document.getElementById(MAP_CALENDAR_LAUNCHER_ID),
-  ) {
-    if (!(launcher instanceof HTMLButtonElement)) {
+  /**
+   * 런처의 눌림 상태를 다시 그린다.
+   *
+   * 예전에는 DOM 을 직접 만져 색·aria-pressed 를 갱신했다. 이제 컴포넌트가
+   * open prop 으로 판단하므로 다시 렌더하기만 하면 된다.
+   */
+  function updateMapCalendarLauncherState() {
+    if (!getRadarLauncherHost()) {
       return;
     }
-
-    // 런처는 오버레이보다 한 층 위(RADAR_LAUNCHER_Z_INDEX)라 순서에 기대지 않아도
-    // 위에 뜬다. 다만 lms+ 가 SPA 라 body 하위를 갈아끼우면 런처가 떨어져 나갈 수
-    // 있어, 붙어 있는지만 확인해 다시 붙인다.
-    if (
-      launcher.dataset.zzkMountType === "lms-floating" &&
-      document.body instanceof HTMLBodyElement &&
-      document.body.lastElementChild !== launcher
-    ) {
-      document.body.appendChild(launcher);
-    }
-
-    const label = ensureMapCalendarLauncherContent(launcher);
-    if (!(label instanceof HTMLSpanElement)) {
-      return;
-    }
-
-    const isOpen =
-      !state.mapCalendarSuppressedBySlack &&
-      isMapCalendarModalOpenRequested() &&
-      state.scheduleOverlayEnabled;
-    const nextText = isOpen ? "레이더 닫기" : "레이더 열기";
-    if (label.textContent !== nextText) {
-      label.textContent = nextText;
-    }
-
-    const nextAriaLabel = isOpen ? "레이더 닫기" : "레이더 열기";
-    if (launcher.getAttribute("aria-label") !== nextAriaLabel) {
-      launcher.setAttribute("aria-label", nextAriaLabel);
-    }
-
-    const nextPressed = isOpen ? "true" : "false";
-    if (launcher.getAttribute("aria-pressed") !== nextPressed) {
-      launcher.setAttribute("aria-pressed", nextPressed);
-    }
-
-    launcher.dataset.zzkToggleState = isOpen ? "open" : "closed";
-    launcher.style.setProperty("border-style", "solid", "important");
-    launcher.style.setProperty("border-width", "1px", "important");
-    if (isOpen) {
-      launcher.style.setProperty("background-color", "#FF8833", "important");
-      launcher.style.setProperty("border-color", "#FF8833", "important");
-      launcher.style.setProperty("color", "#ffffff", "important");
-      launcher.style.setProperty(
-        "box-shadow",
-        "0 0 0 1px rgba(255, 136, 51, 0.18), 0 4px 12px rgba(255, 136, 51, 0.3)",
-        "important",
-      );
-      launcher.style.setProperty("transform", "translateY(-1px)", "important");
-      launcher.style.setProperty("opacity", "1", "important");
-      return;
-    }
-
-    launcher.style.setProperty("background-color", "rgba(255, 255, 255, 0.96)", "important");
-    launcher.style.setProperty("border-color", "rgba(255, 136, 51, 0.56)", "important");
-    launcher.style.setProperty("color", "#FF8833", "important");
-    launcher.style.setProperty("box-shadow", "0 0 0 1px rgba(255, 136, 51, 0.16)", "important");
-    launcher.style.setProperty("transform", "none", "important");
-    launcher.style.setProperty("opacity", "1", "important");
+    ensureMapCalendarLauncher();
   }
 
   function ensureMapCalendarLoadingOverlay(bodyElement, forceCreate = false) {

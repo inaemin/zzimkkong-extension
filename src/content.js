@@ -77,6 +77,11 @@ import { renderRadarHeader } from "./ui/radar-header-mount.js";
 import { renderRadarGrid } from "./ui/radar-grid-mount.js";
 import { renderRadarError } from "./ui/radar-error-mount.js";
 import {
+  getRadarLauncherHost,
+  removeRadarLauncher,
+  renderRadarLauncher,
+} from "./ui/radar-launcher-mount.js";
+import {
   MAP_CALENDAR_OVERLAY_ID,
   MAP_CALENDAR_LAUNCHER_ID,
   SLACK_MODAL_TRIGGER_ID,
@@ -1786,6 +1791,10 @@ import { createSlackSuccessFlow } from "./features/slack/success-flow.js";
     removeMapCalendarOverlay,
   } = createRadarWorkflow({
     state,
+    renderRadarLauncher,
+    removeRadarLauncher,
+    getRadarLauncherHost,
+
     queryRadarOverlay,
 
     MAP_CALENDAR_OVERLAY_ID,
