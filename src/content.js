@@ -353,7 +353,6 @@ import { createSlackSuccessFlow } from "./features/slack/success-flow.js";
     mapCalendarCurrentTimeScrollDate: null,
     // 드래그로 옮긴 모달 위치를 저장소에서 복원한다.
     mapCalendarOffset: readStoredMapCalendarOffset(),
-    slotSelection: null,
     slotHover: null,
     appliedSelection: null,
     timelineSelectionRequestId: 0,
@@ -1558,9 +1557,6 @@ import { createSlackSuccessFlow } from "./features/slack/success-flow.js";
       ? 0
       : getEarliestSelectableMinuteForDate(selectionDate);
 
-    if (state.slotSelection && state.slotSelection.date !== selectionDate) {
-      state.slotSelection = null;
-    }
     if (state.slotHover && state.slotHover.date !== selectionDate) {
       state.slotHover = null;
     }
@@ -1923,51 +1919,9 @@ import { createSlackSuccessFlow } from "./features/slack/success-flow.js";
           ? state.appliedSelection
           : null;
 
-      const selectionMatchesRoom =
-        state.slotSelection != null &&
-        state.slotSelection.date === selectionDate &&
-        state.slotSelection.roomId === room.id;
-
-      let selectionStartIndex = -1;
-      let selectionMaxIndex = -1;
-      let selectionHoverIndex = -1;
-
-      if (selectionMatchesRoom) {
-        selectionStartIndex = slotMetas.findIndex(
-          (meta) => meta.slot.startMinute === state.slotSelection?.startMinute,
-        );
-
-        if (selectionStartIndex >= 0 && slotMetas[selectionStartIndex].isSelectable) {
-          const hardMaxIndex = Math.min(
-            slotMetas.length - 1,
-            selectionStartIndex + MAX_RESERVATION_BLOCKS - 1,
-          );
-
-          for (let index = selectionStartIndex; index <= hardMaxIndex; index += 1) {
-            if (!slotMetas[index].isSelectable) {
-              break;
-            }
-            selectionMaxIndex = index;
-          }
-
-          const requestedHoverMinute = state.slotSelection?.hoverMinute;
-          const hoverIndex = slotMetas.findIndex(
-            (meta) => meta.slot.startMinute === requestedHoverMinute,
-          );
-
-          selectionHoverIndex =
-            hoverIndex >= selectionStartIndex && hoverIndex <= selectionMaxIndex
-              ? hoverIndex
-              : selectionStartIndex;
-        } else {
-          state.slotSelection = null;
-        }
-      }
-
-      if (selectionStartIndex >= 0 && selectionHoverIndex < selectionStartIndex) {
-        selectionHoverIndex = selectionStartIndex;
-      }
-
+      // lms+ 는 클릭 한 번에 예약이 확정되므로(아래 click 핸들러) 2단계 드래그 선택이
+      // 없다. slotSelection 은 hoverMinute 만 갖고 startMinute 은 아무도 쓰지 않아,
+      // 예전 선택 미리보기 분기(selectable/preview/anchor)는 도달할 수 없었다.
       const hoverMatchesRoom =
         state.slotHover != null &&
         state.slotHover.date === selectionDate &&
@@ -2058,32 +2012,6 @@ import { createSlackSuccessFlow } from "./features/slack/success-flow.js";
           slotElement.classList.add("selected");
         }
 
-        const isSelectableRangeSlot =
-          selectionStartIndex >= 0 &&
-          selectionMaxIndex >= selectionStartIndex &&
-          index >= selectionStartIndex &&
-          index <= selectionMaxIndex &&
-          slotMetas[index].isSelectable;
-
-        if (isSelectableRangeSlot) {
-          slotElement.classList.add("selectable");
-        }
-
-        if (selectionStartIndex >= 0 && index === selectionStartIndex) {
-          slotElement.classList.add("anchor");
-        }
-
-        const isPreviewRangeSlot =
-          selectionStartIndex >= 0 &&
-          selectionHoverIndex >= selectionStartIndex &&
-          index >= selectionStartIndex &&
-          index <= selectionHoverIndex &&
-          slotMetas[index].isSelectable;
-
-        if (isPreviewRangeSlot) {
-          slotElement.classList.add("preview");
-        }
-
         const isHoverPreviewRangeSlot =
           hoverStartIndex >= 0 &&
           hoverMaxIndex >= hoverStartIndex &&
@@ -2138,20 +2066,6 @@ import { createSlackSuccessFlow } from "./features/slack/success-flow.js";
             shouldRerender = true;
           }
 
-          if (
-            state.slotSelection &&
-            state.slotSelection.date === selectionDate &&
-            state.slotSelection.roomId === room.id &&
-            isSelectableRangeSlot &&
-            state.slotSelection.hoverMinute !== slot.startMinute
-          ) {
-            state.slotSelection = {
-              ...state.slotSelection,
-              hoverMinute: slot.startMinute,
-            };
-            shouldRerender = true;
-          }
-
           if (shouldRerender) {
             renderMapCalendarOverlay(scheduleData);
           }
@@ -2191,7 +2105,6 @@ import { createSlackSuccessFlow } from "./features/slack/success-flow.js";
 
           const selectionStartMinute = timeline[index].startMinute;
           const selectionEndMinute = timeline[autoEndIndex].endMinute;
-          state.slotSelection = null;
           state.slotHover = null;
 
           queueTimelineSelectionApply({

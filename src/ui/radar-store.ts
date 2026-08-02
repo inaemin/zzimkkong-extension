@@ -26,16 +26,6 @@ export interface SlotHover {
   startMinute: number;
 }
 
-/**
- * 드래그 선택 중인 범위. 시작점은 클릭한 슬롯, 끝은 현재 hover 중인 슬롯이다.
- * 확정되면 null 로 돌아가고 예약 폼에 반영된다.
- */
-export interface SlotSelection {
-  date: string;
-  roomId: string | number;
-  hoverMinute: number;
-}
-
 export interface RadarState {
   /** 그릴 스케줄. null 이면 아직 데이터가 없다. */
   schedule: DailyScheduleResult | null;
@@ -44,7 +34,6 @@ export interface RadarState {
   collapsed: boolean;
   loading: boolean;
   slotHover: SlotHover | null;
-  slotSelection: SlotSelection | null;
   spaceTab: SpaceTab;
   /** 드래그로 옮긴 위치. */
   offset: { x: number; y: number } | null;
@@ -57,7 +46,6 @@ const INITIAL_STATE: RadarState = {
   collapsed: false,
   loading: false,
   slotHover: null,
-  slotSelection: null,
   spaceTab: MAP_CALENDAR_SPACE_TAB_MEETING,
   offset: null,
   floorMapOpen: false,
