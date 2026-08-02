@@ -12,9 +12,56 @@
 @import "tailwindcss/theme.css" layer(theme);
 @import "tailwindcss/utilities.css" layer(utilities);
 
+/* 토큰 값을 Tailwind 색 이름에 연결한다. 이게 없으면 bg-popover·shadow-md 같은
+   유틸리티가 만들어지지 않아, 클래스는 붙어도 아무 효과가 없다.
+   (@theme 은 최상위에만 올 수 있어 스코프 밖에 둔다.) */
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+}
+
 /* 토큰은 우리 오버레이 안에서만 유효하게 건다. shadow root 판(styles.css)은
-   :host 를 쓰지만 여기서는 페이지라 오버레이 id 로 스코프한다. */
+   :host 를 쓰지만 여기서는 페이지라 오버레이 id 로 스코프한다.
+   팝오버는 오버레이 안에 포털되므로 이 토큰을 그대로 물려받는다. */
 #zzk-map-calendar-overlay {
+  /* shadow/ring 합성 변수의 기본값. preflight 를 뺐기 때문에 직접 넣어야 한다.
+     Tailwind v4 의 box-shadow 유틸리티는 이 변수들을 한 줄로 합쳐 쓰는데,
+     하나라도 비어 있으면 값 전체가 무효가 돼 그림자가 통째로 사라진다. */
+  --tw-shadow: 0 0 #0000;
+  --tw-shadow-color: initial;
+  --tw-shadow-alpha: 100%;
+  --tw-inset-shadow: 0 0 #0000;
+  --tw-inset-shadow-color: initial;
+  --tw-inset-shadow-alpha: 100%;
+  --tw-ring-color: initial;
+  --tw-ring-shadow: 0 0 #0000;
+  --tw-inset-ring-color: initial;
+  --tw-inset-ring-shadow: 0 0 #0000;
+  --tw-ring-inset: initial;
+  --tw-ring-offset-width: 0px;
+  --tw-ring-offset-color: #fff;
+  --tw-ring-offset-shadow: 0 0 #0000;
+
   --background: oklch(1 0 0);
   --foreground: oklch(0.145 0 0);
   --card: oklch(1 0 0);
