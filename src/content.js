@@ -63,6 +63,7 @@ import { closeFloorMapZoom, openFloorMapZoom } from "./ui/floor-map-zoom-modal.j
 import { RadarShell } from "./ui/components/radar-shell.js";
 import { getRadarOverlayRoot } from "./ui/radar-overlay-mount.js";
 import { renderRadarHeader } from "./ui/radar-header-mount.js";
+import { ensurePageTailwindStyle } from "./ui/page-styles.js";
 import {
   MAP_CALENDAR_OVERLAY_ID,
   MAP_CALENDAR_LAUNCHER_ID,
@@ -1349,6 +1350,7 @@ import { createSlackSuccessFlow } from "./features/slack/success-flow.js";
     }
 
     ensureMapCalendarStyle();
+    ensurePageTailwindStyle();
 
     let overlay = document.getElementById(MAP_CALENDAR_OVERLAY_ID);
     if (!(overlay instanceof HTMLElement) || overlay.parentElement !== modalRoot) {
@@ -1477,6 +1479,7 @@ import { createSlackSuccessFlow } from "./features/slack/success-flow.js";
     }
 
     ensureMapCalendarStyle();
+    ensurePageTailwindStyle();
 
     let overlay = document.getElementById(MAP_CALENDAR_OVERLAY_ID);
     if (overlay instanceof HTMLElement && overlay.parentElement !== modalRoot) {
@@ -1672,6 +1675,8 @@ import { createSlackSuccessFlow } from "./features/slack/success-flow.js";
         tagLegendRef: (node) => {
           headerRefs.tagLegend = node;
         },
+        // 달력을 body 로 내보내면 오버레이가 inert 처리돼 날짜 클릭이 막힌다.
+        popoverContainer: overlay,
       });
     });
 

@@ -1,0 +1,37 @@
+/* 페이지에 직접 주입되는 Tailwind.
+ *
+ * 레이더 오버레이는 shadow root 가 아니라 페이지에 렌더된다(오버레이 CSS 약 800줄이
+ * #zzk-map-calendar-overlay 로 스코프돼 있어, shadow root 로 옮기면 그 CSS 가 통째로
+ * 안 닿는다). 그래서 컴포넌트가 쓰는 유틸리티를 페이지에도 넣어줘야 한다.
+ *
+ * preflight(@import "tailwindcss" 에 포함된 기본 리셋)는 넣지 않는다. 그걸 넣으면
+ * lms+ 페이지의 모든 요소가 초기화돼 남의 페이지를 부순다. 유틸리티와 테마만 가져온다.
+ */
+@layer theme, base, components, utilities;
+
+@import "tailwindcss/theme.css" layer(theme);
+@import "tailwindcss/utilities.css" layer(utilities);
+
+/* 토큰은 우리 오버레이 안에서만 유효하게 건다. shadow root 판(styles.css)은
+   :host 를 쓰지만 여기서는 페이지라 오버레이 id 로 스코프한다. */
+#zzk-map-calendar-overlay {
+  --background: oklch(1 0 0);
+  --foreground: oklch(0.145 0 0);
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.145 0 0);
+  --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0.145 0 0);
+  --primary: oklch(0.205 0 0);
+  --primary-foreground: oklch(0.985 0 0);
+  --secondary: oklch(0.97 0 0);
+  --secondary-foreground: oklch(0.205 0 0);
+  --muted: oklch(0.97 0 0);
+  --muted-foreground: oklch(0.556 0 0);
+  --accent: oklch(0.97 0 0);
+  --accent-foreground: oklch(0.205 0 0);
+  --destructive: oklch(0.577 0.245 27.325);
+  --border: oklch(0.922 0 0);
+  --input: oklch(0.922 0 0);
+  --ring: oklch(0.708 0 0);
+  --radius: 0.625rem;
+}

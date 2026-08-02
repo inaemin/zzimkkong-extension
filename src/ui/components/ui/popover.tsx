@@ -1,7 +1,7 @@
 import * as React from "react";
 import { Popover as PopoverPrimitive } from "@base-ui/react/popover";
 
-import { useShadowContainer } from "@/ui/shadow-root-context"
+import { useShadowContainer } from "@/ui/shadow-root-context";
 import { cn } from "@/ui/lib/utils";
 
 function Popover({ ...props }: PopoverPrimitive.Root.Props) {
@@ -18,17 +18,27 @@ function PopoverContent({
   alignOffset = 0,
   side = "bottom",
   sideOffset = 4,
+  container,
   ...props
 }: PopoverPrimitive.Popup.Props &
-  Pick<PopoverPrimitive.Positioner.Props, "align" | "alignOffset" | "side" | "sideOffset">) {
+  Pick<PopoverPrimitive.Positioner.Props, "align" | "alignOffset" | "side" | "sideOffset"> &
+  Pick<PopoverPrimitive.Portal.Props, "container">) {
+  const shadowContainer = useShadowContainer();
+  // 기본값(document.body)으로 두면, 트리거를 감싼 컨테이너가 "팝오버 바깥"으로
+  // 취급돼 열려 있는 동안 inert 처리된다. 그러면 팝오버 위의 클릭이 막힌다.
+  // 트리거와 같은 컨테이너 안에 렌더해야 그 문제가 없다.
+  const portalContainer = container ?? shadowContainer ?? undefined;
   return (
-    <PopoverPrimitive.Portal>
+    <PopoverPrimitive.Portal container={portalContainer}>
       <PopoverPrimitive.Positioner
         align={align}
         alignOffset={alignOffset}
         side={side}
         sideOffset={sideOffset}
-        className="isolate z-50"
+        // 팝오버는 document.body 로 포털되는데, 우리 레이더 오버레이가
+        // z-index 최대값(2147483647)이라 기본값(z-50)이면 그 뒤로 숨는다.
+        // isolate 를 빼야 여기서 준 z-index 가 실제로 먹는다.
+        className="z-2147483647"
       >
         <PopoverPrimitive.Popup
           data-slot="popover-content"

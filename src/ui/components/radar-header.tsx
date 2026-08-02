@@ -32,6 +32,8 @@ export interface RadarHeaderProps {
 
   /** 방 태그 범례. 아직 명령형이라 붙일 자리만 내준다. */
   tagLegendRef?: React.Ref<HTMLDivElement>;
+  /** 달력 팝오버를 띄울 컨테이너(오버레이). body 로 나가면 클릭이 막힌다. */
+  popoverContainer?: HTMLElement | null;
 }
 
 export function RadarHeader({
@@ -45,6 +47,7 @@ export function RadarHeader({
   alwaysOpen,
   onAlwaysOpenChange,
   tagLegendRef,
+  popoverContainer,
 }: RadarHeaderProps) {
   // 최소일 이하로는 못 내려간다. 지난 날짜는 예약할 수 없기 때문이다.
   const canGoPrev = !minDate || date > minDate;
@@ -56,10 +59,12 @@ export function RadarHeader({
   return (
     <>
       <div className="zzk-map-calendar-title-controls">
-        <strong>예약 현황</strong>
-
         <div className="zzk-map-calendar-controls">
-          <div className="zzk-map-calendar-date-row flex items-center gap-1">
+          {/*
+            zzk-map-calendar-date-row 는 쓰지 않는다. 그 CSS 가 grid +
+            align-items:stretch + 1fr 컬럼이라 버튼이 늘어나 정방형이 깨진다.
+          */}
+          <div className="flex items-center gap-1">
             <Button
               type="button"
               variant="ghost"
@@ -78,7 +83,9 @@ export function RadarHeader({
               onChange={onDateChange}
               min={minDate || undefined}
               aria-label="지도 날짜 선택"
-              className="h-7 px-2 text-xs"
+              className="size-7 justify-center p-0"
+              iconOnly
+              container={popoverContainer}
             />
 
             <Button
@@ -96,8 +103,8 @@ export function RadarHeader({
             <Button
               type="button"
               variant="ghost"
-              size="sm"
-              className="h-7 px-2 text-xs"
+              size="icon"
+              className="size-7 text-xs"
               disabled={isToday}
               title={`오늘 (${todayDate})`}
               aria-label={`오늘 (${todayDate})`}
@@ -136,8 +143,8 @@ export function RadarHeader({
         <Button
           type="button"
           variant="outline"
-          size="sm"
-          className="zzk-map-calendar-toggle h-7 px-2 text-xs"
+          size="icon"
+          className="zzk-map-calendar-toggle size-7 text-xs"
           aria-label="지도 타임블록 접기/펼치기"
           onClick={onToggleCollapsed}
         >
