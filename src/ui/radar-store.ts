@@ -14,10 +14,26 @@
 import { MAP_CALENDAR_SPACE_TAB_MEETING, type SpaceTab } from "../constants/runtime.js";
 import type { DailyScheduleResult } from "../services/lms-data/types.js";
 
-/** 슬롯 hover/선택 좌표. 행(방)과 열(시간대)로 가리킨다. */
-export interface SlotPointer {
+/**
+ * hover 중인 슬롯.
+ *
+ * 날짜까지 들고 있는 이유: 날짜를 바꾸면 같은 방·같은 시각이라도 다른 슬롯이다.
+ * 이게 없으면 날짜 전환 후에도 이전 hover 가 살아 있는 것처럼 보인다.
+ */
+export interface SlotHover {
+  date: string;
   roomId: string | number;
-  slotIndex: number;
+  startMinute: number;
+}
+
+/**
+ * 드래그 선택 중인 범위. 시작점은 클릭한 슬롯, 끝은 현재 hover 중인 슬롯이다.
+ * 확정되면 null 로 돌아가고 예약 폼에 반영된다.
+ */
+export interface SlotSelection {
+  date: string;
+  roomId: string | number;
+  hoverMinute: number;
 }
 
 export interface RadarState {
@@ -27,8 +43,8 @@ export interface RadarState {
   open: boolean;
   collapsed: boolean;
   loading: boolean;
-  slotHover: SlotPointer | null;
-  slotSelection: SlotPointer | null;
+  slotHover: SlotHover | null;
+  slotSelection: SlotSelection | null;
   spaceTab: SpaceTab;
   /** 드래그로 옮긴 위치. */
   offset: { x: number; y: number } | null;
