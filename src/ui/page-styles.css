@@ -40,10 +40,17 @@
   --radius-xl: calc(var(--radius) + 4px);
 }
 
-/* 토큰은 우리 오버레이 안에서만 유효하게 건다. shadow root 판(styles.css)은
-   :host 를 쓰지만 여기서는 페이지라 오버레이 id 로 스코프한다.
-   팝오버는 오버레이 안에 포털되므로 이 토큰을 그대로 물려받는다. */
-#zzk-map-calendar-overlay {
+/* 토큰은 :root 에 건다.
+ *
+ * 오버레이 id 로 스코프하고 싶지만 그러면 안 된다. Tailwind 가 @theme 에서 만든
+ * 변수(--radius-md: calc(var(--radius) - 2px) 등)는 :root 에 놓이는데, --radius 가
+ * 오버레이에만 있으면 그 calc 이 :root 에서 풀리지 못해 빈 값이 된다. 실제로
+ * 달력 셀의 --cell-radius 가 비어 모서리가 각지게 나왔다.
+ *
+ * 값 정의(커스텀 프로퍼티)일 뿐이라 페이지 요소의 모양을 바꾸지는 않는다.
+ * 이름이 일반적이라 호스트와 충돌할 여지는 있는데, shadow root 로 옮기면 사라질
+ * 임시 파일이므로 그때 정리한다. */
+:root {
   /* shadow/ring 합성 변수의 기본값. preflight 를 뺐기 때문에 직접 넣어야 한다.
      Tailwind v4 의 box-shadow 유틸리티는 이 변수들을 한 줄로 합쳐 쓰는데,
      하나라도 비어 있으면 값 전체가 무효가 돼 그림자가 통째로 사라진다. */
