@@ -1,4 +1,5 @@
 import type { SpaceTab } from "../../constants/runtime.js";
+
 import type { Reservation, Room, ReservationQuota, TimelineRange, TimelineSlot } from "./types.js";
 
 // content.js 와 background.js 가 각자 구현을 주입한다(서비스워커에는 DOM 이 없다).

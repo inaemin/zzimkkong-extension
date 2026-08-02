@@ -1,6 +1,7 @@
 import { createRoot, type Root } from "react-dom/client";
 
 import { MAP_CALENDAR_OVERLAY_ID } from "../constants/runtime.js";
+
 // shadow root 안에서는 preflight 를 포함한 Tailwind 전체를 넣어도 안전하다.
 // 페이지로 새지 않으므로 lms+ 를 건드리지 않는다(페이지 주입 시절에는 preflight 를
 // 빼야 했고, 그래서 버튼 배경·그림자 기본값을 손으로 채워야 했다).

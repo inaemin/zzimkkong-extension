@@ -1,5 +1,6 @@
 import js from "@eslint/js";
 import prettierConfig from "eslint-config-prettier";
+import importX from "eslint-plugin-import-x";
 import globals from "globals";
 import tseslint from "typescript-eslint";
 import reactHooks from "eslint-plugin-react-hooks";
@@ -14,8 +15,9 @@ import { defineConfig, globalIgnores } from "eslint/config";
 // 규칙 선정 메모(요청안 대비):
 //  - Next.js/React/TS 관련(eslint-config-next, typescript-eslint, react-hooks)은
 //    아직 해당 스택이 없어 제외했다. TS 는 2.5-B, react-hooks 는 3단계에서 추가한다.
-//  - eslint-plugin-import 는 ESLint 10 peer 미지원이라 보류(9 까지만 지원).
-//    전역 해체가 끝나 실제 import 그래프가 생기면 그때 다시 본다.
+//  - eslint-plugin-import 대신 eslint-plugin-import-x(포크)를 쓴다. 원본은
+//    지금도 ESLint 10 을 peer 로 받지 않는다(2.32.0 기준 ^9 까지). 포크는
+//    ^10 을 지원하고 order/no-cycle 규칙이 동일하다. 규칙 이름만 import-x/* 다.
 //  - functional 플러그인(no-let/immutable-data/no-expression-statements)은
 //    DOM 을 직접 조립하는 확장 코드 특성상 맞지 않아 제외했다.
 //    순수 도메인 계층이 분리되는 3단계 이후에 재검토한다.
@@ -60,6 +62,10 @@ export default defineConfig([
   // 확장 소스: content script / MAIN world 훅.
   {
     files: ["src/**/*.{js,ts,tsx}"],
+    plugins: { "import-x": importX },
+    settings: {
+      "import-x/resolver": { node: { extensions: [".js", ".ts", ".tsx"] } },
+    },
     languageOptions: {
       ecmaVersion: 2023,
       sourceType: "module",
@@ -72,6 +78,10 @@ export default defineConfig([
       "no-var": "error",
       "prefer-const": "error",
       "no-param-reassign": "error",
+      // 순환 참조 0건인 상태로 들어왔다(2.5-A 전역 해체 결과). 다시 생기지
+      // 않게 고정한다 — 순환은 번들러가 조용히 통과시킨 뒤 런타임에 터진다.
+      "import-x/no-cycle": "error",
+      "import-x/order": ["error", { "newlines-between": "always" }],
       "no-else-return": "error",
       // 기존 코드에 26건 있고 그중 21건이 content.js 다.
       // content.js 는 3단계에서 React 컴포넌트로 다시 쓸 파일이라 지금 고치면 헛수고다.

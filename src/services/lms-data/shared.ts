@@ -12,8 +12,9 @@ import {
   sanitizeDateForApi,
   sanitizeTimeForApi,
 } from "../../utils/date-time.js";
-import { createLmsDataNormalizers } from "./normalizers.js";
 import type { SpaceTab } from "../../constants/runtime.js";
+
+import { createLmsDataNormalizers } from "./normalizers.js";
 import type {
   AvailabilityResult,
   DailyScheduleResult,

@@ -1,10 +1,11 @@
 import * as React from "react";
 import { createRoot, type Root } from "react-dom/client";
+
 // ?inline 은 CSS 를 <link> 로 만들지 않고 문자열로 준다.
 // shadow root 안에 넣어야 해서 파일이 아니라 문자열이 필요하다.
 import { RADAR_MODAL_Z_INDEX } from "../constants/runtime.js";
-import styleText from "./styles.css?inline";
 
+import styleText from "./styles.css?inline";
 import { bridgeHostTheme } from "./host-theme.js";
 import { ShadowRootProvider } from "./shadow-root-context.js";
 

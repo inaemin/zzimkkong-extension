@@ -2,10 +2,10 @@
 
 import * as React from "react";
 import { Select as SelectPrimitive } from "@base-ui/react/select";
+import { ChevronDownIcon, CheckIcon, ChevronUpIcon } from "lucide-react";
 
 import { useShadowContainer } from "@/ui/shadow-root-context";
 import { cn } from "@/ui/lib/utils";
-import { ChevronDownIcon, CheckIcon, ChevronUpIcon } from "lucide-react";
 
 const Select = SelectPrimitive.Root;
 
