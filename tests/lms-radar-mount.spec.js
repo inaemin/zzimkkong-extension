@@ -582,3 +582,66 @@ test("호스트 CSS 가 있어도 달력 배경은 투명하다", async ({ page 
   expect(rendered.hostStyleHasBgBackground).toBe(true);
   expect(rendered.calendarBackground).toBe("rgba(0, 0, 0, 0)");
 });
+
+// 지난 시간이면서 예약도 있었던 칸은 "그냥 비어 있던 과거"와 구분해서 보여준다.
+// 둘 다 못 고르는 건 같지만, 예약이 있었다면 누가 썼는지가 정보로 남는다.
+test("지난 예약 칸은 더 진하고 예약 내용을 알려준다", async ({ page }) => {
+  await stubServiceDocument(page);
+
+  const now = new Date();
+  const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(
+    now.getDate(),
+  ).padStart(2, "0")}`;
+
+  await page.route(`${API_ORIGIN}/api/**`, async (route) => {
+    const url = new URL(route.request().url());
+    if (url.pathname === "/api/spaces") {
+      await route.fulfill(jsonResponse(spacesFixture));
+      return;
+    }
+    // 07:00~08:00 은 항상 과거다(레이더는 07:00 부터 그린다).
+    await route.fulfill(
+      jsonResponse([
+        {
+          id: 999,
+          spaceId: spacesFixture[0].id,
+          spaceName: spacesFixture[0].name,
+          floor: spacesFixture[0].floor,
+          date: today,
+          startTime: "07:00:00",
+          endTime: "08:00:00",
+          mine: false,
+          purpose: "학습",
+          reserverName: "아무개",
+        },
+      ]),
+    );
+  });
+
+  await page.goto(`${WEB_ORIGIN}/space-reservations`, { waitUntil: "domcontentloaded" });
+  await loadContentBundle(page);
+  await page.waitForSelector(`#${MAP_CALENDAR_OVERLAY_ID} .zzk-map-calendar-slot`, {
+    timeout: 4000,
+  });
+
+  const rendered = await page.evaluate((overlayId) => {
+    const overlay = document.getElementById(overlayId);
+    const pastReserved = overlay.querySelector(".zzk-map-calendar-slot.past-reserved");
+    const pastEmpty = overlay.querySelector(
+      ".zzk-map-calendar-slot.past-blocked:not(.past-reserved)",
+    );
+    const alpha = (color) => Number(color.match(/[\d.]+\)$/)?.[0].replace(")", "") ?? 1);
+    return {
+      count: overlay.querySelectorAll(".past-reserved").length,
+      reservedAlpha: alpha(getComputedStyle(pastReserved).backgroundColor),
+      emptyAlpha: alpha(getComputedStyle(pastEmpty).backgroundColor),
+      title: pastReserved.title,
+    };
+  }, MAP_CALENDAR_OVERLAY_ID);
+
+  expect(rendered.count).toBeGreaterThan(0);
+  // 빈 과거보다 진해야 구분이 된다.
+  expect(rendered.reservedAlpha).toBeGreaterThan(rendered.emptyAlpha);
+  expect(rendered.title).toContain("지난 예약");
+  expect(rendered.title).toContain("아무개");
+});

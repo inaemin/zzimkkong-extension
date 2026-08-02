@@ -13,6 +13,13 @@ export interface SlotState {
   isBusy: boolean;
   /** 현재 시각 이전이라 고를 수 없다. */
   isPastBlocked: boolean;
+  /**
+   * 지난 시간이면서 예약도 있었던 슬롯.
+   *
+   * "비어 있던 과거"와 "예약이 있었던 과거"는 다른 정보다. 둘 다 못 고르는 건
+   * 같지만, 후자는 그 시간에 누가 썼는지가 남아 있어 더 진하게 표시한다.
+   */
+  isPastReserved: boolean;
   isSelectable: boolean;
 }
 
@@ -34,12 +41,15 @@ export function buildSlotStates(
     const isPastBlocked =
       Number.isFinite(earliestSelectableMinute) && slot.startMinute < earliestSelectableMinute;
 
+    const isBusy = overlappedReservations.length > 0;
+
     return {
       slot,
       overlappedReservations,
-      isBusy: overlappedReservations.length > 0,
+      isBusy,
       isPastBlocked,
-      isSelectable: overlappedReservations.length === 0 && !isPastBlocked,
+      isPastReserved: isPastBlocked && isBusy,
+      isSelectable: !isBusy && !isPastBlocked,
     };
   });
 }
@@ -90,7 +100,7 @@ export function buildSlotTitle(
   slotState: SlotState,
   slotEndLabel: string,
 ): string {
-  const { slot, isBusy, isPastBlocked, overlappedReservations } = slotState;
+  const { slot, isBusy, isPastBlocked, isPastReserved, overlappedReservations } = slotState;
   const range = `${roomName} ${slot.label}~${slotEndLabel}`;
 
   if (isBusy) {
@@ -102,7 +112,9 @@ export function buildSlotTitle(
           : `${reservation.startTime}~${reservation.endTime}`,
       )
       .join(" | ");
-    return `${range} 예약 있음${preview ? ` (${preview})` : ""}`;
+    // 지난 예약도 누가 썼는지는 알려준다. 지난 시간이라는 것만 덧붙인다.
+    const label = isPastReserved ? "지난 예약" : "예약 있음";
+    return `${range} ${label}${preview ? ` (${preview})` : ""}`;
   }
   if (isPastBlocked) {
     return `${range} 선택 불가 (현재 시간 이전)`;

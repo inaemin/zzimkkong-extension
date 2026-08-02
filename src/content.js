@@ -1964,6 +1964,10 @@ import { createSlackSuccessFlow } from "./features/slack/success-flow.js";
         }
         if (isPastBlocked) {
           slotElement.classList.add("past-blocked");
+          if (slotMeta.isPastReserved) {
+            // 지난 시간이지만 예약이 있었던 칸. 그냥 비어 있던 과거와 구분한다.
+            slotElement.classList.add("past-reserved");
+          }
         }
         const isSelectedRange =
           appliedSelectionForRoom &&
@@ -3306,6 +3310,12 @@ import { createSlackSuccessFlow } from "./features/slack/success-flow.js";
       #${MAP_CALENDAR_OVERLAY_ID} .zzk-map-calendar-slot.past-blocked {
         background: rgba(148, 163, 184, 0.32);
         border-color: rgba(100, 116, 139, 0.2);
+      }
+
+      /* 지난 시간 + 예약 있었음. 빈 과거보다 진하게 해서 "그때 누가 썼다"를 보여준다. */
+      #${MAP_CALENDAR_OVERLAY_ID} .zzk-map-calendar-slot.past-blocked.past-reserved {
+        background: rgba(100, 116, 139, 0.55);
+        border-color: rgba(71, 85, 105, 0.4);
       }
 
       #${MAP_CALENDAR_OVERLAY_ID} .zzk-map-calendar-slot.selected {
