@@ -72,7 +72,7 @@ async function mountRadar(page, spaces) {
 async function readRoomLabels(page) {
   return await page.evaluate(() =>
     Array.from(
-      document.querySelectorAll("#zzk-map-calendar-overlay .zzk-map-calendar-room-name"),
+      window.__zzkQueryAll(".zzk-map-calendar-room-name"),
     ).map((node) => node.textContent || ""),
   );
 }
@@ -88,7 +88,7 @@ test("창 태그가 붙은 회의실은 창 배지를 보여준다", async ({ pa
 
   const snapshot = await page.evaluate(() => {
     const rows = Array.from(
-      document.querySelectorAll("#zzk-map-calendar-overlay .zzk-map-calendar-room-name"),
+      window.__zzkQueryAll(".zzk-map-calendar-room-name"),
     );
     return rows.map((node) => ({
       text: (node.textContent || "").replace(/\s+/g, ""),

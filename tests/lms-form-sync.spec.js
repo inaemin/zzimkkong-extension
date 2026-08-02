@@ -259,7 +259,7 @@ test("clicking a 30-min block wires through to the lms+ form", async ({ page }) 
       async () => {
         await page.evaluate(() => window.__zzkTestApi.renderScheduleForDate("2099-01-02"));
         return page.evaluate(() => {
-          const slot = document.querySelector(".zzk-map-calendar-slot");
+          const slot = window.__zzkQuery(".zzk-map-calendar-slot");
           return slot ? !slot.className.includes("past-blocked") : false;
         });
       },
@@ -271,18 +271,14 @@ test("clicking a 30-min block wires through to the lms+ form", async ({ page }) 
     // 두 pane 은 같은 순서로 행을 그린다. 라벨 pane 에서 찾은 위치가
     // 타임라인 pane 의 같은 위치다(예전에는 DOM 에 서로 참조를 걸어 뒀다).
     const labelRows = Array.from(
-      document.querySelectorAll(
-        ".zzk-map-calendar-label-pane .zzk-map-calendar-row.zzk-map-calendar-label-row",
-      ),
+      window.__zzkQueryAll(".zzk-map-calendar-label-pane .zzk-map-calendar-row.zzk-map-calendar-label-row"),
     );
     const roomIndex = labelRows.findIndex((r) => {
       const n = r.querySelector(".zzk-map-calendar-room-name");
       return n && (n.textContent || "").includes("은하수");
     });
     const timelineRows = Array.from(
-      document.querySelectorAll(
-        ".zzk-map-calendar-timeline-pane .zzk-map-calendar-row.zzk-map-calendar-timeline-row",
-      ),
+      window.__zzkQueryAll(".zzk-map-calendar-timeline-pane .zzk-map-calendar-row.zzk-map-calendar-timeline-row"),
     );
     const row = roomIndex >= 0 ? timelineRows[roomIndex] : null;
     if (!row) return { ok: false };
@@ -305,18 +301,14 @@ async function hoverSlot(page, label) {
     // 두 pane 은 같은 순서로 행을 그린다. 라벨 pane 에서 찾은 위치가
     // 타임라인 pane 의 같은 위치다(예전에는 DOM 에 서로 참조를 걸어 뒀다).
     const labelRows = Array.from(
-      document.querySelectorAll(
-        ".zzk-map-calendar-label-pane .zzk-map-calendar-row.zzk-map-calendar-label-row",
-      ),
+      window.__zzkQueryAll(".zzk-map-calendar-label-pane .zzk-map-calendar-row.zzk-map-calendar-label-row"),
     );
     const roomIndex = labelRows.findIndex((r) => {
       const n = r.querySelector(".zzk-map-calendar-room-name");
       return n && (n.textContent || "").includes("은하수");
     });
     const timelineRows = Array.from(
-      document.querySelectorAll(
-        ".zzk-map-calendar-timeline-pane .zzk-map-calendar-row.zzk-map-calendar-timeline-row",
-      ),
+      window.__zzkQueryAll(".zzk-map-calendar-timeline-pane .zzk-map-calendar-row.zzk-map-calendar-timeline-row"),
     );
     const row = roomIndex >= 0 ? timelineRows[roomIndex] : null;
     return row ? row.querySelector(`.zzk-map-calendar-slot[data-zzk-slot-start="${label}"]`) : null;
@@ -329,18 +321,14 @@ function readHoverPreview(page) {
     // 두 pane 은 같은 순서로 행을 그린다. 라벨 pane 에서 찾은 위치가
     // 타임라인 pane 의 같은 위치다(예전에는 DOM 에 서로 참조를 걸어 뒀다).
     const labelRows = Array.from(
-      document.querySelectorAll(
-        ".zzk-map-calendar-label-pane .zzk-map-calendar-row.zzk-map-calendar-label-row",
-      ),
+      window.__zzkQueryAll(".zzk-map-calendar-label-pane .zzk-map-calendar-row.zzk-map-calendar-label-row"),
     );
     const roomIndex = labelRows.findIndex((r) => {
       const n = r.querySelector(".zzk-map-calendar-room-name");
       return n && (n.textContent || "").includes("은하수");
     });
     const timelineRows = Array.from(
-      document.querySelectorAll(
-        ".zzk-map-calendar-timeline-pane .zzk-map-calendar-row.zzk-map-calendar-timeline-row",
-      ),
+      window.__zzkQueryAll(".zzk-map-calendar-timeline-pane .zzk-map-calendar-row.zzk-map-calendar-timeline-row"),
     );
     const row = roomIndex >= 0 ? timelineRows[roomIndex] : null;
     if (!row) return [];
@@ -375,7 +363,7 @@ test("hover previews the default 60min (2 slots), or 1 slot when the next is res
       async () => {
         await page.evaluate(() => window.__zzkTestApi.renderScheduleForDate("2099-01-02"));
         return page.evaluate(() => {
-          const slot = document.querySelector(".zzk-map-calendar-slot");
+          const slot = window.__zzkQuery(".zzk-map-calendar-slot");
           return slot ? !slot.className.includes("past-blocked") : false;
         });
       },
@@ -401,7 +389,7 @@ test("슬롯 hover 시 회의실 이름 셀에도 파란 배경이 적용된다"
       async () => {
         await page.evaluate(() => window.__zzkTestApi.renderScheduleForDate("2099-01-02"));
         return page.evaluate(() => {
-          const slot = document.querySelector(".zzk-map-calendar-slot");
+          const slot = window.__zzkQuery(".zzk-map-calendar-slot");
           return slot ? !slot.className.includes("past-blocked") : false;
         });
       },
@@ -416,7 +404,7 @@ test("슬롯 hover 시 회의실 이름 셀에도 파란 배경이 적용된다"
     page.evaluate(() => {
       // 회의실 이름 셀은 라벨 pane 에만 있다.
       const rows = Array.from(
-        document.querySelectorAll(".zzk-map-calendar-label-pane .zzk-map-calendar-row"),
+        window.__zzkQueryAll(".zzk-map-calendar-label-pane .zzk-map-calendar-row"),
       );
       const row = rows.find((r) => {
         const n = r.querySelector(".zzk-map-calendar-room-name");
@@ -445,7 +433,7 @@ test("슬롯 hover 시 회의실 이름 셀에도 파란 배경이 적용된다"
 
 function readOverlayScroll(page) {
   return page.evaluate(() => {
-    const body = document.querySelector("#zzk-map-calendar-overlay .zzk-map-calendar-body");
+    const body = window.__zzkQuery(".zzk-map-calendar-body");
     if (!body) return null;
     return { scrollLeft: body.scrollLeft, maxScroll: body.scrollWidth - body.clientWidth };
   });
@@ -469,7 +457,7 @@ test("today scrolls near current time; a future date resets to the start", async
   // 오늘을 스크롤한 상태에서 미래로 넘긴 뒤에도 위치가 남으면 안 된다.
   // 확실히 하기 위해 스크롤을 끝으로 밀어 놓고 미래 날짜를 렌더한다.
   await page.evaluate(() => {
-    const body = document.querySelector("#zzk-map-calendar-overlay .zzk-map-calendar-body");
+    const body = window.__zzkQuery(".zzk-map-calendar-body");
     body.scrollLeft = body.scrollWidth;
   });
 
@@ -512,7 +500,7 @@ test("드래그로 옮긴 모달 위치가 저장되고 재로드 시 복원된�
   await page.waitForSelector("#zzk-map-calendar-overlay", { timeout: 4000 });
 
   const restored = await page.evaluate(() => {
-    const overlay = document.getElementById("zzk-map-calendar-overlay");
+    const overlay = window.__zzkHost();
     return overlay ? overlay.style.transform : null;
   });
   // translate(...) 형태로 저장된 오프셋이 반영되어야 한다.

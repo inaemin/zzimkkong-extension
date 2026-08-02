@@ -150,7 +150,7 @@ async function openRadar(page) {
 
   await page.evaluate(async () => {
     const hasOverlayRows =
-      document.querySelectorAll("#zzk-map-calendar-overlay .zzk-map-calendar-row").length > 0;
+      window.__zzkQueryAll(".zzk-map-calendar-row").length > 0;
     if (hasOverlayRows) {
       return;
     }
@@ -223,9 +223,7 @@ test("resize handle is rendered on the radar modal", async ({ page }) => {
   await mountAndOpenRadar(page);
 
   const handle = await page.evaluate(() => {
-    const node = document.querySelector(
-      "#zzk-map-calendar-overlay .zzk-map-calendar-resize-handle",
-    );
+    const node = window.__zzkQuery(".zzk-map-calendar-resize-handle");
     if (!(node instanceof HTMLElement)) {
       return null;
     }
@@ -252,7 +250,7 @@ test("dragging the resize handle changes the modal width live", async ({ page })
   await mountAndOpenRadar(page);
 
   const before = await page.evaluate(() => {
-    const card = document.querySelector("#zzk-map-calendar-overlay .zzk-map-calendar-card");
+    const card = window.__zzkQuery(".zzk-map-calendar-card");
     return card.getBoundingClientRect().width;
   });
 
@@ -271,14 +269,14 @@ test("dragging the resize handle changes the modal width live", async ({ page })
   );
 
   const during = await page.evaluate(() => {
-    const card = document.querySelector("#zzk-map-calendar-overlay .zzk-map-calendar-card");
+    const card = window.__zzkQuery(".zzk-map-calendar-card");
     return card.getBoundingClientRect().width;
   });
 
   await page.mouse.up();
 
   const after = await page.evaluate(() => {
-    const card = document.querySelector("#zzk-map-calendar-overlay .zzk-map-calendar-card");
+    const card = window.__zzkQuery(".zzk-map-calendar-card");
     return card.getBoundingClientRect().width;
   });
 
@@ -301,7 +299,7 @@ test("resizing never shrinks the modal below the minimum width", async ({ page }
   await page.mouse.up();
 
   const result = await page.evaluate(() => {
-    const card = document.querySelector("#zzk-map-calendar-overlay .zzk-map-calendar-card");
+    const card = window.__zzkQuery(".zzk-map-calendar-card");
     return {
       width: card.getBoundingClientRect().width,
       min: window.__zzkTestApi.getMapCalendarWidthBounds().min,
@@ -331,7 +329,7 @@ test("resized width is written to localStorage", async ({ page }) => {
 
   const stored = await page.evaluate((key) => window.localStorage.getItem(key), WIDTH_STORAGE_KEY);
   const liveWidth = await page.evaluate(() => {
-    const card = document.querySelector("#zzk-map-calendar-overlay .zzk-map-calendar-card");
+    const card = window.__zzkQuery(".zzk-map-calendar-card");
     return card.getBoundingClientRect().width;
   });
 
@@ -353,7 +351,7 @@ test("stored width is restored when the radar opens again", async ({ page }) => 
   });
 
   const width = await page.evaluate(() => {
-    const card = document.querySelector("#zzk-map-calendar-overlay .zzk-map-calendar-card");
+    const card = window.__zzkQuery(".zzk-map-calendar-card");
     return card.getBoundingClientRect().width;
   });
 
@@ -385,7 +383,7 @@ test("stored width survives a full page reload", async ({ page }) => {
   await openRadar(page);
 
   const width = await page.evaluate(() => {
-    const card = document.querySelector("#zzk-map-calendar-overlay .zzk-map-calendar-card");
+    const card = window.__zzkQuery(".zzk-map-calendar-card");
     return card.getBoundingClientRect().width;
   });
 
@@ -396,7 +394,7 @@ test("first-time users with no stored width get the default layout", async ({ pa
   await mountAndOpenRadar(page);
 
   const result = await page.evaluate((key) => {
-    const card = document.querySelector("#zzk-map-calendar-overlay .zzk-map-calendar-card");
+    const card = window.__zzkQuery(".zzk-map-calendar-card");
     return {
       stored: window.localStorage.getItem(key),
       inlineWidth: card.style.width,
@@ -423,7 +421,7 @@ test("corrupt stored widths fall back to the default layout", async ({ page }) =
     await openRadar(page);
 
     const result = await page.evaluate(() => {
-      const card = document.querySelector("#zzk-map-calendar-overlay .zzk-map-calendar-card");
+      const card = window.__zzkQuery(".zzk-map-calendar-card");
       return {
         width: card.getBoundingClientRect().width,
         inlineWidth: card.style.width,
@@ -453,7 +451,7 @@ test("out-of-range stored widths are clamped into the supported range", async ({
     await openRadar(page);
 
     const result = await page.evaluate(() => {
-      const card = document.querySelector("#zzk-map-calendar-overlay .zzk-map-calendar-card");
+      const card = window.__zzkQuery(".zzk-map-calendar-card");
       const bounds = window.__zzkTestApi.getMapCalendarWidthBounds();
       return {
         width: card.getBoundingClientRect().width,
@@ -481,9 +479,7 @@ test("narrow widths make the timeline body horizontally scrollable", async ({ pa
 
   const result = await page.evaluate(() => {
     // 2-pane 구조: 가로 스크롤은 타임블록 pane 에서 일어난다.
-    const pane = document.querySelector(
-      "#zzk-map-calendar-overlay .zzk-map-calendar-timeline-pane",
-    );
+    const pane = window.__zzkQuery(".zzk-map-calendar-timeline-pane");
     const style = window.getComputedStyle(pane);
     return {
       overflowX: style.overflowX,
@@ -509,7 +505,7 @@ test("가로 스크롤바는 마지막 타임블록 행 아래 빈 공간에 놓
   });
 
   const result = await page.evaluate(() => {
-    const overlay = document.getElementById("zzk-map-calendar-overlay");
+    const overlay = window.__zzkRoot();
     const pane = overlay.querySelector(".zzk-map-calendar-timeline-pane");
     const grid = overlay.querySelector(".zzk-map-calendar-timeline-grid");
     const rows = Array.from(
@@ -547,9 +543,7 @@ test("the timeline body can actually be scrolled horizontally", async ({ page })
   });
 
   const scrolled = await page.evaluate(() => {
-    const pane = document.querySelector(
-      "#zzk-map-calendar-overlay .zzk-map-calendar-timeline-pane",
-    );
+    const pane = window.__zzkQuery(".zzk-map-calendar-timeline-pane");
     pane.scrollLeft = 0;
     pane.scrollLeft = 200;
     return pane.scrollLeft;
@@ -571,16 +565,10 @@ test("floor and room columns stay pinned while the timeline scrolls", async ({ p
   });
 
   const before = await page.evaluate(() => {
-    const pane = document.querySelector(
-      "#zzk-map-calendar-overlay .zzk-map-calendar-timeline-pane",
-    );
+    const pane = window.__zzkQuery(".zzk-map-calendar-timeline-pane");
     pane.scrollLeft = 0;
-    const floorName = document.querySelector(
-      "#zzk-map-calendar-overlay .zzk-map-calendar-floor-name:not(.axis)",
-    );
-    const roomName = document.querySelector(
-      "#zzk-map-calendar-overlay .zzk-map-calendar-label-pane .zzk-map-calendar-room-name",
-    );
+    const floorName = window.__zzkQuery(".zzk-map-calendar-floor-name:not(.axis)");
+    const roomName = window.__zzkQuery(".zzk-map-calendar-label-pane .zzk-map-calendar-room-name");
     return {
       floorLeft: floorName.getBoundingClientRect().left,
       roomLeft: roomName.getBoundingClientRect().left,
@@ -588,19 +576,11 @@ test("floor and room columns stay pinned while the timeline scrolls", async ({ p
   });
 
   const after = await page.evaluate(() => {
-    const pane = document.querySelector(
-      "#zzk-map-calendar-overlay .zzk-map-calendar-timeline-pane",
-    );
+    const pane = window.__zzkQuery(".zzk-map-calendar-timeline-pane");
     pane.scrollLeft = 260;
-    const floorName = document.querySelector(
-      "#zzk-map-calendar-overlay .zzk-map-calendar-floor-name:not(.axis)",
-    );
-    const roomName = document.querySelector(
-      "#zzk-map-calendar-overlay .zzk-map-calendar-label-pane .zzk-map-calendar-room-name",
-    );
-    const slot = document.querySelector(
-      "#zzk-map-calendar-overlay .zzk-map-calendar-timeline-row .zzk-map-calendar-slots > *",
-    );
+    const floorName = window.__zzkQuery(".zzk-map-calendar-floor-name:not(.axis)");
+    const roomName = window.__zzkQuery(".zzk-map-calendar-label-pane .zzk-map-calendar-room-name");
+    const slot = window.__zzkQuery(".zzk-map-calendar-timeline-row .zzk-map-calendar-slots > *");
     return {
       scrollLeft: pane.scrollLeft,
       floorLeft: floorName.getBoundingClientRect().left,
@@ -631,7 +611,7 @@ test("회의실 열과 타임블록 사이에 세로 구분선이 있고, 스크
   });
 
   const geom = await page.evaluate(() => {
-    const overlay = document.getElementById("zzk-map-calendar-overlay");
+    const overlay = window.__zzkRoot();
     const body = overlay.querySelector(".zzk-map-calendar-body");
     const pane = overlay.querySelector(".zzk-map-calendar-timeline-pane");
     const labelPane = overlay.querySelector(".zzk-map-calendar-label-pane");
@@ -685,7 +665,7 @@ test("라벨 pane 은 타임블록 스크롤 영역 밖이라 타임블록이 �
   });
 
   const result = await page.evaluate(() => {
-    const overlay = document.getElementById("zzk-map-calendar-overlay");
+    const overlay = window.__zzkRoot();
     const labelPane = overlay.querySelector(".zzk-map-calendar-label-pane");
     const pane = overlay.querySelector(".zzk-map-calendar-timeline-pane");
     // 타임블록을 최대한 스크롤한다.
@@ -725,7 +705,7 @@ test("같은 층 안의 회의실 행들은 세로 간격 없이 바짝 붙는�
 
   // 같은 층 그룹(.zzk-map-calendar-floor-rooms) 안의 연속 행 사이 세로 간격을 잰다.
   const gaps = await page.evaluate(() => {
-    const overlay = document.getElementById("zzk-map-calendar-overlay");
+    const overlay = window.__zzkRoot();
     const result = [];
     overlay.querySelectorAll(".zzk-map-calendar-floor-rooms").forEach((group) => {
       const rows = Array.from(group.querySelectorAll(".zzk-map-calendar-row"));
@@ -756,7 +736,7 @@ test("정시 세로선이 층/회의실 세로선처럼 헤더 맨 위까지 올
   });
 
   const geom = await page.evaluate(() => {
-    const overlay = document.getElementById("zzk-map-calendar-overlay");
+    const overlay = window.__zzkRoot();
     const gridWrap = overlay.querySelector(".zzk-map-calendar-grid-wrap");
     const cs = getComputedStyle(gridWrap);
     const axisHeight = parseFloat(cs.getPropertyValue("--zzk-axis-row-height"));
@@ -791,7 +771,7 @@ test("the radar body does not grow a vertical scrollbar when rows fit", async ({
   });
 
   const result = await page.evaluate(() => {
-    const overlay = document.getElementById("zzk-map-calendar-overlay");
+    const overlay = window.__zzkRoot();
     const body = overlay.querySelector(".zzk-map-calendar-body");
     const pane = overlay.querySelector(".zzk-map-calendar-timeline-pane");
     const hasHScroll = pane.classList.contains("zzk-map-calendar-timeline-pane-hscroll");
@@ -827,7 +807,7 @@ test("가로 스크롤바는 타임블록 pane 에만 생기고 라벨 pane 아�
   });
 
   const result = await page.evaluate(() => {
-    const overlay = document.getElementById("zzk-map-calendar-overlay");
+    const overlay = window.__zzkRoot();
     const body = overlay.querySelector(".zzk-map-calendar-body");
     const labelPane = overlay.querySelector(".zzk-map-calendar-label-pane");
     const pane = overlay.querySelector(".zzk-map-calendar-timeline-pane");
@@ -862,20 +842,16 @@ test("the axis header labels also stay pinned while scrolling", async ({ page })
   });
 
   const before = await page.evaluate(() => {
-    const body = document.querySelector("#zzk-map-calendar-overlay .zzk-map-calendar-body");
+    const body = window.__zzkQuery(".zzk-map-calendar-body");
     body.scrollLeft = 0;
-    const axisRoom = document.querySelector(
-      "#zzk-map-calendar-overlay .zzk-map-calendar-room-name.axis",
-    );
+    const axisRoom = window.__zzkQuery(".zzk-map-calendar-room-name.axis");
     return axisRoom.getBoundingClientRect().left;
   });
 
   const after = await page.evaluate(() => {
-    const body = document.querySelector("#zzk-map-calendar-overlay .zzk-map-calendar-body");
+    const body = window.__zzkQuery(".zzk-map-calendar-body");
     body.scrollLeft = 260;
-    const axisRoom = document.querySelector(
-      "#zzk-map-calendar-overlay .zzk-map-calendar-room-name.axis",
-    );
+    const axisRoom = window.__zzkQuery(".zzk-map-calendar-room-name.axis");
     return axisRoom.getBoundingClientRect().left;
   });
 
@@ -1121,9 +1097,7 @@ test("today's radar scrolls the timeline near the current time on open", async (
   await page.waitForTimeout(400);
 
   const result = await page.evaluate(() => {
-    const pane = document.querySelector(
-      "#zzk-map-calendar-overlay .zzk-map-calendar-timeline-pane",
-    );
+    const pane = window.__zzkQuery(".zzk-map-calendar-timeline-pane");
     return {
       scrollLeft: pane.scrollLeft,
       scrollWidth: pane.scrollWidth,
@@ -1157,7 +1131,7 @@ test("a non-today date opens the timeline at the start", async ({ page }) => {
   await page.waitForTimeout(400);
 
   const scrollLeft = await page.evaluate(() => {
-    const body = document.querySelector("#zzk-map-calendar-overlay .zzk-map-calendar-body");
+    const body = window.__zzkQuery(".zzk-map-calendar-body");
     return body.scrollLeft;
   });
 
@@ -1170,7 +1144,7 @@ test("resizing keeps the radar rows and legend intact", async ({ page }) => {
   await mountAndOpenRadar(page);
 
   const before = await page.evaluate(() => ({
-    rows: document.querySelectorAll("#zzk-map-calendar-overlay .zzk-map-calendar-row").length,
+    rows: window.__zzkQueryAll(".zzk-map-calendar-row").length,
   }));
 
   const handleBox = await page
@@ -1187,9 +1161,9 @@ test("resizing keeps the radar rows and legend intact", async ({ page }) => {
   await page.mouse.up();
 
   const after = await page.evaluate(() => ({
-    rows: document.querySelectorAll("#zzk-map-calendar-overlay .zzk-map-calendar-row").length,
+    rows: window.__zzkQueryAll(".zzk-map-calendar-row").length,
     roomNames: Array.from(
-      document.querySelectorAll("#zzk-map-calendar-overlay .zzk-map-calendar-room-name"),
+      window.__zzkQueryAll(".zzk-map-calendar-room-name"),
     ).length,
   }));
 
@@ -1202,7 +1176,7 @@ test("dragging the resize handle does not move the modal", async ({ page }) => {
   await mountAndOpenRadar(page);
 
   const beforeTransform = await page.evaluate(() => {
-    const overlay = document.getElementById("zzk-map-calendar-overlay");
+    const overlay = window.__zzkHost();
     return overlay.style.transform;
   });
 
@@ -1220,7 +1194,7 @@ test("dragging the resize handle does not move the modal", async ({ page }) => {
   await page.mouse.up();
 
   const afterTransform = await page.evaluate(() => {
-    const overlay = document.getElementById("zzk-map-calendar-overlay");
+    const overlay = window.__zzkHost();
     return overlay.style.transform;
   });
 
@@ -1264,7 +1238,7 @@ test("리사이즈로 넓어져 화면을 벗어나면 다시 뷰포트 안으�
   await page.mouse.up();
 
   const result = await page.evaluate(() => {
-    const overlay = document.getElementById("zzk-map-calendar-overlay");
+    const overlay = window.__zzkHost();
     const rect = overlay.getBoundingClientRect();
     return {
       left: Math.round(rect.left),
@@ -1300,7 +1274,7 @@ test("마운트 시 저장된 위치가 현재 뷰포트를 벗어나면 화면 
   });
 
   const result = await page.evaluate(() => {
-    const overlay = document.getElementById("zzk-map-calendar-overlay");
+    const overlay = window.__zzkHost();
     const rect = overlay.getBoundingClientRect();
     return {
       left: Math.round(rect.left),

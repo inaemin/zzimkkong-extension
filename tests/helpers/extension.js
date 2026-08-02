@@ -72,6 +72,30 @@ const HOST_PAGE_CSS = fs.readFileSync(
 
 const DEFAULT_SERVICE_DOCUMENT = `<html><head><style>${HOST_PAGE_CSS}</style></head><body><main></main></body></html>`;
 
+// 레이더 오버레이는 shadow root 안에 있다. document 쿼리로는 안 잡히므로,
+// 페이지 안에서 쓸 조회 헬퍼를 심어준다.
+//
+// Playwright 로케이터(page.locator/click/hover)는 open shadow root 를 자동으로
+// 뚫으므로 그대로 두면 된다. 문제는 page.evaluate 안의 document.querySelector 다.
+export async function installRadarQueryHelpers(page) {
+  await page.evaluate(() => {
+    const overlayId = "zzk-map-calendar-overlay";
+
+    /** 오버레이 호스트 엘리먼트(위치·transform 은 여기에 있다). */
+    window.__zzkHost = () => document.getElementById(overlayId);
+
+    /** 오버레이 shadow root. 없으면 null. */
+    window.__zzkRoot = () => document.getElementById(overlayId)?.shadowRoot ?? null;
+
+    /** 오버레이 안에서 하나 찾기. */
+    window.__zzkQuery = (selector) => window.__zzkRoot()?.querySelector(selector) ?? null;
+
+    /** 오버레이 안에서 모두 찾기(배열). */
+    window.__zzkQueryAll = (selector) => [...(window.__zzkRoot()?.querySelectorAll(selector) ?? [])];
+
+  });
+}
+
 // 실제 사이트는 미인증 요청을 로그인 페이지로 돌려보내므로 문서 응답을 고정한다.
 export async function stubServiceDocument(page, body = DEFAULT_SERVICE_DOCUMENT) {
   await page.route(`${WEB_ORIGIN}/**`, async (route) => {
@@ -159,6 +183,9 @@ export async function loadContentBundle(page, { timeout = 5000 } = {}) {
   await page.waitForFunction(() => window.__zzkAvailabilityLensLoaded === true, undefined, {
     timeout,
   });
+  // 모든 스펙이 이 함수를 거치므로 여기서 조회 헬퍼를 심는다.
+  // (일부 스펙은 stubServiceDocument 대신 자체 page.route 를 쓴다.)
+  await installRadarQueryHelpers(page);
 }
 
 export async function loadPageHookBundle(page) {
