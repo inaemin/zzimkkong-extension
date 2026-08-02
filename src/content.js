@@ -86,7 +86,6 @@ import {
   MAP_CALENDAR_LAUNCHER_ID,
   SLACK_MODAL_TRIGGER_ID,
   DEBUG_MODE,
-  MAP_CALENDAR_STYLE_ID,
   MAP_CALENDAR_OVERLAY_TAB_MEETING_ID,
   MAP_CALENDAR_OVERLAY_TAB_PAIR_ID,
   PAGE_RESERVATION_EVENT_TYPE,
@@ -1777,10 +1776,7 @@ import { createSlackSuccessFlow } from "./features/slack/success-flow.js";
   }
 
   const {
-    createMapCalendarLauncherIcon,
-    ensureMapCalendarLauncherContent,
     ensureSlackModalTrigger,
-    getMapCalendarLauncherMountTarget,
     ensureMapCalendarLoadingOverlay,
     syncMapCalendarBodyLoadingState,
     ensureMapCalendarLauncher,

@@ -49,75 +49,6 @@ export function createRadarWorkflow(deps: Deps) {
     renderMapCalendarOverlay,
   } = deps;
 
-  function createMapCalendarLauncherIcon() {
-    const namespace = "http://www.w3.org/2000/svg";
-    const svg = document.createElementNS(namespace, "svg");
-    svg.classList.add("zzk-map-calendar-radar-icon");
-    svg.setAttribute("viewBox", "0 0 24 24");
-    svg.setAttribute("width", "16");
-    svg.setAttribute("height", "16");
-    svg.setAttribute("fill", "none");
-    svg.setAttribute("aria-hidden", "true");
-    svg.setAttribute("focusable", "false");
-    svg.style.display = "block";
-    svg.style.flexShrink = "0";
-
-    const pathData = [
-      "M19.0701 4.9298C17.513 3.37102 15.4847 2.37012 13.3002 2.0826C11.1158 1.79508 8.89754 2.23703 6.99011 3.3398M4.00011 5.9998H4.01011M2.29011 9.6198C1.9152 11.1469 1.90569 12.7408 2.26233 14.2722C2.61898 15.8037 3.33174 17.2294 4.34274 18.4337C5.35374 19.638 6.63449 20.5869 8.08101 21.2034C9.52752 21.8199 11.099 22.0866 12.6679 21.9819C14.2369 21.8771 15.759 21.4038 17.1107 20.6005C18.4624 19.7972 19.6056 18.6864 20.4475 17.3584C21.2894 16.0303 21.8063 14.5225 21.9562 12.9572C22.1061 11.392 21.8847 9.81347 21.3101 8.3498",
-      "M16.24 7.75992C15.6646 7.18108 14.977 6.72575 14.2195 6.42179C13.462 6.11783 12.6504 5.97163 11.8344 5.99213C11.0184 6.01263 10.2152 6.1994 9.47391 6.54103C8.7326 6.88265 8.0688 7.37193 7.5231 7.97894C6.97741 8.58594 6.56131 9.29791 6.30025 10.0713C6.0392 10.8446 5.93868 11.6631 6.00486 12.4767C6.07103 13.2902 6.30251 14.0817 6.68512 14.8027C7.06772 15.5237 7.59342 16.1591 8.23004 16.6699M12 17.9999H12.01M17.99 11.6599C18.0444 12.6113 17.8715 13.5619 17.4854 14.4332C17.0993 15.3044 16.5113 16.0711 15.77 16.6699",
-      "M12 14C13.1046 14 14 13.1046 14 12C14 10.8954 13.1046 10 12 10C10.8954 10 10 10.8954 10 12C10 13.1046 10.8954 14 12 14Z",
-      "M13.4102 10.5897L19.0702 4.92969",
-    ];
-
-    pathData.forEach((d) => {
-      const path = document.createElementNS(namespace, "path");
-      path.setAttribute("d", d);
-      path.setAttribute("stroke", "currentColor");
-      path.setAttribute("stroke-width", "2");
-      path.setAttribute("stroke-linecap", "round");
-      path.setAttribute("stroke-linejoin", "round");
-      svg.appendChild(path);
-    });
-
-    return svg;
-  }
-
-  function ensureMapCalendarLauncherContent(launcher) {
-    if (!(launcher instanceof HTMLButtonElement)) {
-      return null;
-    }
-
-    // lms+ 플로팅 런처는 아이콘만 노출한다(텍스트 라벨 숨김).
-    const isFloating = launcher.dataset.zzkMountType === "lms-floating";
-
-    let label = launcher.querySelector<HTMLSpanElement>(".zzk-map-calendar-radar-label");
-    if (label instanceof HTMLSpanElement) {
-      label.style.display = isFloating ? "none" : "";
-      return label;
-    }
-
-    launcher.textContent = "";
-    const icon = createMapCalendarLauncherIcon();
-    label = document.createElement("span");
-    label.className = "zzk-map-calendar-radar-label";
-    label.style.display = isFloating ? "none" : "";
-    launcher.append(icon, label);
-    return label;
-  }
-
-  function getMapCalendarLauncherMountTarget() {
-    const actionContainer = findGuestReservationTabContainer();
-    if (actionContainer instanceof HTMLElement) {
-      return actionContainer;
-    }
-
-    if (document.body instanceof HTMLBodyElement) {
-      return document.body;
-    }
-
-    return null;
-  }
-
   function shouldShowSlackModalTrigger() {
     const manualVerificationEnabled = (() => {
       try {
@@ -419,11 +350,8 @@ export function createRadarWorkflow(deps: Deps) {
   }
 
   return {
-    createMapCalendarLauncherIcon,
-    ensureMapCalendarLauncherContent,
     ensureSlackModalTrigger,
     findGuestReservationTabContainer,
-    getMapCalendarLauncherMountTarget,
     findGuestReservationTabStyleSource,
     ensureMapCalendarLoadingOverlay,
     syncMapCalendarBodyLoadingState,

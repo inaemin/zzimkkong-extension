@@ -12,7 +12,6 @@ export const MAP_CALENDAR_OVERLAY_ID = "zzk-map-calendar-overlay";
 export const MAP_CALENDAR_LAUNCHER_ID = "zzk-map-calendar-radar-launcher";
 export const SLACK_MODAL_TRIGGER_ID = "zzk-slack-modal-trigger";
 export { DEBUG_MODE };
-export const MAP_CALENDAR_STYLE_ID = "zzk-map-calendar-style";
 export const MAP_CALENDAR_OVERLAY_TAB_MEETING_ID = "zzk-map-calendar-overlay-tab-meeting";
 export const MAP_CALENDAR_OVERLAY_TAB_PAIR_ID = "zzk-map-calendar-overlay-tab-pair";
 export const PAGE_RESERVATION_EVENT_TYPE = "ZZK_RESERVATION_NETWORK_EVENT";
