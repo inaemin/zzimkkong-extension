@@ -85,7 +85,13 @@ export function DatePicker({
         <CalendarIcon />
         {selected ? label : <span>날짜 선택</span>}
       </PopoverTrigger>
-      <PopoverContent className="w-auto p-0" align="start" container={container ?? undefined}>
+      {/* 레이더 헤더 바로 아래에 뜨므로 조금 띄워야 컨트롤과 붙어 보이지 않는다. */}
+      <PopoverContent
+        className="w-auto p-0"
+        align="start"
+        sideOffset={8}
+        container={container ?? undefined}
+      >
         <Calendar
           mode="single"
           selected={selected}
