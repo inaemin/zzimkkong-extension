@@ -495,11 +495,6 @@ import { createSlackSuccessFlow } from "./features/slack/success-flow.js";
   }
 
   function createRuntimePanelStateElements() {
-    const createButton = () => {
-      const button = document.createElement("button");
-      button.type = "button";
-      return button;
-    };
     const createTimeInput = () => {
       const input = document.createElement("input");
       input.type = "time";
@@ -511,44 +506,14 @@ import { createSlackSuccessFlow } from "./features/slack/success-flow.js";
     const dateInput = document.createElement("input");
     dateInput.type = "date";
 
-    const startInput = createTimeInput();
-    const endInput = createTimeInput();
-
-    const highlightToggle = document.createElement("input");
-    highlightToggle.type = "checkbox";
     const scheduleToggle = document.createElement("input");
     scheduleToggle.type = "checkbox";
 
-    const statusMessage = document.createElement("p");
-    const totalCount = document.createElement("strong");
-    const availableCount = document.createElement("strong");
-    const occupiedCount = document.createElement("strong");
-    const availableList = document.createElement("ul");
-    const occupiedList = document.createElement("ul");
-    const updatedAt = document.createElement("p");
-
     return {
-      form: document.createElement("form"),
-      spaceTabMeetingButton: createButton(),
-      spaceTabPairButton: createButton(),
-      refreshButton: createButton(),
-      datePrevButton: createButton(),
       dateInput,
-      dateNextButton: createButton(),
-      dateTodayButton: createButton(),
-      dateWeekdayLabel: document.createElement("span"),
-      roomTagLegend: document.createElement("div"),
-      startInput,
-      endInput,
-      highlightToggle,
+      startInput: createTimeInput(),
+      endInput: createTimeInput(),
       scheduleToggle,
-      statusMessage,
-      totalCount,
-      availableCount,
-      occupiedCount,
-      availableList,
-      occupiedList,
-      updatedAt,
     };
   }
 
@@ -663,7 +628,6 @@ import { createSlackSuccessFlow } from "./features/slack/success-flow.js";
 
     const sharingMapId = getSharingMapId();
     if (!sharingMapId) {
-      setStatus("공유 맵 정보를 찾지 못했습니다.", "error");
       return;
     }
 
@@ -693,7 +657,6 @@ import { createSlackSuccessFlow } from "./features/slack/success-flow.js";
     const endTime = normalizeTimeInput(state.elements.endInput);
 
     if (!date || !startTime || !endTime) {
-      setStatus("날짜와 시작/종료 시간을 모두 선택해 주세요.", "error");
       return;
     }
 
@@ -701,12 +664,10 @@ import { createSlackSuccessFlow } from "./features/slack/success-flow.js";
     const isEndValid = validateTenMinuteField(state.elements.endInput);
 
     if (!isStartValid || !isEndValid) {
-      setStatus("시간은 10분 단위로 선택해 주세요.", "error");
       return;
     }
 
     if (startTime >= endTime) {
-      setStatus("종료 시간은 시작 시간보다 늦어야 합니다.", "error");
       return;
     }
 
@@ -739,8 +700,6 @@ import { createSlackSuccessFlow } from "./features/slack/success-flow.js";
 
     state.loading = true;
     state.pendingAvailabilityRefresh = false;
-    setStatus(`${getMapCalendarSpaceTabLabel()} 현황을 불러오는 중입니다...`, "loading");
-    state.elements.refreshButton.disabled = true;
 
     const inflight = sendMessage({
       type: "ZZK_FETCH_AVAILABILITY",
@@ -783,8 +742,8 @@ import { createSlackSuccessFlow } from "./features/slack/success-flow.js";
           removeMapCalendarOverlay();
         }
       }
-    } catch (error) {
-      setStatus(getErrorMessage(error), "error");
+    } catch {
+      // 사용자에게 보이는 에러는 React 오버레이가 그린다.
     } finally {
       if (state.availabilityInflightByToken.get(availabilityToken) === inflight) {
         state.availabilityInflightByToken.delete(availabilityToken);
@@ -793,9 +752,6 @@ import { createSlackSuccessFlow } from "./features/slack/success-flow.js";
         state.availabilityInflightToken = null;
       }
       state.loading = false;
-      if (state.elements) {
-        state.elements.refreshButton.disabled = false;
-      }
       // 조건이 바뀌어 대기 중인 갱신이 있으면 그때만 다시 돈다.
       // (같은 조건 반복은 위의 inflight/TTL 에서 이미 걸러진다)
       if (state.pendingAvailabilityRefresh) {
@@ -805,43 +761,7 @@ import { createSlackSuccessFlow } from "./features/slack/success-flow.js";
     }
   }
 
-  function renderCounts(counts) {
-    const rooms = Array.isArray(counts) ? counts : [];
-    const availableCount = rooms.filter((room) => room.isAvailable).length;
-    state.elements.totalCount.textContent = String(rooms.length);
-    state.elements.availableCount.textContent = String(availableCount);
-    state.elements.occupiedCount.textContent = String(Math.max(0, rooms.length - availableCount));
-  }
-
-  function renderRoomLists(rooms) {
-    const available = rooms.filter((room) => room.isAvailable);
-    const occupied = rooms.filter((room) => !room.isAvailable);
-
-    renderPanelRoomTagLegend(rooms);
-    fillList(state.elements.availableList, available, "available");
-    fillList(state.elements.occupiedList, occupied, "occupied");
-  }
-
   function syncMapCalendarSpaceTabButtons() {
-    if (!state.elements) {
-      syncOpenMapCalendarSpaceTabButtons();
-      return;
-    }
-
-    const tabs = [
-      [state.elements.spaceTabMeetingButton, MAP_CALENDAR_SPACE_TAB_MEETING],
-      [state.elements.spaceTabPairButton, MAP_CALENDAR_SPACE_TAB_PAIR],
-    ];
-
-    tabs.forEach(([button, tab]) => {
-      if (!(button instanceof HTMLButtonElement)) {
-        return;
-      }
-      const isActive = state.mapCalendarSpaceTab === tab;
-      button.setAttribute("aria-selected", isActive ? "true" : "false");
-      button.tabIndex = isActive ? 0 : -1;
-    });
-
     syncOpenMapCalendarSpaceTabButtons();
   }
 
@@ -867,8 +787,6 @@ import { createSlackSuccessFlow } from "./features/slack/success-flow.js";
   function rerenderMapCalendarViews() {
     const activeTab = normalizeMapCalendarSpaceTab(state.mapCalendarSpaceTab);
     const visibleRooms = getLatestRoomsForSpaceTab(activeTab);
-    renderCounts(visibleRooms);
-    renderRoomLists(visibleRooms);
 
     const activeDate = normalizeDateInput(state.elements?.dateInput) || state.activeScheduleDate;
     const isModalOpen = isMapCalendarModalOpenRequested();
@@ -879,14 +797,8 @@ import { createSlackSuccessFlow } from "./features/slack/success-flow.js";
     }
 
     if (activeDate && isModalOpen) {
-      refreshDailySchedule(activeDate).catch((error) => {
-        if (
-          state.activeScheduleDate === activeDate &&
-          state.activeScheduleTab === activeTab &&
-          state.elements
-        ) {
-          setStatus(getErrorMessage(error), "error");
-        }
+      refreshDailySchedule(activeDate).catch(() => {
+        // 사용자에게 보이는 에러는 React 오버레이가 그린다.
       });
     }
   }
@@ -906,40 +818,6 @@ import { createSlackSuccessFlow } from "./features/slack/success-flow.js";
     }
     rerenderMapCalendarViews();
     refreshAvailability();
-  }
-
-  function fillList(container, rooms, type) {
-    container.textContent = "";
-
-    if (rooms.length === 0) {
-      const empty = document.createElement("li");
-      empty.className = "zzk-empty";
-      empty.textContent = type === "available" ? "비어 있는 공간 없음" : "사용 중인 공간 없음";
-      container.appendChild(empty);
-      return;
-    }
-
-    const fragment = document.createDocumentFragment();
-    rooms.forEach((room) => {
-      const item = document.createElement("li");
-      item.className = `zzk-room zzk-room-${type}`;
-      renderRoomLabel(item, room, {
-        formatter: formatPlainRoomLabel,
-        titleMode: "list",
-      });
-      item.title = `공간 ID: ${room.id}`;
-      fragment.appendChild(item);
-    });
-    container.appendChild(fragment);
-  }
-
-  function renderPanelRoomTagLegend(rooms) {
-    const legend = state.elements?.roomTagLegend;
-    if (!(legend instanceof HTMLElement)) {
-      return;
-    }
-
-    renderRoomTagLegend(legend);
   }
 
   // 예약 현황(availability)은 회의실 수만큼 요청을 보낸다. 타임블록을 연속으로
@@ -992,12 +870,6 @@ import { createSlackSuccessFlow } from "./features/slack/success-flow.js";
     state.latestRooms = rooms;
     state.latestRoomsBySpaceTab.set(roomType, rooms);
     state.latestMapName = typeof data?.mapName === "string" ? data.mapName : state.latestMapName;
-
-    renderCounts(rooms);
-    renderRoomLists(rooms);
-    renderUpdatedAt();
-
-    setStatus(`${data?.mapName || "공간 지도"} · ${date} ${startTime}~${endTime} 기준`, "success");
   }
 
   function isScheduleCacheStale(date) {
@@ -1220,9 +1092,6 @@ import { createSlackSuccessFlow } from "./features/slack/success-flow.js";
         return;
       }
       const message = getErrorMessage(error);
-      if (state.elements) {
-        setStatus(message, "error");
-      }
       renderMapCalendarErrorOverlay(message);
     } finally {
       if (state.scheduleInflightByDate.get(scopeKey) === inflight) {
@@ -1823,7 +1692,6 @@ import { createSlackSuccessFlow } from "./features/slack/success-flow.js";
     setScheduleLoadingDate,
     refreshDailySchedule,
     refreshAvailability,
-    setStatus,
     getErrorMessage,
     queryHostDateInput,
     renderMapCalendarOverlay,
@@ -1832,7 +1700,6 @@ import { createSlackSuccessFlow } from "./features/slack/success-flow.js";
   const radarFormSync = createRadarFormSync({
     state,
     ensurePanel,
-    setStatus,
     getErrorMessage,
     clampDateToMin,
     getMinimumSelectableDateForCurrentContext,
@@ -2326,30 +2193,6 @@ import { createSlackSuccessFlow } from "./features/slack/success-flow.js";
     element.setAttribute(attrName, value);
   }
 
-  function renderUpdatedAt() {
-    const now = new Date();
-    const text = now.toLocaleString("ko-KR", {
-      hour12: false,
-      timeZone: SEOUL_TIMEZONE,
-      month: "2-digit",
-      day: "2-digit",
-      hour: "2-digit",
-      minute: "2-digit",
-      second: "2-digit",
-    });
-
-    state.elements.updatedAt.textContent = `업데이트: ${text} (KST)`;
-  }
-
-  function setStatus(message, type) {
-    if (!state.elements) {
-      return;
-    }
-
-    state.elements.statusMessage.textContent = message;
-    state.elements.statusMessage.className = `zzk-status ${type}`;
-  }
-
   function initializeDefaults(elements) {
     const todayDate = getTodayDateInKST();
 
@@ -2372,11 +2215,9 @@ import { createSlackSuccessFlow } from "./features/slack/success-flow.js";
     elements.endInput.value = range.endTime;
     normalizeTimeInput(elements.startInput);
     normalizeTimeInput(elements.endInput);
-    elements.highlightToggle.checked = true;
     elements.scheduleToggle.checked = true;
     state.scheduleOverlayEnabled = true;
     syncPanelDateNavigationState();
-    renderCounts({ total: 0, available: 0, occupied: 0 });
   }
 
   function syncPanelDateNavigationState() {
@@ -2534,10 +2375,8 @@ import { createSlackSuccessFlow } from "./features/slack/success-flow.js";
             renderMapCalendarOverlay(resolvedCache);
           }
         })
-        .catch((error) => {
-          if (state.elements) {
-            setStatus(getErrorMessage(error), "error");
-          }
+        .catch(() => {
+          // 사용자에게 보이는 에러는 React 오버레이가 그린다.
         })
         .finally(() => {
           if (
@@ -2552,14 +2391,6 @@ import { createSlackSuccessFlow } from "./features/slack/success-flow.js";
     }
 
     refreshDailySchedule(requestedDate).catch((error) => {
-      if (
-        state.activeScheduleDate === requestedDate &&
-        state.activeScheduleTab === requestedTab &&
-        getSharingMapId() === requestedSharingMapId &&
-        state.elements
-      ) {
-        setStatus(getErrorMessage(error), "error");
-      }
       setScheduleLoadingDate(requestedDate, false, requestedTab);
       updateMapCalendarLauncherState();
     });
@@ -4295,10 +4126,8 @@ import { createSlackSuccessFlow } from "./features/slack/success-flow.js";
         return;
       }
 
-      refreshDailySchedule(state.activeScheduleDate).catch((error) => {
-        if (state.elements) {
-          setStatus(getErrorMessage(error), "error");
-        }
+      refreshDailySchedule(state.activeScheduleDate).catch(() => {
+        // 사용자에게 보이는 에러는 React 오버레이가 그린다.
       });
     }, 220);
   }
@@ -5667,7 +5496,7 @@ import { createSlackSuccessFlow } from "./features/slack/success-flow.js";
 
   const { showSlackCopyModal, closeSlackCopyModal, copyTextToClipboard } = createSlackWorkflow({
     state,
-            SLACK_CHANNEL_MENTION_STORAGE_KEY,
+    SLACK_CHANNEL_MENTION_STORAGE_KEY,
     SLACK_CHANNEL_HISTORY_STORAGE_KEY,
     SLACK_REMINDER_LEAD_TIME_STORAGE_KEY,
     SLACK_REMINDER_LEAD_TIME_OPTIONS,

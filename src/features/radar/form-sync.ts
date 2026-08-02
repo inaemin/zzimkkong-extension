@@ -4,7 +4,6 @@ export function createRadarFormSync(deps: Deps) {
   const {
     state,
     ensurePanel,
-    setStatus,
     getErrorMessage,
     clampDateToMin,
     getMinimumSelectableDateForCurrentContext,
@@ -112,9 +111,7 @@ export function createRadarFormSync(deps: Deps) {
           if (!isLatestTimelineSelectionRequest(requestId)) {
             return;
           }
-          if (state.elements) {
-            setStatus(getErrorMessage(error), "error");
-          }
+          // 사용자에게 보이는 에러는 React 오버레이(renderRadarError)가 그린다.
         });
       },
       hadPendingApply ? 80 : 0,
@@ -222,10 +219,6 @@ export function createRadarFormSync(deps: Deps) {
         startTime,
         endTime,
       });
-      setStatus(
-        `예약 폼 시간 반영 실패: ${normalizedDate} ${startTime}~${endTime}. 다시 한번 선택해 주세요.`,
-        "error",
-      );
       return;
     }
 

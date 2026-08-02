@@ -43,7 +43,6 @@ export function createRadarWorkflow(deps: Deps) {
     setScheduleLoadingDate,
     refreshDailySchedule,
     refreshAvailability,
-    setStatus,
     getErrorMessage,
     queryHostDateInput,
     renderMapCalendarOverlay,
@@ -324,10 +323,8 @@ export function createRadarWorkflow(deps: Deps) {
     }
 
     if (targetDate) {
-      refreshDailySchedule(targetDate).catch((error) => {
-        if (state.elements) {
-          setStatus(getErrorMessage(error), "error");
-        }
+      refreshDailySchedule(targetDate).catch(() => {
+        // 사용자에게 보이는 에러는 React 오버레이(renderRadarError)가 그린다.
         updateMapCalendarLauncherState();
       });
       return;
