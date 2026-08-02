@@ -1508,8 +1508,12 @@ import { createSlackSuccessFlow } from "./features/slack/success-flow.js";
           }
           if (!state.mapCalendarVisible) {
             removeMapCalendarOverlay();
+            return;
           }
           updateMapCalendarLauncherState();
+          // 끈 뒤에도 오버레이가 열려 있으면(직접 열어둔 경우) 헤더를 다시 그려야
+          // 스위치가 꺼진 상태로 보인다. 안 그리면 값만 바뀌고 화면은 그대로다.
+          renderMapCalendarOverlay(scheduleData);
         },
         tagLegendRef: (node) => {
           headerRefs.tagLegend = node;
@@ -1835,6 +1839,15 @@ import { createSlackSuccessFlow } from "./features/slack/success-flow.js";
         height: 2px;
         background: rgba(255, 255, 255, 0.94);
         pointer-events: none;
+      }
+
+      #${MAP_CALENDAR_OVERLAY_ID} {
+        /* 슬롯 색. 범례가 이 변수를 그대로 참조하므로 한쪽만 바뀌지 않는다. */
+        --zzk-slot-free: rgba(34, 197, 94, 0.32);
+        --zzk-slot-busy: rgba(239, 68, 68, 0.45);
+        --zzk-slot-past: rgba(148, 163, 184, 0.32);
+        --zzk-slot-past-reserved: rgba(100, 116, 139, 0.55);
+        --zzk-slot-selected: rgba(14, 165, 233, 0.38);
       }
 
       #${MAP_CALENDAR_OVERLAY_ID} .zzk-map-calendar-card {
@@ -2304,37 +2317,109 @@ import { createSlackSuccessFlow } from "./features/slack/success-flow.js";
         text-overflow: ellipsis;
       }
 
-      #${MAP_CALENDAR_OVERLAY_ID} .zzk-map-calendar-legend {
-        display: flex;
-        gap: 6px;
-        font-size: 12px;
-        color: #334155;
+      #${MAP_CALENDAR_OVERLAY_ID} .zzk-map-calendar-toggle {
+        user-select: auto;
       }
 
-      #${MAP_CALENDAR_OVERLAY_ID} .zzk-map-calendar-legend span {
+      #${MAP_CALENDAR_OVERLAY_ID} .zzk-map-calendar-control.zzk-date {
+        min-width: 122px;
+      }
+
+      #${MAP_CALENDAR_OVERLAY_ID} .zzk-map-calendar-control.zzk-time {
+        min-width: 88px;
+      }
+
+      #${MAP_CALENDAR_OVERLAY_ID} .zzk-map-calendar-control.zzk-time.zzk-time-readonly {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        background: #f8fafc;
+        color: #0f172a;
+        border-color: rgba(15, 23, 42, 0.2);
+        font-variant-numeric: tabular-nums;
+        cursor: default;
+        user-select: none;
+      }
+
+      #${MAP_CALENDAR_OVERLAY_ID} .zzk-map-calendar-control:focus {
+        outline: 2px solid rgba(14, 116, 144, 0.28);
+        outline-offset: 0;
+        border-color: rgba(14, 116, 144, 0.4);
+      }
+
+      #${MAP_CALENDAR_OVERLAY_ID} .zzk-map-calendar-header-right {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin-left: auto;
+      }
+
+      #${MAP_CALENDAR_OVERLAY_ID} .zzk-map-calendar-always-open {
         display: inline-flex;
         align-items: center;
         gap: 4px;
+        font-size: 13px;
+        font-weight: 700;
+        color: #334155;
+        white-space: nowrap;
+        user-select: none;
       }
 
-      #${MAP_CALENDAR_OVERLAY_ID} .zzk-map-calendar-legend span::before {
-        content: "";
-        width: 8px;
-        height: 8px;
-        border-radius: 2px;
-        border: 1px solid rgba(15, 23, 42, 0.25);
+      #${MAP_CALENDAR_OVERLAY_ID} .zzk-map-calendar-always-open input {
+        margin: 0;
+        cursor: pointer;
+        accent-color: #0284c7;
       }
 
-      #${MAP_CALENDAR_OVERLAY_ID} .zzk-map-calendar-legend .free::before {
-        background: rgba(34, 197, 94, 0.4);
+      #${MAP_CALENDAR_OVERLAY_ID} .zzk-map-calendar-header strong {
+        font-size: 14px;
       }
 
-      #${MAP_CALENDAR_OVERLAY_ID} .zzk-map-calendar-legend .busy::before {
-        background: rgba(239, 68, 68, 0.45);
+      #${MAP_CALENDAR_OVERLAY_ID} .zzk-room-tag-legend[hidden] {
+        display: none !important;
       }
 
-      #${MAP_CALENDAR_OVERLAY_ID} .zzk-map-calendar-legend .selected::before {
-        background: rgba(14, 165, 233, 0.35);
+      #${MAP_CALENDAR_OVERLAY_ID} .zzk-room-tag-legend {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+        margin-top: 6px;
+      }
+
+      #${MAP_CALENDAR_OVERLAY_ID} .zzk-room-tag-legend-item {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        font-size: 11px;
+        color: #475569;
+      }
+
+      #${MAP_CALENDAR_OVERLAY_ID} .zzk-room-tag-badge {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        flex: none;
+        min-width: 18px;
+        min-height: 18px;
+        padding: 0 2px;
+        border-radius: 4px;
+        background: rgba(14, 165, 233, 0.14);
+        border: 1px solid rgba(14, 165, 233, 0.22);
+        color: #0369a1;
+        font-size: 10px;
+        font-weight: 800;
+        line-height: 1;
+        letter-spacing: 0.01em;
+      }
+
+      #${MAP_CALENDAR_OVERLAY_ID} .zzk-room-tag-badge::before {
+        content: attr(data-label);
+      }
+
+      #${MAP_CALENDAR_OVERLAY_ID} .zzk-room-name-text {
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
       }
 
       #${MAP_CALENDAR_OVERLAY_ID} .zzk-map-calendar-toggle {
@@ -2855,28 +2940,26 @@ import { createSlackSuccessFlow } from "./features/slack/success-flow.js";
       }
 
       #${MAP_CALENDAR_OVERLAY_ID} .zzk-map-calendar-slot.free {
-        background: rgba(34, 197, 94, 0.32);
+        background: var(--zzk-slot-free);
       }
-
       #${MAP_CALENDAR_OVERLAY_ID} .zzk-map-calendar-slot.busy {
-        background: rgba(239, 68, 68, 0.45);
+        background: var(--zzk-slot-busy);
       }
-
       #${MAP_CALENDAR_OVERLAY_ID} .zzk-map-calendar-slot.past-blocked {
-        background: rgba(148, 163, 184, 0.32);
+        background: var(--zzk-slot-past);
         border-color: rgba(100, 116, 139, 0.2);
       }
 
       /* 지난 시간 + 예약 있었음. 빈 과거보다 진하게 해서 "그때 누가 썼다"를 보여준다. */
       #${MAP_CALENDAR_OVERLAY_ID} .zzk-map-calendar-slot.past-blocked.past-reserved {
-        background: rgba(100, 116, 139, 0.55);
+        background: var(--zzk-slot-past-reserved);
         border-color: rgba(71, 85, 105, 0.4);
       }
 
       #${MAP_CALENDAR_OVERLAY_ID} .zzk-map-calendar-slot.selected {
         outline: 1.5px solid rgba(14, 116, 144, 0.95);
         outline-offset: -1px;
-        background: rgba(14, 165, 233, 0.38);
+        background: var(--zzk-slot-selected);
       }
 
       #${MAP_CALENDAR_OVERLAY_ID} .zzk-map-calendar-slot.selectable {

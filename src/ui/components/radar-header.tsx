@@ -4,6 +4,9 @@ import { ChevronLeftIcon, ChevronRightIcon } from "lucide-react";
 import { addDaysToDateString, formatDateSelectorText } from "@/utils/date-time";
 import { Button } from "@/ui/components/ui/button";
 import { DatePicker } from "@/ui/components/date-picker";
+import { RadarLegend } from "@/ui/components/radar-legend";
+import { Label } from "@/ui/components/ui/label";
+import { Switch } from "@/ui/components/ui/switch";
 
 // 레이더 헤더의 컨트롤 줄.
 //
@@ -125,21 +128,20 @@ export function RadarHeader({
       </div>
 
       <div className="zzk-map-calendar-header-right">
-        <label className="zzk-map-calendar-always-open">
-          <input
-            type="checkbox"
+        {/* 폼 제출용 선택이 아니라 즉시 저장되는 설정이라 Switch 를 쓴다. */}
+        <div className="zzk-map-calendar-always-open flex items-center gap-1.5">
+          <Switch
+            id="zzk-radar-always-open"
             checked={alwaysOpen}
             aria-label="지도 타임블록 항상 열기"
-            onChange={(event) => onAlwaysOpenChange(event.target.checked)}
+            onCheckedChange={onAlwaysOpenChange}
           />
-          <span>항상 열기</span>
-        </label>
-
-        <div className="zzk-map-calendar-legend">
-          <span className="free">비어 있음</span>
-          <span className="busy">예약 있음</span>
-          <span className="selected">선택 시간대</span>
+          <Label htmlFor="zzk-radar-always-open" className="text-xs font-normal">
+            항상 열기
+          </Label>
         </div>
+
+        <RadarLegend container={popoverContainer} />
 
         <Button
           type="button"

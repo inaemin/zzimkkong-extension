@@ -743,3 +743,30 @@ test("표시할 일정이 없으면 안내 문구가 뜬다", async ({ page }) =
   expect(rendered.slots).toBe(0);
   expect(rendered.hasFloorMaps).toBe(true);
 });
+
+// "항상 열기"를 끄면 오버레이가 열린 채로 남는다. 그때 헤더를 다시 그리지 않으면
+// 값만 바뀌고 스위치는 켜진 채로 보인다.
+test("항상 열기 스위치가 양방향으로 토글된다", async ({ page }) => {
+  await mountServicePage(page);
+
+  const switchSelector = `#${MAP_CALENDAR_OVERLAY_ID} [aria-label="지도 타임블록 항상 열기"]`;
+  await page.waitForSelector(switchSelector, { timeout: 4000 });
+
+  const readChecked = () =>
+    page.evaluate(
+      (overlayId) =>
+        document
+          .getElementById(overlayId)
+          ?.querySelector('[aria-label="지도 타임블록 항상 열기"]')
+          ?.getAttribute("aria-checked"),
+      MAP_CALENDAR_OVERLAY_ID,
+    );
+
+  expect(await readChecked()).toBe("true");
+
+  await page.click(switchSelector);
+  await expect.poll(readChecked).toBe("false");
+
+  await page.click(switchSelector);
+  await expect.poll(readChecked).toBe("true");
+});
