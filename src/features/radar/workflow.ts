@@ -507,9 +507,6 @@ export function createRadarWorkflow(deps: Deps) {
     if (overlay) {
       overlay.remove();
     }
-    document
-      .querySelectorAll(".zzk-map-calendar-date-popover-floating")
-      .forEach((element) => element.remove());
     state.scheduleLoadingDate = null;
     state.scheduleLoadingTab = null;
     state.lastRenderedScheduleDate = null;

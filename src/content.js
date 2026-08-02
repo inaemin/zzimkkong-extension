@@ -1255,9 +1255,6 @@ import { createSlackSuccessFlow } from "./features/slack/success-flow.js";
 
     applyMapCalendarOverlayOffset(overlay);
     updateMapCalendarLauncherState();
-    document
-      .querySelectorAll(".zzk-map-calendar-date-popover-floating")
-      .forEach((element) => element.remove());
 
     const errorRefs = {};
     flushSync(() => {
@@ -1356,9 +1353,6 @@ import { createSlackSuccessFlow } from "./features/slack/success-flow.js";
     applyMapCalendarOverlayOffset(overlay);
     updateMapCalendarLauncherState();
 
-    document
-      .querySelectorAll(".zzk-map-calendar-date-popover-floating")
-      .forEach((element) => element.remove());
     // overlay 는 이제 React 루트다. textContent 로 비우면 React 가 자기 DOM 이
     // 사라진 줄 모른 채 다음 렌더에서 없는 노드를 건드린다. 트리 갱신은 React 에
     // 맡기고, 아직 명령형인 본문만 아래에서 새로 만들어 붙인다.
@@ -1987,110 +1981,6 @@ import { createSlackSuccessFlow } from "./features/slack/success-flow.js";
         border-color: rgba(14, 116, 144, 0.45);
       }
 
-      .zzk-map-calendar-date-popover-floating {
-        position: fixed;
-        top: 0;
-        left: 0;
-        z-index: 2147483647;
-        width: 236px;
-        padding: 8px;
-        border: 1px solid rgba(15, 23, 42, 0.14);
-        border-radius: 12px;
-        background: rgba(255, 255, 255, 0.98);
-        box-shadow: 0 12px 28px rgba(15, 23, 42, 0.16);
-        backdrop-filter: blur(10px);
-      }
-
-      .zzk-map-calendar-date-popover-floating[hidden] {
-        display: none;
-      }
-
-      .zzk-map-calendar-date-popover-floating .zzk-map-calendar-date-popover-header {
-        display: grid;
-        grid-template-columns: 28px 1fr 28px;
-        align-items: center;
-        gap: 4px;
-        margin-bottom: 6px;
-      }
-
-      .zzk-map-calendar-date-popover-floating .zzk-map-calendar-date-popover-title {
-        font-size: 13px;
-        font-weight: 800;
-        color: #0f172a;
-        text-align: center;
-      }
-
-      .zzk-map-calendar-date-popover-floating .zzk-map-calendar-date-popover-nav {
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-        width: 28px;
-        height: 28px;
-        padding: 0;
-        border: 1px solid rgba(15, 23, 42, 0.12);
-        border-radius: 8px;
-        background: #ffffff;
-        color: #475569;
-        cursor: pointer;
-      }
-
-      .zzk-map-calendar-date-popover-floating .zzk-map-calendar-date-popover-nav svg {
-        width: 12px;
-        height: 12px;
-      }
-
-      .zzk-map-calendar-date-popover-floating .zzk-map-calendar-date-popover-weekdays,
-      .zzk-map-calendar-date-popover-floating .zzk-map-calendar-date-popover-grid {
-        display: grid;
-        grid-template-columns: repeat(7, 1fr);
-        gap: 2px;
-      }
-
-      .zzk-map-calendar-date-popover-floating .zzk-map-calendar-date-popover-weekdays {
-        margin-bottom: 4px;
-      }
-
-      .zzk-map-calendar-date-popover-floating .zzk-map-calendar-date-popover-weekdays span {
-        font-size: 11px;
-        font-weight: 700;
-        color: #64748b;
-        text-align: center;
-      }
-
-      .zzk-map-calendar-date-popover-floating .zzk-map-calendar-date-popover-day {
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-        min-width: 26px;
-        min-height: 26px;
-        padding: 0;
-        border: 1px solid transparent;
-        border-radius: 8px;
-        background: transparent;
-        color: #0f172a;
-        font-size: 12px;
-        font-weight: 700;
-        cursor: pointer;
-      }
-
-      .zzk-map-calendar-date-popover-floating .zzk-map-calendar-date-popover-day.is-outside-month {
-        color: #cbd5e1;
-      }
-
-      .zzk-map-calendar-date-popover-floating .zzk-map-calendar-date-popover-day.is-today {
-        border-color: rgba(255, 136, 51, 0.28);
-        color: #ff8833;
-      }
-
-      .zzk-map-calendar-date-popover-floating .zzk-map-calendar-date-popover-day.is-selected {
-        background: #ff8833;
-        color: #ffffff;
-      }
-
-      .zzk-map-calendar-date-popover-floating .zzk-map-calendar-date-popover-day:disabled {
-        color: #cbd5e1;
-        cursor: default;
-      }
 
       #${MAP_CALENDAR_OVERLAY_ID} .zzk-map-calendar-date-nav {
         display: inline-flex;
