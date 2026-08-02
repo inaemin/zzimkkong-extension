@@ -67,7 +67,7 @@ export function RadarHeader({
           <div className="flex items-center gap-1">
             <Button
               type="button"
-              variant="ghost"
+              variant="outline"
               size="icon"
               className="size-7"
               disabled={!canGoPrev}
@@ -90,7 +90,7 @@ export function RadarHeader({
 
             <Button
               type="button"
-              variant="ghost"
+              variant="outline"
               size="icon"
               className="size-7"
               title={nextDate ? `다음일 (${nextDate})` : "다음일"}
@@ -103,7 +103,7 @@ export function RadarHeader({
             {/* 글자 버튼은 정방형으로 만들면 글씨가 눌린다. 높이만 맞춘다. */}
             <Button
               type="button"
-              variant="ghost"
+              variant="secondary"
               size="sm"
               className="h-7 px-2 text-xs"
               disabled={isToday}
