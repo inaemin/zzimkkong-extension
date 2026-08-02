@@ -1825,22 +1825,6 @@ import { createSlackSuccessFlow } from "./features/slack/success-flow.js";
     };
   }
 
-  function renderMapCalendarHourBoundaryCells(slotsContainer, boundaryColumnStarts) {
-    if (!(slotsContainer instanceof HTMLElement)) {
-      return;
-    }
-
-    const columnStarts = Array.isArray(boundaryColumnStarts) ? boundaryColumnStarts : [];
-    columnStarts.forEach((columnStart) => {
-      if (!Number.isInteger(columnStart) || columnStart < 1) {
-        return;
-      }
-      const line = document.createElement("div");
-      line.className = "zzk-map-calendar-hour-boundary-cell";
-      line.style.gridColumn = String(columnStart);
-      slotsContainer.appendChild(line);
-    });
-  }
 
   function ensureMapCalendarStyle() {
     if (document.getElementById(MAP_CALENDAR_STYLE_ID)) {
