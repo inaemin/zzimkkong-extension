@@ -162,7 +162,9 @@ export function buildSlotTitle(
       .join(" | ");
     // 지난 예약도 누가 썼는지는 알려준다. 지난 시간이라는 것만 덧붙인다.
     const label = isPastReserved ? "지난 예약" : "예약 있음";
-    return `${range} ${label}${preview ? ` (${preview})` : ""}`;
+    // 예약 내용은 줄을 바꿔 보여준다. 한 줄로 붙이면 방 이름·시간대·예약자가
+    // 뭉쳐서 어디까지가 무엇인지 읽기 어렵다.
+    return preview ? `${range} ${label}\n(${preview})` : `${range} ${label}`;
   }
   if (isPastBlocked) {
     return `${range} 선택 불가 (현재 시간 이전)`;

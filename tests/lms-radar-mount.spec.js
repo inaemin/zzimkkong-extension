@@ -652,6 +652,10 @@ test("지난 예약 칸은 더 진하고 예약 내용을 알려준다", async (
   const tooltip = page.locator('[data-slot="tooltip-content"]');
   await expect(tooltip).toContainText("지난 예약");
   await expect(tooltip).toContainText("아무개");
+
+  // 예약 내용은 줄을 바꿔 보여준다(한 줄로 붙으면 읽기 어렵다).
+  const tooltipText = await tooltip.textContent();
+  expect(tooltipText).toContain("\n");
 });
 
 // 에러 화면과 정상 오버레이는 같은 엘리먼트에 그려진다(React 루트 공유).
