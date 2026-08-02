@@ -42,6 +42,8 @@ export interface RadarGridProps {
   };
   /** 라벨 pane 헤더의 두 번째 열 제목("회의실"/"페어룸"). */
   roomColumnLabel: string;
+  /** 그릴 게 없을 때 보여줄 문구. 있으면 그리드 대신 이것만 그린다. */
+  emptyMessage: string | null;
 
   onSlotClick: (room: RoomSchedule, startIndex: number, endIndex: number) => void;
 
@@ -61,6 +63,7 @@ export function RadarGrid({
   floorGroups,
   layout,
   roomColumnLabel,
+  emptyMessage,
   onSlotClick,
   defaultReservationMinutes,
   renderRoomLabel,
@@ -80,6 +83,16 @@ export function RadarGrid({
   React.useEffect(() => {
     setHover(null);
   }, [roomIds]);
+
+  if (emptyMessage !== null) {
+    // 빈 상태에서도 평면도는 보여준다(공간 위치는 일정과 무관하게 유용하다).
+    return (
+      <>
+        <p className="zzk-map-calendar-empty">{emptyMessage}</p>
+        <RadarFloorMaps {...floorMaps} />
+      </>
+    );
+  }
 
   return (
     <>

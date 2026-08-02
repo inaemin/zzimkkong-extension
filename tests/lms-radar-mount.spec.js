@@ -709,3 +709,37 @@ test("에러 화면에서 다시 시도하면 정상 오버레이로 바뀐다",
   );
   expect(stillHasError).toBe(false);
 });
+
+// 공간이 하나도 없으면 그리드 대신 안내 문구를 보여준다.
+// (평면도는 일정과 무관하게 유용하므로 계속 보여준다.)
+test("표시할 일정이 없으면 안내 문구가 뜬다", async ({ page }) => {
+  await stubServiceDocument(page);
+  await page.route(`${API_ORIGIN}/api/**`, async (route) => {
+    await route.fulfill(jsonResponse([]));
+  });
+
+  await page.goto(`${WEB_ORIGIN}/space-reservations`, { waitUntil: "domcontentloaded" });
+  await loadContentBundle(page);
+
+  await expect
+    .poll(() =>
+      page.evaluate(
+        (overlayId) =>
+          document.getElementById(overlayId)?.querySelector(".zzk-map-calendar-empty")
+            ?.textContent ?? null,
+        MAP_CALENDAR_OVERLAY_ID,
+      ),
+    )
+    .toContain("표시할");
+
+  const rendered = await page.evaluate((overlayId) => {
+    const overlay = document.getElementById(overlayId);
+    return {
+      slots: overlay.querySelectorAll(".zzk-map-calendar-slot").length,
+      hasFloorMaps: Boolean(overlay.querySelector(".zzk-map-calendar-floormap-section")),
+    };
+  }, MAP_CALENDAR_OVERLAY_ID);
+
+  expect(rendered.slots).toBe(0);
+  expect(rendered.hasFloorMaps).toBe(true);
+});

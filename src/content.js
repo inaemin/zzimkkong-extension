@@ -1538,21 +1538,9 @@ import { createSlackSuccessFlow } from "./features/slack/success-flow.js";
       return;
     }
 
-    if (timeline.length === 0 || rooms.length === 0) {
-      const empty = document.createElement("p");
-      empty.className = "zzk-map-calendar-empty";
-      empty.textContent = `표시할 ${tabLabel} 일정이 없습니다.`;
-      body.appendChild(empty);
-      syncMapCalendarBodyScrollState(body);
-      applyMapCalendarWidth(overlay);
-      if (preservedBodyScroll.left !== 0) {
-        body.scrollLeft = preservedBodyScroll.left;
-      }
-      if (preservedBodyScroll.top !== 0) {
-        body.scrollTop = preservedBodyScroll.top;
-      }
-      return;
-    }
+    // 그릴 게 없으면 그리드 대신 문구만 보여준다(컴포넌트가 판단한다).
+    const emptyMessage =
+      timeline.length === 0 || rooms.length === 0 ? `표시할 ${tabLabel} 일정이 없습니다.` : null;
 
     const hasTerminalHourBoundary =
       Number.isInteger(scheduleData?.range?.endMinute) && scheduleData.range.endMinute % 60 === 0;
@@ -1596,6 +1584,7 @@ import { createSlackSuccessFlow } from "./features/slack/success-flow.js";
         floorGroups: gridRoomsByFloor,
         layout: timelineLayout,
         roomColumnLabel: tabLabel,
+        emptyMessage,
         minTrackWidth: Math.max(320, timelineLayout.trackWidth + CALENDAR_SIDE_MARGIN),
         defaultReservationMinutes: LMS_DEFAULT_RESERVATION_MINUTES,
         renderRoomLabel: (container, room) => {
