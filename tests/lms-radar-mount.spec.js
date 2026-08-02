@@ -571,12 +571,20 @@ test("호스트 CSS 가 있어도 달력 배경은 투명하다", async ({ page 
 // 지난 시간이면서 예약도 있었던 칸은 "그냥 비어 있던 과거"와 구분해서 보여준다.
 // 둘 다 못 고르는 건 같지만, 예약이 있었다면 누가 썼는지가 정보로 남는다.
 test("지난 예약 칸은 더 진하고 예약 내용을 알려준다", async ({ page }) => {
-  await stubServiceDocument(page);
+  // 시각을 고정한다. "지금"에 의존하면 실행 시각에 따라 결과가 달라진다 —
+  // 예를 들어 운영 종료(23:00) 뒤에 돌리면 오늘 전체가 과거라 레이더가 다음 날을
+  // 띄우고, 그러면 "지난 칸"이 하나도 안 생긴다.
+  // 날짜는 실제 오늘을 쓰고 시각만 정오로 고정한다. 날짜를 박아두면 언젠가
+  // 만료되고, 시각을 안 고정하면 실행 시각에 따라 결과가 달라진다.
+  const today = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Seoul",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(new Date());
+  await page.clock.setFixedTime(new Date(`${today}T12:00:00+09:00`));
 
-  const now = new Date();
-  const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(
-    now.getDate(),
-  ).padStart(2, "0")}`;
+  await stubServiceDocument(page);
 
   await page.route(`${API_ORIGIN}/api/**`, async (route) => {
     const url = new URL(route.request().url());
