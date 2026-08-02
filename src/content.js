@@ -67,7 +67,12 @@ import { createElement } from "react";
 import { flushSync } from "react-dom";
 import { closeFloorMapZoom, openFloorMapZoom } from "./ui/floor-map-zoom-modal.js";
 import { RadarShell } from "./ui/components/radar-shell.js";
-import { ensureRadarOverlayMount, renderRadarOverlay } from "./ui/radar-overlay-mount.js";
+import {
+  ensureRadarOverlayMount,
+  queryAllRadarOverlay,
+  queryRadarOverlay,
+  renderRadarOverlay,
+} from "./ui/radar-overlay-mount.js";
 import { renderRadarHeader } from "./ui/radar-header-mount.js";
 import { renderRadarGrid } from "./ui/radar-grid-mount.js";
 import { renderRadarError } from "./ui/radar-error-mount.js";
@@ -1319,7 +1324,7 @@ import { createSlackSuccessFlow } from "./features/slack/success-flow.js";
     // (2-pane 의 timeline-pane)의 scrollLeft 를 보존해야 한다. body 를 읽으면 항상 0 이라
     // 리렌더마다 맨 앞으로 튀는 버그가 생긴다.
     const previousScrollEl = getMapCalendarScrollElement(overlay);
-    const previousBody = overlay.querySelector(".zzk-map-calendar-body");
+    const previousBody = queryRadarOverlay(".zzk-map-calendar-body");
     const preservedBodyScroll = {
       left: previousScrollEl instanceof HTMLElement ? previousScrollEl.scrollLeft : 0,
       top: previousBody instanceof HTMLElement ? previousBody.scrollTop : 0,
@@ -1623,8 +1628,8 @@ import { createSlackSuccessFlow } from "./features/slack/success-flow.js";
       return;
     }
 
-    const gridWrap = overlay.querySelector(".zzk-map-calendar-grid-wrap");
-    const axisRow = overlay.querySelector(".zzk-map-calendar-axis-row");
+    const gridWrap = queryRadarOverlay(".zzk-map-calendar-grid-wrap");
+    const axisRow = queryRadarOverlay(".zzk-map-calendar-axis-row");
     if (!(gridWrap instanceof HTMLElement) || !(axisRow instanceof HTMLElement)) {
       return;
     }
@@ -1745,7 +1750,6 @@ import { createSlackSuccessFlow } from "./features/slack/success-flow.js";
     };
   }
 
-
   function getMapRootElement() {
     const mapSvg = Array.from(document.querySelectorAll("svg")).find(
       (svg) => svg.querySelectorAll("g[data-testid]").length > 0,
@@ -1781,6 +1785,8 @@ import { createSlackSuccessFlow } from "./features/slack/success-flow.js";
     removeMapCalendarOverlay,
   } = createRadarWorkflow({
     state,
+    queryRadarOverlay,
+
     MAP_CALENDAR_OVERLAY_ID,
     MAP_CALENDAR_LAUNCHER_ID,
     SLACK_MODAL_TRIGGER_ID,
@@ -1960,7 +1966,7 @@ import { createSlackSuccessFlow } from "./features/slack/success-flow.js";
       return;
     }
 
-    const card = overlay.querySelector(".zzk-map-calendar-card");
+    const card = queryRadarOverlay(".zzk-map-calendar-card");
     if (!(card instanceof HTMLElement)) {
       return;
     }
@@ -2045,11 +2051,11 @@ import { createSlackSuccessFlow } from "./features/slack/success-flow.js";
     if (!(overlay instanceof HTMLElement)) {
       return null;
     }
-    const pane = overlay.querySelector(".zzk-map-calendar-timeline-pane");
+    const pane = queryRadarOverlay(".zzk-map-calendar-timeline-pane");
     if (pane instanceof HTMLElement) {
       return pane;
     }
-    const body = overlay.querySelector(".zzk-map-calendar-body");
+    const body = queryRadarOverlay(".zzk-map-calendar-body");
     return body instanceof HTMLElement ? body : null;
   }
 
@@ -2118,7 +2124,7 @@ import { createSlackSuccessFlow } from "./features/slack/success-flow.js";
 
   function measureMapCalendarTrackMetrics(overlay) {
     // 찜꽁 화면 구조 변경에 대비해 값을 하드코딩하지 않고 실제 DOM에서 측정한다.
-    const slotCells = overlay.querySelectorAll(
+    const slotCells = queryAllRadarOverlay(
       ".zzk-map-calendar-axis-row .zzk-map-calendar-slots .zzk-map-calendar-hour-label",
     );
     if (slotCells.length < 2) {

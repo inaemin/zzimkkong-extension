@@ -28,7 +28,6 @@ export function createSlackWorkflow(deps: Deps) {
     writeStoredText,
   } = deps;
 
-
   function showSlackCopyModal(context) {
     if (!(document.body instanceof HTMLBodyElement)) {
       return;
@@ -68,9 +67,7 @@ export function createSlackWorkflow(deps: Deps) {
         forgetSlackChannelMention(channel);
       },
 
-      initialReminderLeadMinutes: normalizeSlackReminderLeadMinutes(
-        state.slackReminderLeadMinutes,
-      ),
+      initialReminderLeadMinutes: normalizeSlackReminderLeadMinutes(state.slackReminderLeadMinutes),
       reminderLeadOptions: [...SLACK_REMINDER_LEAD_TIME_OPTIONS],
       formatReminderLeadLabel: formatSlackReminderLeadOptionLabel,
       onReminderLeadCommitted: (minutes) => {

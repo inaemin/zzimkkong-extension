@@ -91,8 +91,9 @@ export async function installRadarQueryHelpers(page) {
     window.__zzkQuery = (selector) => window.__zzkRoot()?.querySelector(selector) ?? null;
 
     /** 오버레이 안에서 모두 찾기(배열). */
-    window.__zzkQueryAll = (selector) => [...(window.__zzkRoot()?.querySelectorAll(selector) ?? [])];
-
+    window.__zzkQueryAll = (selector) => [
+      ...(window.__zzkRoot()?.querySelectorAll(selector) ?? []),
+    ];
   });
 }
 

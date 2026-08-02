@@ -8,6 +8,7 @@ type Deps = Record<string, any>;
 export function createRadarWorkflow(deps: Deps) {
   const {
     state,
+    queryRadarOverlay,
     MAP_CALENDAR_OVERLAY_ID,
     MAP_CALENDAR_LAUNCHER_ID,
     SLACK_MODAL_TRIGGER_ID,
@@ -413,12 +414,8 @@ export function createRadarWorkflow(deps: Deps) {
   }
 
   function syncMapCalendarBodyLoadingState() {
-    const overlay = document.getElementById(MAP_CALENDAR_OVERLAY_ID);
-    if (!(overlay instanceof HTMLElement)) {
-      return;
-    }
-
-    const body = overlay.querySelector(".zzk-map-calendar-body");
+    // 오버레이가 shadow root 안이라 document 로는 자식을 찾을 수 없다.
+    const body = queryRadarOverlay(".zzk-map-calendar-body");
     if (!(body instanceof HTMLElement)) {
       return;
     }

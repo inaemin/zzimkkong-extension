@@ -149,8 +149,7 @@ async function openRadar(page) {
   await page.waitForTimeout(1200);
 
   await page.evaluate(async () => {
-    const hasOverlayRows =
-      window.__zzkQueryAll(".zzk-map-calendar-row").length > 0;
+    const hasOverlayRows = window.__zzkQueryAll(".zzk-map-calendar-row").length > 0;
     if (hasOverlayRows) {
       return;
     }
@@ -1162,9 +1161,7 @@ test("resizing keeps the radar rows and legend intact", async ({ page }) => {
 
   const after = await page.evaluate(() => ({
     rows: window.__zzkQueryAll(".zzk-map-calendar-row").length,
-    roomNames: Array.from(
-      window.__zzkQueryAll(".zzk-map-calendar-room-name"),
-    ).length,
+    roomNames: Array.from(window.__zzkQueryAll(".zzk-map-calendar-room-name")).length,
   }));
 
   expect(after.rows).toBe(before.rows);

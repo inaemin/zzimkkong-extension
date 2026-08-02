@@ -98,3 +98,18 @@ export function unmountRadarOverlay(): void {
 export function getRadarOverlayHost(): HTMLElement | null {
   return mount && mount.host.isConnected ? mount.host : null;
 }
+
+/**
+ * 오버레이 안에서 요소를 찾는다.
+ *
+ * 오버레이가 shadow root 로 들어가면서 overlay.querySelector 로는 자식을 찾을 수
+ * 없게 됐다(호스트 엘리먼트에는 자식이 없다). 명령형 코드가 아직 폭 적용·스크롤
+ * 동기화 등에 이 조회를 쓰므로 통로를 열어둔다.
+ */
+export function queryRadarOverlay<T extends Element = HTMLElement>(selector: string): T | null {
+  return mount?.host.shadowRoot?.querySelector<T>(selector) ?? null;
+}
+
+export function queryAllRadarOverlay<T extends Element = HTMLElement>(selector: string): T[] {
+  return [...(mount?.host.shadowRoot?.querySelectorAll<T>(selector) ?? [])];
+}
