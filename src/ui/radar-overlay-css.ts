@@ -191,27 +191,7 @@ transform 120ms ease;
 }
 
 
-:host .zzk-map-calendar-date-nav.prev:hover:not(:disabled),
-:host .zzk-map-calendar-date-nav:focus,
-:host .zzk-map-calendar-date-nav.prev:focus:not(:disabled),
-:host .zzk-map-calendar-date-nav.prev:focus-visible:not(:disabled),
-:host .zzk-map-calendar-date-nav.next:focus:not(:disabled),
-:host
-  .zzk-map-calendar-date-display-wrap
-  .zzk-map-calendar-control.zzk-date.zzk-map-calendar-date-native {
-  position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-  opacity: 0;
-  margin: 0;
-  padding: 0;
-  border: none;
-  cursor: pointer;
-  z-index: 2;
-}
 
-:host .zzk-map-calendar-control,
 :host .zzk-map-calendar-header-right {
   display: flex;
   align-items: center;
@@ -792,15 +772,6 @@ var(--zzk-hour-boundary-clip-top, var(--zzk-cal-header-h, 24px)) 0 0 0
   outline: 1.5px solid rgba(14, 116, 144, 0.95);
   outline-offset: -1px;
   background: var(--zzk-slot-selected);
-}
-
-:host .zzk-map-calendar-slot.anchor {
-  outline: 2px solid rgba(2, 132, 199, 0.9);
-  outline-offset: -1px;
-}
-
-:host .zzk-map-calendar-slot.preview {
-  background: rgba(14, 165, 233, 0.28);
 }
 
 :host .zzk-map-calendar-slot.hover-preview {
