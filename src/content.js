@@ -1325,7 +1325,6 @@ import { createSlackSuccessFlow } from "./features/slack/success-flow.js";
     if (headerDateInput instanceof HTMLInputElement && clampedHeaderDate) {
       headerDateInput.value = clampedHeaderDate;
     }
-    syncPanelDateNavigationState();
 
     flushSync(() => {
       renderRadarHeader(header, {
@@ -1707,7 +1706,6 @@ import { createSlackSuccessFlow } from "./features/slack/success-flow.js";
     minuteToHourMinute,
     normalizeDateInput,
     normalizeTimeInput,
-    syncPanelDateNavigationState,
     getFreshScheduleCache,
     setScheduleLoadingDate,
     renderMapCalendarOverlay,
@@ -2185,14 +2183,6 @@ import { createSlackSuccessFlow } from "./features/slack/success-flow.js";
     };
   }
 
-  function setAttrOrRemove(element, attrName, value) {
-    if (!value) {
-      element.removeAttribute(attrName);
-      return;
-    }
-    element.setAttribute(attrName, value);
-  }
-
   function initializeDefaults(elements) {
     const todayDate = getTodayDateInKST();
 
@@ -2217,52 +2207,6 @@ import { createSlackSuccessFlow } from "./features/slack/success-flow.js";
     normalizeTimeInput(elements.endInput);
     elements.scheduleToggle.checked = true;
     state.scheduleOverlayEnabled = true;
-    syncPanelDateNavigationState();
-  }
-
-  function syncPanelDateNavigationState() {
-    if (!state.elements) {
-      return;
-    }
-
-    const { dateInput, datePrevButton, dateNextButton, dateTodayButton, dateWeekdayLabel } =
-      state.elements;
-    if (
-      !(dateInput instanceof HTMLInputElement) ||
-      !(datePrevButton instanceof HTMLButtonElement) ||
-      !(dateNextButton instanceof HTMLButtonElement) ||
-      !(dateTodayButton instanceof HTMLButtonElement) ||
-      !(dateWeekdayLabel instanceof HTMLElement)
-    ) {
-      return;
-    }
-
-    const todayDate = getTodayDateInKST();
-    const minimumDate = getMinimumSelectableDateForCurrentContext(dateInput.value);
-    setDateInputMinimum(dateInput, minimumDate);
-    const normalizedDate = clampDateToMin(normalizeDateString(dateInput.value), minimumDate);
-    if (dateInput.value !== normalizedDate) {
-      dateInput.value = normalizedDate;
-    }
-
-    datePrevButton.disabled = Boolean(minimumDate) && normalizedDate <= minimumDate;
-    dateTodayButton.disabled = normalizedDate === todayDate;
-
-    const prevDate = addDaysToDateString(normalizedDate, -1);
-    const nextDate = addDaysToDateString(normalizedDate, 1);
-    const prevLabel = isDateString(prevDate) ? `이전일 (${prevDate})` : "이전일";
-    const nextLabel = isDateString(nextDate) ? `다음일 (${nextDate})` : "다음일";
-    const todayLabel = `오늘 (${todayDate})`;
-    const dateDisplayText = formatDateSelectorText(normalizedDate);
-    renderDateDisplayLabel(dateWeekdayLabel, normalizedDate);
-    setAttrOrRemove(dateWeekdayLabel, "title", dateDisplayText || "");
-
-    datePrevButton.title = prevLabel;
-    datePrevButton.setAttribute("aria-label", prevLabel);
-    dateNextButton.title = nextLabel;
-    dateNextButton.setAttribute("aria-label", nextLabel);
-    dateTodayButton.title = todayLabel;
-    dateTodayButton.setAttribute("aria-label", todayLabel);
   }
 
   function applyPanelDateChange(nextDate) {
@@ -2275,19 +2219,16 @@ import { createSlackSuccessFlow } from "./features/slack/success-flow.js";
       getMinimumSelectableDateForCurrentContext(nextDate),
     );
     if (!normalizedDate) {
-      syncPanelDateNavigationState();
       return false;
     }
 
     const currentPanelDate = normalizeDateString(state.elements.dateInput.value);
     const currentActiveDate = normalizeDateString(state.activeScheduleDate || "");
     if (currentPanelDate === normalizedDate && currentActiveDate === normalizedDate) {
-      syncPanelDateNavigationState();
       return false;
     }
 
     state.elements.dateInput.value = normalizedDate;
-    syncPanelDateNavigationState();
     resetTimelineSelectionState();
     syncScheduleOverlayToDate(normalizedDate);
     scheduleInputRefresh();
@@ -5856,40 +5797,6 @@ import { createSlackSuccessFlow } from "./features/slack/success-flow.js";
     }
 
     return value < minDate ? minDate : value;
-  }
-
-  function renderDateDisplayLabel(labelElement, dateString) {
-    if (!(labelElement instanceof HTMLElement)) {
-      return;
-    }
-
-    if (!isDateString(dateString)) {
-      labelElement.textContent = "";
-      return;
-    }
-
-    const [year, month, day] = dateString.split("-");
-    const weekdayText = formatKSTWeekday(dateString);
-    if (!weekdayText) {
-      labelElement.textContent = `${year}.${month}.${day}`;
-      return;
-    }
-
-    const weekdaySpan = document.createElement("span");
-    weekdaySpan.className = "zzk-date-display-weekday";
-    if (weekdayText === "토") {
-      weekdaySpan.classList.add("is-saturday");
-    }
-    if (weekdayText === "일") {
-      weekdaySpan.classList.add("is-sunday");
-    }
-    weekdaySpan.textContent = weekdayText;
-
-    labelElement.replaceChildren(
-      document.createTextNode(`${year}.${month}.${day} (`),
-      weekdaySpan,
-      document.createTextNode(")"),
-    );
   }
 
   function normalizeTimeInput(inputElement) {

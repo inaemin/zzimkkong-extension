@@ -52,7 +52,7 @@ export function RadarFloorMaps({
         <span className="zzk-map-calendar-floormap-caret" aria-hidden="true">
           {open ? "▾" : "▸"}
         </span>
-        <span className="zzk-map-calendar-floormap-title">평면도</span>
+        <span>평면도</span>
       </button>
 
       <div className="zzk-map-calendar-floormap-scroller" data-testid="radar-floormaps-scroller">

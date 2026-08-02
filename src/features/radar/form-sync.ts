@@ -11,7 +11,6 @@ export function createRadarFormSync(deps: Deps) {
     minuteToHourMinute,
     normalizeDateInput,
     normalizeTimeInput,
-    syncPanelDateNavigationState,
     getFreshScheduleCache,
     setScheduleLoadingDate,
     renderMapCalendarOverlay,
@@ -179,7 +178,6 @@ export function createRadarFormSync(deps: Deps) {
     };
 
     normalizeDateInput(state.elements.dateInput);
-    syncPanelDateNavigationState();
     normalizeTimeInput(state.elements.startInput);
     normalizeTimeInput(state.elements.endInput);
 

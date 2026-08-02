@@ -100,7 +100,7 @@ export function RadarGrid({
     <>
       <div className="zzk-map-calendar-grid-wrap">
         <div className="zzk-map-calendar-label-pane" data-testid="radar-label-pane">
-          <div className="zzk-map-calendar-grid zzk-map-calendar-label-grid">
+          <div className="zzk-map-calendar-grid">
             <div className="zzk-map-calendar-axis-row zzk-map-calendar-label-row">
               <div className="zzk-map-calendar-floor-name axis">층</div>
               <div className="zzk-map-calendar-room-name axis">{roomColumnLabel}</div>
