@@ -94,6 +94,54 @@ export function resolveSelectionEndIndex(
   return endIndex;
 }
 
+/** 같은 층끼리 묶인 방 목록. 라벨 pane 과 타임라인 pane 이 같은 그룹을 그린다. */
+export interface FloorGroup<TRoom> {
+  floorKey: string;
+  floorLabel: string;
+  rooms: TRoom[];
+  /** 이전 그룹과 층이 실제로 달라지는 경계인지(가로 구분선을 그린다). */
+  isFloorDivider: boolean;
+}
+
+/**
+ * 방 목록을 층 그룹으로 묶는다.
+ *
+ * 두 pane 이 각자 순회하며 그룹을 만들면 경계 판단이 어긋날 수 있어, 한 번만
+ * 묶고 양쪽이 같은 결과를 쓰게 한다.
+ */
+export function groupRoomsByFloor<TRoom>(
+  rooms: TRoom[],
+  resolveFloor: (room: TRoom) => { floorKey: string; floorLabel: string },
+): FloorGroup<TRoom>[] {
+  const groups: FloorGroup<TRoom>[] = [];
+  // 층 이름이 비어 있는 그룹은 경계 판단에서 건너뛴다(이름을 모르는 방들).
+  let previousLabeledFloor = "";
+
+  for (const room of rooms) {
+    const { floorKey, floorLabel } = resolveFloor(room);
+    const lastGroup = groups.at(-1);
+
+    if (lastGroup && lastGroup.floorKey === floorKey) {
+      lastGroup.rooms.push(room);
+      continue;
+    }
+
+    groups.push({
+      floorKey,
+      floorLabel,
+      rooms: [room],
+      isFloorDivider: Boolean(
+        floorLabel && previousLabeledFloor && previousLabeledFloor !== floorLabel,
+      ),
+    });
+    if (floorLabel) {
+      previousLabeledFloor = floorLabel;
+    }
+  }
+
+  return groups;
+}
+
 /** 슬롯에 붙일 툴팁 문구. */
 export function buildSlotTitle(
   roomName: string,
