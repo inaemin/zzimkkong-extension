@@ -553,3 +553,32 @@ test("리렌더돼도 평면도 가로 스크롤 위치가 유지된다", async 
     )
     .toBeGreaterThan(0);
 });
+
+// 호스트(lms+)도 shadcn/Tailwind 를 쓰므로 .bg-background 같은 유틸리티 이름이 겹친다.
+// 우리 스타일시트는 head 앞쪽에 주입돼서, 명시도가 같으면 뒤에 오는 호스트가 이긴다.
+// 달력이 그 영향으로 불투명해지면 팝오버 그림자를 덮어버린다.
+test("호스트 CSS 가 있어도 달력 배경은 투명하다", async ({ page }) => {
+  await mountServicePage(page);
+  await page.waitForSelector(`#${MAP_CALENDAR_OVERLAY_ID} [aria-label="지도 날짜 선택"]`, {
+    timeout: 4000,
+  });
+  await page.click(`#${MAP_CALENDAR_OVERLAY_ID} [aria-label="지도 날짜 선택"]`);
+
+  const calendar = page.locator('[data-slot="calendar"]');
+  await calendar.waitFor({ state: "visible" });
+
+  const rendered = await page.evaluate(() => {
+    const host = [...document.head.querySelectorAll("style")].find(
+      (style) => !style.id.startsWith("zzk-"),
+    );
+    const calendarElement = document.querySelector('[data-slot="calendar"]');
+    return {
+      // 호스트 CSS 가 실제로 로드된 상태에서 검증하는지 확인한다.
+      hostStyleHasBgBackground: Boolean(host?.textContent.includes(".bg-background")),
+      calendarBackground: getComputedStyle(calendarElement).backgroundColor,
+    };
+  });
+
+  expect(rendered.hostStyleHasBgBackground).toBe(true);
+  expect(rendered.calendarBackground).toBe("rgba(0, 0, 0, 0)");
+});

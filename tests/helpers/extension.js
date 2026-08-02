@@ -1,5 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 
 // 테스트 공용 하네스.
 //
@@ -59,8 +60,20 @@ export function getBackgroundBundlePath() {
   return match ? path.join(DIST_DIR, match[1]) : loaderPath;
 }
 
+// lms+ 가 실제로 서빙하는 스타일시트. 호스트도 shadcn/Tailwind 를 쓰기 때문에
+// .bg-background 같은 유틸리티 이름이 우리 것과 겹친다. 이게 없으면 우리 CSS 끼리만
+// 겨루게 돼, 실제 페이지에서만 나는 우선순위 문제를 테스트가 놓친다.
+// (예: 호스트의 .bg-background 가 우리 in-data-[...]:bg-transparent 를 이겨
+//  달력 배경이 남던 문제.)
+const HOST_PAGE_CSS = fs.readFileSync(
+  path.join(path.dirname(fileURLToPath(import.meta.url)), "..", "fixtures", "host-page.css"),
+  "utf8",
+);
+
+const DEFAULT_SERVICE_DOCUMENT = `<html><head><style>${HOST_PAGE_CSS}</style></head><body><main></main></body></html>`;
+
 // 실제 사이트는 미인증 요청을 로그인 페이지로 돌려보내므로 문서 응답을 고정한다.
-export async function stubServiceDocument(page, body = "<html><body><main></main></body></html>") {
+export async function stubServiceDocument(page, body = DEFAULT_SERVICE_DOCUMENT) {
   await page.route(`${WEB_ORIGIN}/**`, async (route) => {
     if (route.request().resourceType() !== "document") {
       await route.continue();
