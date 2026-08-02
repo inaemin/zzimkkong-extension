@@ -1953,122 +1953,12 @@ import { createSlackSuccessFlow } from "./features/slack/success-flow.js";
         outline-offset: 2px;
       }
 
-      #${MAP_CALENDAR_OVERLAY_ID} .zzk-map-calendar-controls {
-        display: flex;
-        align-items: center;
-        gap: 6px;
-        flex-wrap: nowrap;
-      }
-
-      #${MAP_CALENDAR_OVERLAY_ID} .zzk-map-calendar-date-row {
-        display: grid;
-        grid-template-columns: auto minmax(0, 1fr) auto auto;
-        align-items: stretch;
-        gap: 4px;
-        min-width: 0;
-        padding-bottom: 2px;
-      }
-
-      #${MAP_CALENDAR_OVERLAY_ID} .zzk-map-calendar-date-display-wrap {
-        position: relative;
-        display: block;
-        min-width: 136px;
-      }
-
-      #${MAP_CALENDAR_OVERLAY_ID} .zzk-map-calendar-date-display-wrap.is-open .zzk-map-calendar-date-display {
-        outline: 2px solid rgba(14, 116, 144, 0.3);
-        outline-offset: 0;
-        border-color: rgba(14, 116, 144, 0.45);
-      }
-
-
-      #${MAP_CALENDAR_OVERLAY_ID} .zzk-map-calendar-date-nav {
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-        min-width: 32px;
-        min-height: 32px;
-        padding: 0;
-        border-radius: 8px;
-        border: 1px solid rgba(15, 23, 42, 0.18);
-        background: #ffffff;
-        color: #475569;
-        cursor: pointer;
-        transition: background-color 120ms ease, border-color 120ms ease, color 120ms ease,
-          box-shadow 120ms ease;
-      }
-
-      #${MAP_CALENDAR_OVERLAY_ID} .zzk-map-calendar-date-nav svg {
-        width: 14px;
-        height: 14px;
-        display: block;
-      }
 
       #${MAP_CALENDAR_OVERLAY_ID} .zzk-map-calendar-date-nav.prev:hover:not(:disabled),
-      #${MAP_CALENDAR_OVERLAY_ID} .zzk-map-calendar-date-nav.next:hover:not(:disabled) {
-        border-color: rgba(14, 116, 144, 0.35);
-        background: #f0f9ff;
-        color: #0f172a;
-        box-shadow: 0 0 0 1px rgba(14, 116, 144, 0.14);
-      }
-
       #${MAP_CALENDAR_OVERLAY_ID} .zzk-map-calendar-date-nav:focus,
-      #${MAP_CALENDAR_OVERLAY_ID} .zzk-map-calendar-date-nav:focus-visible {
-        outline: 2px solid rgba(14, 116, 144, 0.3);
-        outline-offset: 0;
-        border-color: rgba(14, 116, 144, 0.45);
-      }
-
       #${MAP_CALENDAR_OVERLAY_ID} .zzk-map-calendar-date-nav.prev:focus:not(:disabled),
       #${MAP_CALENDAR_OVERLAY_ID} .zzk-map-calendar-date-nav.prev:focus-visible:not(:disabled),
       #${MAP_CALENDAR_OVERLAY_ID} .zzk-map-calendar-date-nav.next:focus:not(:disabled),
-      #${MAP_CALENDAR_OVERLAY_ID} .zzk-map-calendar-date-nav.next:focus-visible:not(:disabled) {
-        background: #ecfeff;
-        color: #0f172a;
-        box-shadow: 0 0 0 1px rgba(14, 116, 144, 0.2);
-      }
-
-      #${MAP_CALENDAR_OVERLAY_ID} .zzk-map-calendar-date-nav:disabled {
-        cursor: default;
-        border-color: rgba(148, 163, 184, 0.3);
-        background: #f8fafc;
-        color: #94a3b8;
-      }
-
-      #${MAP_CALENDAR_OVERLAY_ID} .zzk-map-calendar-date-nav.today {
-        min-width: 46px;
-        padding: 0 8px;
-        font-size: 12px;
-        font-weight: 700;
-        line-height: 1;
-        white-space: nowrap;
-      }
-
-      #${MAP_CALENDAR_OVERLAY_ID} .zzk-map-calendar-date-display {
-        display: inline-flex;
-        align-items: center;
-        min-height: 32px;
-        width: 100%;
-        padding: 0 10px;
-        border-radius: 8px;
-        border: 1px solid rgba(15, 23, 42, 0.18);
-        background: #ffffff;
-        color: #0f172a;
-        font-size: 12px;
-        font-weight: 700;
-        line-height: 1;
-        white-space: nowrap;
-        text-align: center;
-      }
-
-      #${MAP_CALENDAR_OVERLAY_ID} .zzk-map-calendar-date-display .zzk-date-display-weekday.is-saturday {
-        color: #2563eb;
-      }
-
-      #${MAP_CALENDAR_OVERLAY_ID} .zzk-map-calendar-date-display .zzk-date-display-weekday.is-sunday {
-        color: #dc2626;
-      }
-
       #${MAP_CALENDAR_OVERLAY_ID}
         .zzk-map-calendar-date-display-wrap
         .zzk-map-calendar-control.zzk-date.zzk-map-calendar-date-native {
@@ -2084,50 +1974,7 @@ import { createSlackSuccessFlow } from "./features/slack/success-flow.js";
         z-index: 2;
       }
 
-      #${MAP_CALENDAR_OVERLAY_ID} .zzk-map-calendar-date-display-wrap:focus-within .zzk-map-calendar-date-display {
-        outline: 2px solid rgba(14, 116, 144, 0.3);
-        outline-offset: 0;
-        border-color: rgba(14, 116, 144, 0.45);
-      }
-
-      #${MAP_CALENDAR_OVERLAY_ID} .zzk-map-calendar-control {
-        border: 1px solid rgba(15, 23, 42, 0.18);
-        border-radius: 8px;
-        background: #ffffff;
-        color: #0f172a;
-        font-size: 14px;
-        font-weight: 600;
-        line-height: 1.2;
-        padding: 4px 7px;
-      }
-
       #${MAP_CALENDAR_OVERLAY_ID} .zzk-map-calendar-control,
-      #${MAP_CALENDAR_OVERLAY_ID} .zzk-map-calendar-control.zzk-date {
-        min-width: 122px;
-      }
-
-      #${MAP_CALENDAR_OVERLAY_ID} .zzk-map-calendar-control.zzk-time {
-        min-width: 88px;
-      }
-
-      #${MAP_CALENDAR_OVERLAY_ID} .zzk-map-calendar-control.zzk-time.zzk-time-readonly {
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-        background: #f8fafc;
-        color: #0f172a;
-        border-color: rgba(15, 23, 42, 0.2);
-        font-variant-numeric: tabular-nums;
-        cursor: default;
-        user-select: none;
-      }
-
-      #${MAP_CALENDAR_OVERLAY_ID} .zzk-map-calendar-control:focus {
-        outline: 2px solid rgba(14, 116, 144, 0.28);
-        outline-offset: 0;
-        border-color: rgba(14, 116, 144, 0.4);
-      }
-
       #${MAP_CALENDAR_OVERLAY_ID} .zzk-map-calendar-header-right {
         display: flex;
         align-items: center;
@@ -2201,32 +2048,6 @@ import { createSlackSuccessFlow } from "./features/slack/success-flow.js";
         min-width: 0;
         overflow: hidden;
         text-overflow: ellipsis;
-      }
-
-      #${MAP_CALENDAR_OVERLAY_ID} .zzk-map-calendar-control.zzk-date {
-        min-width: 122px;
-      }
-
-      #${MAP_CALENDAR_OVERLAY_ID} .zzk-map-calendar-control.zzk-time {
-        min-width: 88px;
-      }
-
-      #${MAP_CALENDAR_OVERLAY_ID} .zzk-map-calendar-control.zzk-time.zzk-time-readonly {
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-        background: #f8fafc;
-        color: #0f172a;
-        border-color: rgba(15, 23, 42, 0.2);
-        font-variant-numeric: tabular-nums;
-        cursor: default;
-        user-select: none;
-      }
-
-      #${MAP_CALENDAR_OVERLAY_ID} .zzk-map-calendar-control:focus {
-        outline: 2px solid rgba(14, 116, 144, 0.28);
-        outline-offset: 0;
-        border-color: rgba(14, 116, 144, 0.4);
       }
 
       #${MAP_CALENDAR_OVERLAY_ID} .zzk-map-calendar-header-right {
