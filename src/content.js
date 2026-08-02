@@ -62,10 +62,11 @@ import {
   buildHostFieldDescriptor,
   readHostFieldDisplayValue,
 } from "./features/form-fields/shared.js";
-import {
-  closeFloorMapZoom,
-  openFloorMapZoom,
-} from "./ui/floor-map-zoom-modal.js";
+import { createElement } from "react";
+import { flushSync } from "react-dom";
+import { closeFloorMapZoom, openFloorMapZoom } from "./ui/floor-map-zoom-modal.js";
+import { RadarShell } from "./ui/components/radar-shell.js";
+import { getRadarOverlayRoot } from "./ui/radar-overlay-mount.js";
 import {
   MAP_CALENDAR_OVERLAY_ID,
   MAP_CALENDAR_LAUNCHER_ID,
@@ -1516,7 +1517,9 @@ import { createSlackSuccessFlow } from "./features/slack/success-flow.js";
     document
       .querySelectorAll(".zzk-map-calendar-date-popover-floating")
       .forEach((element) => element.remove());
-    overlay.textContent = "";
+    // overlay 는 이제 React 루트다. textContent 로 비우면 React 가 자기 DOM 이
+    // 사라진 줄 모른 채 다음 렌더에서 없는 노드를 건드린다. 트리 갱신은 React 에
+    // 맡기고, 아직 명령형인 본문만 아래에서 새로 만들어 붙인다.
 
     const timeline = scheduleData.timeline;
     const renderedTab = normalizeMapCalendarSpaceTab(
@@ -1574,65 +1577,44 @@ import { createSlackSuccessFlow } from "./features/slack/success-flow.js";
       state.appliedSelection = null;
     }
 
-    const shell = document.createElement("div");
-    shell.className = "zzk-map-calendar-shell";
-    overlay.appendChild(shell);
-
-    const spaceTabs = document.createElement("div");
-    spaceTabs.className = "zzk-map-calendar-space-tabs";
-    spaceTabs.setAttribute("role", "tablist");
-    spaceTabs.setAttribute("aria-label", "공간 유형 선택");
-
-    const meetingTabButton = document.createElement("button");
-    meetingTabButton.type = "button";
-    meetingTabButton.id = MAP_CALENDAR_OVERLAY_TAB_MEETING_ID;
-    meetingTabButton.className = "zzk-map-calendar-space-tab";
-    meetingTabButton.textContent = "회의실";
-    meetingTabButton.setAttribute("role", "tab");
-
-    const pairTabButton = document.createElement("button");
-    pairTabButton.type = "button";
-    pairTabButton.id = MAP_CALENDAR_OVERLAY_TAB_PAIR_ID;
-    pairTabButton.className = "zzk-map-calendar-space-tab";
-    pairTabButton.textContent = "페어룸";
-    pairTabButton.setAttribute("role", "tab");
-
-    meetingTabButton.addEventListener("click", () => {
-      setMapCalendarSpaceTab(MAP_CALENDAR_SPACE_TAB_MEETING);
+    // 껍데기(탭/카드/헤더 자리/리사이즈 손잡이)는 React 가 그린다. 아직 명령형인
+    // 헤더 컨트롤과 본문은 React 가 내준 자리(ref)에 그대로 붙인다.
+    const shellRefs = {};
+    // ref 가 채워진 상태로 아래 명령형 코드가 이어져야 하므로 이번 렌더를 동기로
+    // 밀어낸다. flushSync(() => {}) 처럼 빈 콜백을 주면 대기 중인 렌더는 밀려나지
+    // 않는다 — render 호출 자체가 안에 들어가야 한다.
+    flushSync(() => {
+      getRadarOverlayRoot(overlay).render(
+        createElement(RadarShell, {
+          spaceTab: normalizeMapCalendarSpaceTab(state.mapCalendarSpaceTab),
+          onSpaceTabChange: (tab) => {
+            setMapCalendarSpaceTab(tab);
+          },
+          cardRef: (node) => {
+            shellRefs.card = node;
+          },
+          headerRef: (node) => {
+            shellRefs.header = node;
+          },
+          resizeHandleRef: (node) => {
+            shellRefs.resizeHandle = node;
+          },
+          bodyRef: (node) => {
+            shellRefs.body = node;
+          },
+        }),
+      );
     });
-    pairTabButton.addEventListener("click", () => {
-      setMapCalendarSpaceTab(MAP_CALENDAR_SPACE_TAB_PAIR);
-    });
-    spaceTabs.append(meetingTabButton, pairTabButton);
-    shell.appendChild(spaceTabs);
+
+    const card = shellRefs.card;
+    const header = shellRefs.header;
+    if (!(card instanceof HTMLElement) || !(header instanceof HTMLElement)) {
+      return;
+    }
+    if (shellRefs.resizeHandle instanceof HTMLElement) {
+      bindMapCalendarResizeHandle(shellRefs.resizeHandle, card);
+    }
     syncOpenMapCalendarSpaceTabButtons();
-
-    const card = document.createElement("div");
-    card.className = "zzk-map-calendar-card";
-    const stopOverlayEventPropagation = (event) => {
-      event.stopPropagation();
-    };
-    ["pointerdown", "mousedown", "mouseup", "click", "dblclick", "touchstart", "touchend"].forEach(
-      (eventName) => {
-        card.addEventListener(eventName, stopOverlayEventPropagation);
-      },
-    );
-    card.addEventListener("wheel", stopOverlayEventPropagation, {
-      passive: true,
-    });
-    shell.appendChild(card);
-
-    const resizeHandle = document.createElement("div");
-    resizeHandle.className = "zzk-map-calendar-resize-handle";
-    resizeHandle.setAttribute("role", "separator");
-    resizeHandle.setAttribute("aria-orientation", "vertical");
-    resizeHandle.setAttribute("aria-label", "레이더 너비 조절");
-    card.appendChild(resizeHandle);
-    bindMapCalendarResizeHandle(resizeHandle, card);
-
-    const header = document.createElement("div");
-    header.className = "zzk-map-calendar-header";
-    card.appendChild(header);
 
     bindDraggableHeader({
       header,
@@ -2124,9 +2106,13 @@ import { createSlackSuccessFlow } from "./features/slack/success-flow.js";
     });
     headerRight.appendChild(collapseButton);
 
-    const body = document.createElement("div");
-    body.className = "zzk-map-calendar-body";
-    card.appendChild(body);
+    // 본문 엘리먼트는 React 가 그린다(카드의 직계 자식이어야 CSS 높이 배분이 맞다).
+    // 내용만 아직 명령형으로 채우므로, 매 렌더마다 비우고 다시 그린다.
+    const body = shellRefs.body;
+    if (!(body instanceof HTMLElement)) {
+      return;
+    }
+    body.textContent = "";
     syncMapCalendarBodyLoadingState();
 
     if (state.mapCalendarCollapsed) {
@@ -7885,11 +7871,7 @@ import { createSlackSuccessFlow } from "./features/slack/success-flow.js";
     return `${normalizedStart} ~ ${normalizedEnd}`;
   }
 
-  const {
-    showSlackCopyModal,
-    closeSlackCopyModal,
-    copyTextToClipboard,
-  } = createSlackWorkflow({
+  const { showSlackCopyModal, closeSlackCopyModal, copyTextToClipboard } = createSlackWorkflow({
     state,
     SLACK_COPY_MODAL_ID,
     SLACK_COPY_MODAL_STYLE_ID,
