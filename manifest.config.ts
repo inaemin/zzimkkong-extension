@@ -37,13 +37,5 @@ export default defineManifest({
       run_at: "document_start",
     },
   ],
-  web_accessible_resources: [
-    {
-      // 훅은 이제 content script 로 실행되므로 공개할 필요가 없다.
-      // Slack 모달 스타일만 런타임에 URL 로 불러온다.
-      resources: ["assets/basecoat-dialog.css"],
-      matches: [LMS_WEB_ORIGIN],
-    },
-  ],
   host_permissions: [LMS_WEB_ORIGIN, LMS_API_ORIGIN],
 });

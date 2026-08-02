@@ -13,7 +13,6 @@ type Deps = Record<string, any>;
 export function createSlackWorkflow(deps: Deps) {
   const {
     state,
-    SLACK_COPY_MODAL_ID,
     SLACK_CHANNEL_MENTION_STORAGE_KEY,
     SLACK_REMINDER_LEAD_TIME_STORAGE_KEY,
     SLACK_REMINDER_LEAD_TIME_OPTIONS,

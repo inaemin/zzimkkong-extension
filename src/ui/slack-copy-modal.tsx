@@ -1,5 +1,7 @@
 import * as React from "react";
 
+import { SLACK_COPY_MODAL_MOUNT_ID } from "../constants/runtime.js";
+
 import { createShadowMount, type ShadowMount } from "./mount.js";
 import { SlackCopyDialog } from "./components/slack-copy-dialog.js";
 
@@ -7,7 +9,7 @@ import { SlackCopyDialog } from "./components/slack-copy-dialog.js";
 // 모달이 뜬다. React 컴포넌트를 그 인터페이스 뒤에 숨겨, 호출부를 바꾸지 않고
 // 내부만 교체한다. content.js 가 컴포넌트로 쪼개지면 이 어댑터는 사라진다.
 
-const MOUNT_ID = "zzk-slack-copy-root";
+const MOUNT_ID = SLACK_COPY_MODAL_MOUNT_ID;
 
 export interface SlackCopyModalDeps {
   /** 현재 선택으로 메시지 본문을 만든다(프레임워크 무관 순수 함수). */

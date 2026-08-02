@@ -9,17 +9,15 @@ export function normalizeTargetRoomName(value: unknown): string {
 }
 
 export const MAP_CALENDAR_OVERLAY_ID = "zzk-map-calendar-overlay";
+/** Slack 복사 모달의 shadow root 호스트. */
+export const SLACK_COPY_MODAL_MOUNT_ID = "zzk-slack-copy-root";
 export const MAP_CALENDAR_LAUNCHER_ID = "zzk-map-calendar-radar-launcher";
 export const SLACK_MODAL_TRIGGER_ID = "zzk-slack-modal-trigger";
 export { DEBUG_MODE };
 export const MAP_CALENDAR_OVERLAY_TAB_MEETING_ID = "zzk-map-calendar-overlay-tab-meeting";
 export const MAP_CALENDAR_OVERLAY_TAB_PAIR_ID = "zzk-map-calendar-overlay-tab-pair";
 export const PAGE_RESERVATION_EVENT_TYPE = "ZZK_RESERVATION_NETWORK_EVENT";
-export const SLACK_COPY_MODAL_ID = "zzk-slack-copy-modal";
 export const FLOOR_MAP_ZOOM_ID = "zzk-floormap-zoom";
-export const SLACK_COPY_MODAL_STYLE_ID = "zzk-slack-copy-modal-style";
-export const SLACK_COPY_MODAL_BASECOAT_STYLE_ID = "zzk-slack-copy-modal-basecoat-style";
-export const SLACK_COPY_MODAL_BASECOAT_STYLE_PATH = "assets/basecoat-dialog.css";
 export const X_ICON_SVG =
   '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-x-icon lucide-x"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>';
 export const SLACK_CHANNEL_MENTION_STORAGE_KEY = "zzk-slack-channel-mention-v1";

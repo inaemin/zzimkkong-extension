@@ -1,3 +1,6 @@
+import { createElement } from "react";
+import { flushSync } from "react-dom";
+
 import {
   normalizeTextForMatch,
   getErrorMessage,
@@ -63,8 +66,6 @@ import {
   groupRoomsByFloor,
   resolveSelectionEndIndex,
 } from "./features/radar/slot-model.js";
-import { createElement } from "react";
-import { flushSync } from "react-dom";
 import { closeFloorMapZoom, openFloorMapZoom } from "./ui/floor-map-zoom-modal.js";
 import { RadarShell } from "./ui/components/radar-shell.js";
 import {
@@ -84,15 +85,12 @@ import {
 import {
   MAP_CALENDAR_OVERLAY_ID,
   MAP_CALENDAR_LAUNCHER_ID,
+  SLACK_COPY_MODAL_MOUNT_ID,
   SLACK_MODAL_TRIGGER_ID,
   DEBUG_MODE,
   MAP_CALENDAR_OVERLAY_TAB_MEETING_ID,
   MAP_CALENDAR_OVERLAY_TAB_PAIR_ID,
   PAGE_RESERVATION_EVENT_TYPE,
-  SLACK_COPY_MODAL_ID,
-  SLACK_COPY_MODAL_STYLE_ID,
-  SLACK_COPY_MODAL_BASECOAT_STYLE_ID,
-  SLACK_COPY_MODAL_BASECOAT_STYLE_PATH,
   X_ICON_SVG,
   SLACK_CHANNEL_MENTION_STORAGE_KEY,
   SLACK_CHANNEL_HISTORY_STORAGE_KEY,
@@ -2781,7 +2779,7 @@ import { createSlackSuccessFlow } from "./features/slack/success-flow.js";
     return Boolean(
       target.closest(`#${MAP_CALENDAR_OVERLAY_ID}`) ||
       target.closest(`#${MAP_CALENDAR_LAUNCHER_ID}`) ||
-      target.closest(`#${SLACK_COPY_MODAL_ID}`),
+      target.closest(`#${SLACK_COPY_MODAL_MOUNT_ID}`),
     );
   }
 
@@ -5669,11 +5667,7 @@ import { createSlackSuccessFlow } from "./features/slack/success-flow.js";
 
   const { showSlackCopyModal, closeSlackCopyModal, copyTextToClipboard } = createSlackWorkflow({
     state,
-    SLACK_COPY_MODAL_ID,
-    SLACK_COPY_MODAL_STYLE_ID,
-    SLACK_COPY_MODAL_BASECOAT_STYLE_ID,
-    SLACK_COPY_MODAL_BASECOAT_STYLE_PATH,
-    SLACK_CHANNEL_MENTION_STORAGE_KEY,
+            SLACK_CHANNEL_MENTION_STORAGE_KEY,
     SLACK_CHANNEL_HISTORY_STORAGE_KEY,
     SLACK_REMINDER_LEAD_TIME_STORAGE_KEY,
     SLACK_REMINDER_LEAD_TIME_OPTIONS,
