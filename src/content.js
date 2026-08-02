@@ -2014,89 +2014,6 @@ import { createSlackSuccessFlow } from "./features/slack/success-flow.js";
         margin-top: 6px;
       }
 
-      #${MAP_CALENDAR_OVERLAY_ID} .zzk-room-tag-legend-item {
-        display: inline-flex;
-        align-items: center;
-        gap: 6px;
-        font-size: 11px;
-        color: #475569;
-      }
-
-      #${MAP_CALENDAR_OVERLAY_ID} .zzk-room-tag-badge {
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-        flex: none;
-        min-width: 18px;
-        min-height: 18px;
-        padding: 0 2px;
-        border-radius: 4px;
-        background: rgba(14, 165, 233, 0.14);
-        border: 1px solid rgba(14, 165, 233, 0.22);
-        color: #0369a1;
-        font-size: 10px;
-        font-weight: 800;
-        line-height: 1;
-        letter-spacing: 0.01em;
-      }
-
-      #${MAP_CALENDAR_OVERLAY_ID} .zzk-room-tag-badge::before {
-        content: attr(data-label);
-      }
-
-      #${MAP_CALENDAR_OVERLAY_ID} .zzk-room-name-text {
-        min-width: 0;
-        overflow: hidden;
-        text-overflow: ellipsis;
-      }
-
-      #${MAP_CALENDAR_OVERLAY_ID} .zzk-map-calendar-header-right {
-        display: flex;
-        align-items: center;
-        gap: 8px;
-        margin-left: auto;
-      }
-
-      #${MAP_CALENDAR_OVERLAY_ID} .zzk-map-calendar-always-open {
-        display: inline-flex;
-        align-items: center;
-        gap: 4px;
-        font-size: 13px;
-        font-weight: 700;
-        color: #334155;
-        white-space: nowrap;
-        user-select: none;
-      }
-
-      #${MAP_CALENDAR_OVERLAY_ID} .zzk-map-calendar-always-open input {
-        margin: 0;
-        cursor: pointer;
-        accent-color: #0284c7;
-      }
-
-      #${MAP_CALENDAR_OVERLAY_ID} .zzk-map-calendar-header strong {
-        font-size: 14px;
-      }
-
-      #${MAP_CALENDAR_OVERLAY_ID} .zzk-room-tag-legend[hidden] {
-        display: none !important;
-      }
-
-      #${MAP_CALENDAR_OVERLAY_ID} .zzk-room-tag-legend {
-        display: flex;
-        flex-wrap: wrap;
-        gap: 6px;
-        margin-top: 6px;
-      }
-
-      #${MAP_CALENDAR_OVERLAY_ID} .zzk-room-tag-legend-item {
-        display: inline-flex;
-        align-items: center;
-        gap: 6px;
-        font-size: 11px;
-        color: #475569;
-      }
-
       #${MAP_CALENDAR_OVERLAY_ID} .zzk-room-tag-badge {
         display: inline-flex;
         align-items: center;
@@ -2540,16 +2457,6 @@ import { createSlackSuccessFlow } from "./features/slack/success-flow.js";
         background: #e3f4fd;
       }
 
-      #${MAP_CALENDAR_OVERLAY_ID} .zzk-map-calendar-row.room-locked-disabled {
-        filter: grayscale(0.94) saturate(0.28);
-        opacity: 0.62;
-        background: rgba(148, 163, 184, 0.14);
-      }
-
-      #${MAP_CALENDAR_OVERLAY_ID} .zzk-map-calendar-row.room-locked-disabled .zzk-map-calendar-room-name {
-        color: #64748b;
-      }
-
       #${MAP_CALENDAR_OVERLAY_ID} .zzk-map-calendar-floor-name,
       #${MAP_CALENDAR_OVERLAY_ID} .zzk-map-calendar-room-name {
         font-size: 13px;
@@ -2650,11 +2557,6 @@ import { createSlackSuccessFlow } from "./features/slack/success-flow.js";
         background: var(--zzk-slot-selected);
       }
 
-      #${MAP_CALENDAR_OVERLAY_ID} .zzk-map-calendar-slot.selectable {
-        cursor: pointer;
-        box-shadow: inset 0 0 0 1px rgba(14, 116, 144, 0.22);
-      }
-
       #${MAP_CALENDAR_OVERLAY_ID} .zzk-map-calendar-slot.anchor {
         outline: 2px solid rgba(2, 132, 199, 0.9);
         outline-offset: -1px;
@@ -2667,10 +2569,6 @@ import { createSlackSuccessFlow } from "./features/slack/success-flow.js";
       #${MAP_CALENDAR_OVERLAY_ID} .zzk-map-calendar-slot.hover-preview {
         background: rgba(14, 165, 233, 0.24);
         box-shadow: inset 0 0 0 1px rgba(2, 132, 199, 0.28);
-      }
-
-      #${MAP_CALENDAR_OVERLAY_ID} .zzk-map-calendar-slot.room-locked-disabled {
-        cursor: not-allowed;
       }
 
       #${MAP_CALENDAR_OVERLAY_ID} .zzk-map-calendar-slot.busy {
