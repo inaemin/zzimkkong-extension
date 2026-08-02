@@ -55,6 +55,12 @@ export function RadarLegend({ container }: RadarLegendProps) {
   return (
     <Popover>
       <PopoverTrigger
+        // 클릭 없이 hover 만으로 열린다. 범례는 "잠깐 확인하고 마는" 정보라
+        // 누르고 다시 누워 닫는 동작이 번거롭다.
+        openOnHover
+        delay={0}
+        // 버튼에서 패널로 마우스를 옮기는 사이에 닫히면 안 된다.
+        closeDelay={200}
         render={
           <Button
             type="button"

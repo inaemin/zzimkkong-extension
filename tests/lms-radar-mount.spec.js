@@ -770,3 +770,28 @@ test("항상 열기 스위치가 양방향으로 토글된다", async ({ page })
   await page.click(switchSelector);
   await expect.poll(readChecked).toBe("true");
 });
+
+// 범례는 잠깐 확인하고 마는 정보라 클릭 없이 hover 로 열린다.
+test("범례는 hover 만으로 열리고 벗어나면 닫힌다", async ({ page }) => {
+  await mountServicePage(page);
+
+  const legendButton = `#${MAP_CALENDAR_OVERLAY_ID} [aria-label="타임블록 색 설명"]`;
+  await page.waitForSelector(legendButton, { timeout: 4000 });
+
+  const box = await page.locator(legendButton).boundingBox();
+  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+
+  // 5개 항목(비어 있음/예약 있음/선택한 시간/지난 시간/지난 예약)이 모두 있어야 한다.
+  await expect
+    .poll(() =>
+      page.evaluate(() => document.querySelectorAll('[data-slot="popover-content"] li').length),
+    )
+    .toBe(5);
+
+  await page.mouse.move(box.x - 200, box.y + 200);
+  await expect
+    .poll(() =>
+      page.evaluate(() => Boolean(document.querySelector('[data-slot="popover-content"]'))),
+    )
+    .toBe(false);
+});
