@@ -78,13 +78,13 @@ export function RadarHeader({
               <ChevronLeftIcon className="size-4" />
             </Button>
 
+            {/* 날짜는 보여야 한다. 아이콘만 두면 지금 며칠인지 알 수 없다. */}
             <DatePicker
               value={date}
               onChange={onDateChange}
               min={minDate || undefined}
               aria-label="지도 날짜 선택"
-              className="size-7 justify-center p-0"
-              iconOnly
+              className="h-7 gap-1 px-2 text-xs"
               container={popoverContainer}
             />
 
@@ -100,11 +100,12 @@ export function RadarHeader({
               <ChevronRightIcon className="size-4" />
             </Button>
 
+            {/* 글자 버튼은 정방형으로 만들면 글씨가 눌린다. 높이만 맞춘다. */}
             <Button
               type="button"
               variant="ghost"
-              size="icon"
-              className="size-7 text-xs"
+              size="sm"
+              className="h-7 px-2 text-xs"
               disabled={isToday}
               title={`오늘 (${todayDate})`}
               aria-label={`오늘 (${todayDate})`}
@@ -143,8 +144,8 @@ export function RadarHeader({
         <Button
           type="button"
           variant="outline"
-          size="icon"
-          className="zzk-map-calendar-toggle size-7 text-xs"
+          size="sm"
+          className="zzk-map-calendar-toggle h-7 px-2 text-xs"
           aria-label="지도 타임블록 접기/펼치기"
           onClick={onToggleCollapsed}
         >

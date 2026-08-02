@@ -18,8 +18,6 @@ export interface DatePickerProps {
   disabled?: boolean;
   className?: string;
   "aria-label"?: string;
-  /** 아이콘만 보여준다(좁은 툴바용). 날짜는 title/aria-label 로 전달된다. */
-  iconOnly?: boolean;
   /**
    * 달력을 렌더할 컨테이너. 기본값(document.body)이면 트리거를 감싼 요소가
    * "팝오버 바깥"으로 취급돼 열려 있는 동안 클릭이 막힌다. 높은 z-index 안에
@@ -59,7 +57,6 @@ export function DatePicker({
   disabled,
   className,
   "aria-label": ariaLabel,
-  iconOnly,
   container,
 }: DatePickerProps) {
   const [open, setOpen] = React.useState(false);
@@ -76,8 +73,7 @@ export function DatePicker({
             variant="outline"
             disabled={disabled}
             aria-label={ariaLabel ?? label}
-            // 아이콘만 보일 때는 어떤 날짜인지 hover 로 알 수 있어야 한다.
-            title={iconOnly ? label : undefined}
+            title={label}
             data-empty={!selected}
             className={cn(
               "justify-start text-left font-normal data-[empty=true]:text-muted-foreground",
@@ -87,7 +83,7 @@ export function DatePicker({
         }
       >
         <CalendarIcon />
-        {iconOnly ? null : selected ? label : <span>날짜 선택</span>}
+        {selected ? label : <span>날짜 선택</span>}
       </PopoverTrigger>
       <PopoverContent className="w-auto p-0" align="start" container={container ?? undefined}>
         <Calendar
