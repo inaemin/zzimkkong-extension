@@ -18,10 +18,14 @@ function PopoverContent({
   alignOffset = 0,
   side = "bottom",
   sideOffset = 4,
+  collisionBoundary,
   container,
   ...props
 }: PopoverPrimitive.Popup.Props &
-  Pick<PopoverPrimitive.Positioner.Props, "align" | "alignOffset" | "side" | "sideOffset"> &
+  Pick<
+    PopoverPrimitive.Positioner.Props,
+    "align" | "alignOffset" | "side" | "sideOffset" | "collisionBoundary"
+  > &
   Pick<PopoverPrimitive.Portal.Props, "container">) {
   const shadowContainer = useShadowContainer();
   // 기본값(document.body)으로 두면, 트리거를 감싼 컨테이너가 "팝오버 바깥"으로
@@ -35,6 +39,10 @@ function PopoverContent({
         alignOffset={alignOffset}
         side={side}
         sideOffset={sideOffset}
+        // 기본값 'clipping-ancestors' 는 포털 대상(우리 오버레이)을 경계로 삼는다.
+        // 그러면 오버레이가 낮을 때 "아래 공간 부족"으로 판단해 팝오버가 위나
+        // 옆으로 튄다. 실제 제약은 화면이므로 뷰포트를 경계로 준다.
+        collisionBoundary={collisionBoundary}
         // 팝오버는 document.body 로 포털되는데, 우리 레이더 오버레이가
         // z-index 최대값(2147483647)이라 기본값(z-50)이면 그 뒤로 숨는다.
         // isolate 를 빼야 여기서 준 z-index 가 실제로 먹는다.
