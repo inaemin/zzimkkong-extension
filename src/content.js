@@ -70,6 +70,7 @@ import { RadarShell } from "./ui/components/radar-shell.js";
 import { getRadarOverlayRoot } from "./ui/radar-overlay-mount.js";
 import { renderRadarHeader } from "./ui/radar-header-mount.js";
 import { renderRadarGrid } from "./ui/radar-grid-mount.js";
+import { renderRadarError } from "./ui/radar-error-mount.js";
 import { ensurePageTailwindStyle } from "./ui/page-styles.js";
 import {
   MAP_CALENDAR_OVERLAY_ID,
@@ -1257,80 +1258,39 @@ import { createSlackSuccessFlow } from "./features/slack/success-flow.js";
     document
       .querySelectorAll(".zzk-map-calendar-date-popover-floating")
       .forEach((element) => element.remove());
-    overlay.textContent = "";
 
-    const shell = document.createElement("div");
-    shell.className = "zzk-map-calendar-shell";
-    overlay.appendChild(shell);
-
-    const card = document.createElement("div");
-    card.className = "zzk-map-calendar-card";
-    ["pointerdown", "mousedown", "mouseup", "click", "dblclick", "touchstart", "touchend"].forEach(
-      (eventName) => {
-        card.addEventListener(eventName, (event) => event.stopPropagation());
-      },
-    );
-    shell.appendChild(card);
-
-    const header = document.createElement("div");
-    header.className = "zzk-map-calendar-header";
-    card.appendChild(header);
-    bindDraggableHeader({
-      header,
-      element: overlay,
-      getOffset: () => state.mapCalendarOffset,
-      setOffset: (nextOffset) => {
-        state.mapCalendarOffset = nextOffset;
-        persistMapCalendarOffset(nextOffset);
-      },
-      applyOffset: () => {
-        applyMapCalendarOverlayOffset(overlay);
-      },
+    const errorRefs = {};
+    flushSync(() => {
+      renderRadarError(overlay, {
+        message: errorMessage || "예약 현황을 불러오지 못했습니다.",
+        onRetry: () => {
+          openMapCalendarModal();
+        },
+        onClose: () => {
+          state.mapCalendarVisible = false;
+          state.lastAutoOpenPath = null;
+          removeMapCalendarOverlay();
+        },
+        headerRef: (node) => {
+          errorRefs.header = node;
+        },
+      });
     });
 
-    const titleControls = document.createElement("div");
-    titleControls.className = "zzk-map-calendar-title-controls";
-    const title = document.createElement("strong");
-    title.textContent = "예약 현황";
-    titleControls.appendChild(title);
-    header.appendChild(titleControls);
-
-    const headerRight = document.createElement("div");
-    headerRight.className = "zzk-map-calendar-header-right";
-    header.appendChild(headerRight);
-
-    const closeButton = document.createElement("button");
-    closeButton.type = "button";
-    closeButton.className = "zzk-map-calendar-toggle";
-    closeButton.textContent = "닫기";
-    closeButton.setAttribute("aria-label", "레이더 닫기");
-    closeButton.addEventListener("click", () => {
-      state.mapCalendarVisible = false;
-      state.lastAutoOpenPath = null;
-      removeMapCalendarOverlay();
-    });
-    headerRight.appendChild(closeButton);
-
-    const body = document.createElement("div");
-    body.className = "zzk-map-calendar-body zzk-map-calendar-error-body";
-    const errorBox = document.createElement("div");
-    errorBox.className = "zzk-map-calendar-error";
-    const errorText = document.createElement("p");
-    errorText.className = "zzk-map-calendar-error-message";
-    errorText.textContent = errorMessage || "예약 현황을 불러오지 못했습니다.";
-    errorBox.appendChild(errorText);
-
-    const retryButton = document.createElement("button");
-    retryButton.type = "button";
-    retryButton.className = "zzk-map-calendar-error-retry";
-    retryButton.textContent = "다시 시도";
-    retryButton.addEventListener("click", () => {
-      openMapCalendarModal();
-    });
-    errorBox.appendChild(retryButton);
-
-    body.appendChild(errorBox);
-    card.appendChild(body);
+    if (errorRefs.header instanceof HTMLElement) {
+      bindDraggableHeader({
+        header: errorRefs.header,
+        element: overlay,
+        getOffset: () => state.mapCalendarOffset,
+        setOffset: (nextOffset) => {
+          state.mapCalendarOffset = nextOffset;
+          persistMapCalendarOffset(nextOffset);
+        },
+        applyOffset: () => {
+          applyMapCalendarOverlayOffset(overlay);
+        },
+      });
+    }
   }
 
   function renderMapCalendarOverlay(scheduleData) {
@@ -1824,7 +1784,6 @@ import { createSlackSuccessFlow } from "./features/slack/success-flow.js";
       trackWidth,
     };
   }
-
 
   function ensureMapCalendarStyle() {
     if (document.getElementById(MAP_CALENDAR_STYLE_ID)) {

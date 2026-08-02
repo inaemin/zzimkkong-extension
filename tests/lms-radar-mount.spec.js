@@ -653,3 +653,59 @@ test("지난 예약 칸은 더 진하고 예약 내용을 알려준다", async (
   await expect(tooltip).toContainText("지난 예약");
   await expect(tooltip).toContainText("아무개");
 });
+
+// 에러 화면과 정상 오버레이는 같은 엘리먼트에 그려진다(React 루트 공유).
+// 한쪽이 남은 DOM 을 다른 쪽이 만나면 깨지므로 전환을 확인한다.
+test("에러 화면에서 다시 시도하면 정상 오버레이로 바뀐다", async ({ page }) => {
+  let shouldFail = true;
+
+  await stubServiceDocument(page);
+  await page.route(`${API_ORIGIN}/api/**`, async (route) => {
+    const url = new URL(route.request().url());
+    if (url.pathname !== "/api/spaces") {
+      await route.fulfill(jsonResponse([]));
+      return;
+    }
+    if (shouldFail) {
+      await route.fulfill({
+        status: 401,
+        headers: {
+          "access-control-allow-origin": WEB_ORIGIN,
+          "access-control-allow-credentials": "true",
+          "content-type": "application/json",
+        },
+        body: "",
+      });
+      return;
+    }
+    await route.fulfill(jsonResponse(spacesFixture));
+  });
+
+  await page.goto(`${WEB_ORIGIN}/space-reservations`, { waitUntil: "domcontentloaded" });
+  await loadContentBundle(page);
+
+  await page.waitForSelector(`#${MAP_CALENDAR_OVERLAY_ID} .zzk-map-calendar-error-message`, {
+    timeout: 5000,
+  });
+
+  shouldFail = false;
+  await page.click(`#${MAP_CALENDAR_OVERLAY_ID} .zzk-map-calendar-error-retry`);
+
+  // 에러가 사라지고 슬롯이 그려져야 한다.
+  await expect
+    .poll(() =>
+      page.evaluate(
+        (overlayId) =>
+          document.getElementById(overlayId).querySelectorAll(".zzk-map-calendar-slot").length,
+        MAP_CALENDAR_OVERLAY_ID,
+      ),
+    )
+    .toBeGreaterThan(0);
+
+  const stillHasError = await page.evaluate(
+    (overlayId) =>
+      Boolean(document.getElementById(overlayId).querySelector(".zzk-map-calendar-error-message")),
+    MAP_CALENDAR_OVERLAY_ID,
+  );
+  expect(stillHasError).toBe(false);
+});
