@@ -32,11 +32,6 @@ import {
   getNextHourRange,
   getEarliestSelectableMinuteForDate,
   addDaysToDateString,
-  formatUTCDateString,
-  parseDateStringAsUTC,
-  addMonthsToDateString,
-  getMonthStartDateString,
-  formatMonthTitle,
   formatKSTWeekday,
   formatDateSelectorText,
 } from "./utils/date-time.js";
@@ -67,6 +62,7 @@ import { flushSync } from "react-dom";
 import { closeFloorMapZoom, openFloorMapZoom } from "./ui/floor-map-zoom-modal.js";
 import { RadarShell } from "./ui/components/radar-shell.js";
 import { getRadarOverlayRoot } from "./ui/radar-overlay-mount.js";
+import { renderRadarHeader } from "./ui/radar-header-mount.js";
 import {
   MAP_CALENDAR_OVERLAY_ID,
   MAP_CALENDAR_LAUNCHER_ID,
@@ -81,8 +77,6 @@ import {
   SLACK_COPY_MODAL_BASECOAT_STYLE_ID,
   SLACK_COPY_MODAL_BASECOAT_STYLE_PATH,
   X_ICON_SVG,
-  CHEVRON_LEFT_ICON_SVG,
-  CHEVRON_RIGHT_ICON_SVG,
   SLACK_CHANNEL_MENTION_STORAGE_KEY,
   SLACK_CHANNEL_HISTORY_STORAGE_KEY,
   SLACK_REMINDER_LEAD_TIME_STORAGE_KEY,
@@ -1629,482 +1623,62 @@ import { createSlackSuccessFlow } from "./features/slack/success-flow.js";
       },
     });
 
-    const titleControls = document.createElement("div");
-    titleControls.className = "zzk-map-calendar-title-controls";
-    header.appendChild(titleControls);
-
-    if (state.elements) {
-      const controlRow = document.createElement("div");
-      controlRow.className = "zzk-map-calendar-controls";
-
-      const dateControlRow = document.createElement("div");
-      dateControlRow.className = "zzk-map-calendar-date-row";
-
-      const dateWeekdayLabel = document.createElement("span");
-      dateWeekdayLabel.className = "zzk-map-calendar-date-display";
-      dateWeekdayLabel.setAttribute("aria-live", "polite");
-
-      const dateDisplayWrap = document.createElement("span");
-      dateDisplayWrap.className = "zzk-map-calendar-date-display-wrap";
-      dateDisplayWrap.tabIndex = 0;
-      dateDisplayWrap.setAttribute("role", "button");
-      dateDisplayWrap.setAttribute("aria-label", "지도 날짜 선택 열기");
-
-      const datePopover = document.createElement("div");
-      datePopover.className =
-        "zzk-map-calendar-date-popover zzk-map-calendar-date-popover-floating";
-      datePopover.hidden = true;
-
-      const datePopoverHeader = document.createElement("div");
-      datePopoverHeader.className = "zzk-map-calendar-date-popover-header";
-
-      const datePopoverPrevButton = document.createElement("button");
-      datePopoverPrevButton.type = "button";
-      datePopoverPrevButton.className = "zzk-map-calendar-date-popover-nav prev";
-      datePopoverPrevButton.innerHTML = CHEVRON_LEFT_ICON_SVG;
-      datePopoverPrevButton.setAttribute("aria-label", "이전달");
-
-      const datePopoverTitle = document.createElement("strong");
-      datePopoverTitle.className = "zzk-map-calendar-date-popover-title";
-
-      const datePopoverNextButton = document.createElement("button");
-      datePopoverNextButton.type = "button";
-      datePopoverNextButton.className = "zzk-map-calendar-date-popover-nav next";
-      datePopoverNextButton.innerHTML = CHEVRON_RIGHT_ICON_SVG;
-      datePopoverNextButton.setAttribute("aria-label", "다음달");
-
-      datePopoverHeader.append(datePopoverPrevButton, datePopoverTitle, datePopoverNextButton);
-
-      const datePopoverWeekdays = document.createElement("div");
-      datePopoverWeekdays.className = "zzk-map-calendar-date-popover-weekdays";
-      ["일", "월", "화", "수", "목", "금", "토"].forEach((weekday) => {
-        const weekdayLabel = document.createElement("span");
-        weekdayLabel.textContent = weekday;
-        datePopoverWeekdays.appendChild(weekdayLabel);
-      });
-
-      const datePopoverGrid = document.createElement("div");
-      datePopoverGrid.className = "zzk-map-calendar-date-popover-grid";
-      datePopover.append(datePopoverHeader, datePopoverWeekdays, datePopoverGrid);
-      ["pointerdown", "click", "mousedown", "mouseup", "touchstart", "touchend"].forEach(
-        (eventName) => {
-          datePopover.addEventListener(eventName, (event) => {
-            event.stopPropagation();
-          });
-        },
-      );
-
-      const prevDateButton = document.createElement("button");
-      prevDateButton.type = "button";
-      prevDateButton.className = "zzk-map-calendar-date-nav prev";
-      prevDateButton.innerHTML = CHEVRON_LEFT_ICON_SVG;
-      prevDateButton.setAttribute("aria-label", "이전날");
-
-      const dateInput = document.createElement("input");
-      dateInput.type = "date";
-      dateInput.className = "zzk-map-calendar-control zzk-date zzk-map-calendar-date-native";
-
-      const nextDateButton = document.createElement("button");
-      nextDateButton.type = "button";
-      nextDateButton.className = "zzk-map-calendar-date-nav next";
-      nextDateButton.innerHTML = CHEVRON_RIGHT_ICON_SVG;
-      nextDateButton.setAttribute("aria-label", "다음날");
-
-      const todayDateButton = document.createElement("button");
-      todayDateButton.type = "button";
-      todayDateButton.className = "zzk-map-calendar-date-nav today";
-      todayDateButton.textContent = "오늘";
-      todayDateButton.setAttribute("aria-label", "오늘");
-
-      const syncMapCalendarDateNavState = () => {
-        const todayDate = getTodayDateInKST();
-        const minimumDate = getMinimumSelectableDateForCurrentContext(dateInput.value);
-        setDateInputMinimum(dateInput, minimumDate);
-        const normalizedDate = clampDateToMin(dateInput.value, minimumDate);
-        dateInput.value = normalizedDate;
-        state.elements.dateInput.value = normalizedDate;
-        syncPanelDateNavigationState();
-        prevDateButton.disabled = Boolean(minimumDate) && normalizedDate <= minimumDate;
-        todayDateButton.disabled = normalizedDate === todayDate;
-
-        const prevDate = addDaysToDateString(normalizedDate, -1);
-        const nextDate = addDaysToDateString(normalizedDate, 1);
-        const prevLabel = isDateString(prevDate) ? `이전일 (${prevDate})` : "이전일";
-        const nextLabel = isDateString(nextDate) ? `다음일 (${nextDate})` : "다음일";
-        const todayLabel = `오늘 (${todayDate})`;
-        const dateDisplayText = formatDateSelectorText(normalizedDate);
-        renderDateDisplayLabel(dateWeekdayLabel, normalizedDate);
-        setAttrOrRemove(dateWeekdayLabel, "title", dateDisplayText || "");
-
-        prevDateButton.title = prevLabel;
-        prevDateButton.setAttribute("aria-label", prevLabel);
-        nextDateButton.title = nextLabel;
-        nextDateButton.setAttribute("aria-label", nextLabel);
-        todayDateButton.title = todayLabel;
-        todayDateButton.setAttribute("aria-label", todayLabel);
-      };
-
-      const todayDate = getTodayDateInKST();
-      const minimumDate = getMinimumSelectableDateForCurrentContext(
-        state.elements.dateInput.value || scheduleData.date || "",
-      );
-      setDateInputMinimum(dateInput, minimumDate);
-      const initialDate = clampDateToMin(
-        state.elements.dateInput.value || scheduleData.date || "",
-        minimumDate,
-      );
-      dateInput.value = initialDate;
-      state.elements.dateInput.value = initialDate;
-      syncPanelDateNavigationState();
-      dateInput.setAttribute("aria-label", "지도 날짜 선택");
-      const shouldUseCustomDatePopover = true;
-      let datePopoverMonth =
-        state.mapCalendarDatePopoverMonth || getMonthStartDateString(initialDate || todayDate);
-      let lastDatePopoverPosition = { left: null, top: null };
-
-      const syncMapCalendarDatePopoverPosition = () => {
-        if (datePopover.hidden) {
-          datePopover.style.removeProperty("left");
-          datePopover.style.removeProperty("top");
-          return;
-        }
-
-        const displayRect = dateDisplayWrap.getBoundingClientRect();
-        const popoverRect = datePopover.getBoundingClientRect();
-        const viewportWidth = window.innerWidth || document.documentElement.clientWidth || 0;
-        const viewportHeight = window.innerHeight || document.documentElement.clientHeight || 0;
-        const popoverWidth = Math.ceil(popoverRect.width || datePopover.offsetWidth || 236);
-        const popoverHeight = Math.ceil(popoverRect.height || datePopover.offsetHeight || 0);
-        const horizontalPadding = 12;
-        const verticalGap = 8;
-
-        if (
-          !Number.isFinite(displayRect.left) ||
-          !Number.isFinite(displayRect.bottom) ||
-          !Number.isFinite(popoverWidth) ||
-          !Number.isFinite(popoverHeight) ||
-          popoverWidth <= 0 ||
-          popoverHeight <= 0
-        ) {
-          if (
-            Number.isFinite(lastDatePopoverPosition.left) &&
-            Number.isFinite(lastDatePopoverPosition.top)
-          ) {
-            datePopover.style.left = `${Math.round(lastDatePopoverPosition.left)}px`;
-            datePopover.style.top = `${Math.round(lastDatePopoverPosition.top)}px`;
-          }
-          return;
-        }
-
-        let left = displayRect.left;
-        left = Math.min(left, viewportWidth - popoverWidth - horizontalPadding);
-        left = Math.max(horizontalPadding, left);
-
-        const top = Math.max(horizontalPadding, displayRect.bottom + verticalGap);
-
-        const nextLeft = Math.round(left);
-        const nextTop = Math.round(top);
-        datePopover.style.left = `${nextLeft}px`;
-        datePopover.style.top = `${nextTop}px`;
-        lastDatePopoverPosition = { left: nextLeft, top: nextTop };
-      };
-      state.syncMapCalendarDatePopoverPosition = syncMapCalendarDatePopoverPosition;
-
-      const handleViewportPopoverReposition = () => {
-        if (datePopover.hidden) {
-          return;
-        }
-        window.requestAnimationFrame(() => {
-          syncMapCalendarDatePopoverPosition();
-        });
-      };
-
-      const closeMapCalendarDatePopover = () => {
-        datePopover.hidden = true;
-        dateDisplayWrap.classList.remove("is-open");
-        state.mapCalendarDatePopoverOpen = false;
-        state.mapCalendarDatePopoverMonth = datePopoverMonth;
-        syncMapCalendarDatePopoverPosition();
-        window.removeEventListener("resize", handleViewportPopoverReposition);
-        window.removeEventListener("scroll", handleViewportPopoverReposition, true);
-      };
-
-      const openMapCalendarDatePopover = () => {
-        renderMapCalendarDatePopover();
-        datePopover.hidden = false;
-        dateDisplayWrap.classList.add("is-open");
-        state.mapCalendarDatePopoverOpen = true;
-        state.mapCalendarDatePopoverMonth = datePopoverMonth;
-        window.addEventListener("resize", handleViewportPopoverReposition);
-        window.addEventListener("scroll", handleViewportPopoverReposition, true);
-        window.requestAnimationFrame(() => {
-          syncMapCalendarDatePopoverPosition();
-        });
-      };
-
-      const toggleMapCalendarDatePopover = () => {
-        if (datePopover.hidden) {
-          openMapCalendarDatePopover();
-          return;
-        }
-        closeMapCalendarDatePopover();
-      };
-
-      const selectMapCalendarPopoverDate = (nextDate) => {
-        const normalizedDate = clampDateToMin(normalizeDateString(nextDate), getTodayDateInKST());
-        if (!normalizedDate) {
-          return;
-        }
-        dateInput.value = normalizedDate;
-        applyPanelDateChange(normalizedDate);
-        dateInput.value = state.elements.dateInput.value;
-        datePopoverMonth = getMonthStartDateString(normalizedDate);
-        state.mapCalendarDatePopoverMonth = datePopoverMonth;
-        syncMapCalendarDateNavState();
-        closeMapCalendarDatePopover();
-      };
-
-      function renderMapCalendarDatePopover() {
-        const todayDateValue = getTodayDateInKST();
-        const selectedDate =
-          normalizeDateString(
-            state.elements?.dateInput.value || dateInput.value || todayDateValue,
-          ) || todayDateValue;
-        const monthStart = parseDateStringAsUTC(datePopoverMonth || selectedDate);
-        if (!(monthStart instanceof Date)) {
-          datePopoverGrid.replaceChildren();
-          datePopoverTitle.textContent = "";
-          return;
-        }
-
-        datePopoverTitle.textContent = formatMonthTitle(monthStart);
-        datePopoverGrid.replaceChildren();
-
-        const startWeekday = monthStart.getUTCDay();
-        const gridStart = new Date(monthStart.getTime());
-        gridStart.setUTCDate(gridStart.getUTCDate() - startWeekday);
-        const monthEnd = new Date(monthStart.getTime());
-        monthEnd.setUTCMonth(monthEnd.getUTCMonth() + 1, 0);
-        const endWeekday = monthEnd.getUTCDay();
-        const gridEnd = new Date(monthEnd.getTime());
-        gridEnd.setUTCDate(gridEnd.getUTCDate() + (6 - endWeekday));
-        const totalDayCount = Math.round((gridEnd.getTime() - gridStart.getTime()) / 86400000) + 1;
-
-        for (let index = 0; index < totalDayCount; index += 1) {
-          const cellDate = new Date(gridStart.getTime());
-          cellDate.setUTCDate(gridStart.getUTCDate() + index);
-          const cellDateString = formatUTCDateString(cellDate);
-          const dayButton = document.createElement("button");
-          dayButton.type = "button";
-          dayButton.className = "zzk-map-calendar-date-popover-day";
-          dayButton.textContent = String(cellDate.getUTCDate());
-
-          if (cellDate.getUTCMonth() !== monthStart.getUTCMonth()) {
-            dayButton.classList.add("is-outside-month");
-          }
-          if (cellDateString === todayDateValue) {
-            dayButton.classList.add("is-today");
-          }
-          if (cellDateString === selectedDate) {
-            dayButton.classList.add("is-selected");
-          }
-          if (cellDateString < todayDateValue) {
-            dayButton.disabled = true;
-          }
-
-          dayButton.addEventListener("click", () => {
-            selectMapCalendarPopoverDate(cellDateString);
-          });
-          datePopoverGrid.appendChild(dayButton);
-        }
-
-        if (!datePopover.hidden) {
-          window.requestAnimationFrame(() => {
-            syncMapCalendarDatePopoverPosition();
-          });
-        }
-      }
-
-      datePopoverPrevButton.addEventListener("click", () => {
-        datePopoverMonth = addMonthsToDateString(datePopoverMonth, -1);
-        state.mapCalendarDatePopoverMonth = datePopoverMonth;
-        renderMapCalendarDatePopover();
-        window.requestAnimationFrame(() => {
-          window.requestAnimationFrame(() => {
-            syncMapCalendarDatePopoverPosition();
-          });
-        });
-      });
-      datePopoverNextButton.addEventListener("click", () => {
-        datePopoverMonth = addMonthsToDateString(datePopoverMonth, 1);
-        state.mapCalendarDatePopoverMonth = datePopoverMonth;
-        renderMapCalendarDatePopover();
-        window.requestAnimationFrame(() => {
-          window.requestAnimationFrame(() => {
-            syncMapCalendarDatePopoverPosition();
-          });
-        });
-      });
-
-      dateDisplayWrap.addEventListener("pointerdown", (event) => {
-        if (shouldUseCustomDatePopover) {
-          event.preventDefault();
-          event.stopPropagation();
-          toggleMapCalendarDatePopover();
-          return;
-        }
-        event.stopPropagation();
-      });
-      dateDisplayWrap.addEventListener("click", (event) => {
-        if (shouldUseCustomDatePopover) {
-          event.preventDefault();
-          event.stopPropagation();
-          return;
-        }
-      });
-      dateDisplayWrap.addEventListener("keydown", (event) => {
-        if (!shouldUseCustomDatePopover) {
-          return;
-        }
-        if (event.key !== "Enter" && event.key !== " ") {
-          return;
-        }
-        event.preventDefault();
-        event.stopPropagation();
-        toggleMapCalendarDatePopover();
-      });
-      dateInput.addEventListener("pointerdown", (event) => {
-        event.stopPropagation();
-        if (shouldUseCustomDatePopover) {
-          event.preventDefault();
-          return;
-        }
-      });
-      dateInput.addEventListener("click", (event) => {
-        event.stopPropagation();
-        if (shouldUseCustomDatePopover) {
-          event.preventDefault();
-          return;
-        }
-      });
-
-      dateInput.addEventListener("change", () => {
-        const normalizedDate = clampDateToMin(
-          dateInput.value,
-          dateInput.min || getTodayDateInKST(),
-        );
-        dateInput.value = normalizedDate;
-        applyPanelDateChange(normalizedDate);
-        dateInput.value = state.elements.dateInput.value;
-        syncMapCalendarDateNavState();
-      });
-
-      if (shouldUseCustomDatePopover) {
-        dateInput.type = "text";
-        dateInput.tabIndex = -1;
-        dateInput.setAttribute("aria-hidden", "true");
-        dateInput.style.pointerEvents = "none";
-        dateInput.style.position = "absolute";
-        dateInput.style.inset = "0";
-        dateInput.style.width = "100%";
-        dateInput.style.height = "100%";
-        dateInput.style.opacity = "0";
-        dateInput.style.margin = "0";
-        dateInput.style.padding = "0";
-        dateInput.style.border = "none";
-        document.body.appendChild(datePopover);
-        renderMapCalendarDatePopover();
-        overlay.addEventListener("pointerdown", (event) => {
-          const target = event.target;
-          if (!(target instanceof Node)) {
-            closeMapCalendarDatePopover();
-            return;
-          }
-          if (dateDisplayWrap.contains(target) || datePopover.contains(target)) {
-            return;
-          }
-          closeMapCalendarDatePopover();
-        });
-      }
-
-      prevDateButton.addEventListener("click", () => {
-        shiftPanelDateBy(-1);
-        dateInput.value = state.elements.dateInput.value;
-        syncMapCalendarDateNavState();
-      });
-
-      nextDateButton.addEventListener("click", () => {
-        shiftPanelDateBy(1);
-        dateInput.value = state.elements.dateInput.value;
-        syncMapCalendarDateNavState();
-      });
-
-      todayDateButton.addEventListener("click", () => {
-        applyPanelDateChange(getTodayDateInKST());
-        dateInput.value = state.elements.dateInput.value;
-        syncMapCalendarDateNavState();
-      });
-
-      dateDisplayWrap.append(dateInput, dateWeekdayLabel);
-      if (state.mapCalendarDatePopoverOpen) {
-        openMapCalendarDatePopover();
-      }
-      dateControlRow.append(prevDateButton, dateDisplayWrap, nextDateButton, todayDateButton);
-      controlRow.appendChild(dateControlRow);
-      const dateTagLegend = document.createElement("div");
-      dateTagLegend.className = "zzk-room-tag-legend";
-      renderRoomTagLegend(dateTagLegend);
-      controlRow.appendChild(dateTagLegend);
-      syncMapCalendarDateNavState();
-
-      titleControls.appendChild(controlRow);
+    // 헤더는 React 가 그린다. 날짜 선택은 손으로 만든 팝오버 대신 shadcn DatePicker
+    // 를 쓰므로, 달력 그리기·위치 계산·바깥 클릭 감지 코드가 전부 빠졌다.
+    const headerRefs = {};
+    const headerDateInput = state.elements?.dateInput;
+    const headerDate =
+      (headerDateInput instanceof HTMLInputElement ? headerDateInput.value : "") ||
+      scheduleData.date ||
+      "";
+    const headerMinDate = getMinimumSelectableDateForCurrentContext(headerDate) || "";
+    // 최소일보다 앞이면 끌어올린다. 지난 날짜는 예약할 수 없다.
+    const clampedHeaderDate = clampDateToMin(headerDate, headerMinDate);
+    if (headerDateInput instanceof HTMLInputElement && clampedHeaderDate) {
+      headerDateInput.value = clampedHeaderDate;
     }
+    syncPanelDateNavigationState();
 
-    const headerRight = document.createElement("div");
-    headerRight.className = "zzk-map-calendar-header-right";
-    header.appendChild(headerRight);
-
-    const alwaysOpenToggle = document.createElement("label");
-    alwaysOpenToggle.className = "zzk-map-calendar-always-open";
-    const alwaysOpenInput = document.createElement("input");
-    alwaysOpenInput.type = "checkbox";
-    alwaysOpenInput.checked = state.mapCalendarAlwaysOpen;
-    alwaysOpenInput.setAttribute("aria-label", "지도 타임블록 항상 열기");
-    alwaysOpenInput.addEventListener("change", () => {
-      state.mapCalendarAlwaysOpen = alwaysOpenInput.checked;
-      writeStoredBoolean(MAP_CALENDAR_ALWAYS_OPEN_STORAGE_KEY, state.mapCalendarAlwaysOpen);
-      if (state.mapCalendarAlwaysOpen) {
-        state.mapCalendarVisible = true;
-        openMapCalendarModal();
-        return;
-      }
-
-      if (!state.mapCalendarVisible) {
-        removeMapCalendarOverlay();
-      }
-      updateMapCalendarLauncherState();
+    flushSync(() => {
+      renderRadarHeader(header, {
+        date: clampedHeaderDate,
+        minDate: headerMinDate,
+        todayDate: getTodayDateInKST(),
+        onDateChange: (nextDate) => {
+          applyPanelDateChange(nextDate);
+        },
+        onShiftDate: (dayOffset) => {
+          shiftPanelDateBy(dayOffset);
+        },
+        collapsed: state.mapCalendarCollapsed,
+        onToggleCollapsed: () => {
+          state.mapCalendarCollapsed = !state.mapCalendarCollapsed;
+          renderMapCalendarOverlay(scheduleData);
+        },
+        alwaysOpen: state.mapCalendarAlwaysOpen,
+        onAlwaysOpenChange: (nextAlwaysOpen) => {
+          state.mapCalendarAlwaysOpen = nextAlwaysOpen;
+          writeStoredBoolean(MAP_CALENDAR_ALWAYS_OPEN_STORAGE_KEY, nextAlwaysOpen);
+          if (nextAlwaysOpen) {
+            state.mapCalendarVisible = true;
+            openMapCalendarModal();
+            return;
+          }
+          if (!state.mapCalendarVisible) {
+            removeMapCalendarOverlay();
+          }
+          updateMapCalendarLauncherState();
+        },
+        tagLegendRef: (node) => {
+          headerRefs.tagLegend = node;
+        },
+      });
     });
-    const alwaysOpenLabel = document.createElement("span");
-    alwaysOpenLabel.textContent = "항상 열기";
-    alwaysOpenToggle.append(alwaysOpenInput, alwaysOpenLabel);
-    headerRight.appendChild(alwaysOpenToggle);
 
-    const legend = document.createElement("div");
-    legend.className = "zzk-map-calendar-legend";
-    legend.innerHTML =
-      '<span class="free">비어 있음</span><span class="busy">예약 있음</span><span class="selected">선택 시간대</span>';
-    headerRight.appendChild(legend);
-
-    const collapseButton = document.createElement("button");
-    collapseButton.type = "button";
-    collapseButton.className = "zzk-map-calendar-toggle";
-    collapseButton.textContent = state.mapCalendarCollapsed ? "열기" : "접기";
-    collapseButton.setAttribute("aria-label", "지도 타임블록 접기/펼치기");
-    collapseButton.addEventListener("click", () => {
-      state.mapCalendarCollapsed = !state.mapCalendarCollapsed;
-      renderMapCalendarOverlay(scheduleData);
-    });
-    headerRight.appendChild(collapseButton);
+    // 방 태그 범례는 아직 명령형이다. React 가 내준 자리에 그린다.
+    if (headerRefs.tagLegend instanceof HTMLElement) {
+      renderRoomTagLegend(headerRefs.tagLegend);
+    }
 
     // 본문 엘리먼트는 React 가 그린다(카드의 직계 자식이어야 CSS 높이 배분이 맞다).
     // 내용만 아직 명령형으로 채우므로, 매 렌더마다 비우고 다시 그린다.
