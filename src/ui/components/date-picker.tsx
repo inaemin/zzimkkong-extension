@@ -92,7 +92,15 @@ export function DatePicker({
         sideOffset={8}
         container={container ?? undefined}
       >
+        {/*
+          bg-transparent 를 직접 준다. Calendar 에는
+          in-data-[slot=popover-content]:bg-transparent 가 붙어 있지만, 그 규칙은
+          :where(...) 로 감싸져 있어 .bg-background 와 명시도가 같다. 즉 승패가
+          CSS 안의 순서로만 갈려서, 페이지에 따로 주입하는 지금 구조에서는
+          달력 배경이 남아 팝오버 그림자를 덮을 수 있다.
+        */}
         <Calendar
+          className="bg-transparent"
           mode="single"
           selected={selected}
           defaultMonth={selected}
