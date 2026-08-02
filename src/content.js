@@ -360,7 +360,6 @@ import { createSlackSuccessFlow } from "./features/slack/success-flow.js";
     mapCalendarCurrentTimeScrollDate: null,
     // 드래그로 옮긴 모달 위치를 저장소에서 복원한다.
     mapCalendarOffset: readStoredMapCalendarOffset(),
-    slotHover: null,
     appliedSelection: null,
     timelineSelectionRequestId: 0,
     timelineSelectionApplyTimer: null,
@@ -1576,9 +1575,6 @@ import { createSlackSuccessFlow } from "./features/slack/success-flow.js";
       ? 0
       : getEarliestSelectableMinuteForDate(selectionDate);
 
-    if (state.slotHover && state.slotHover.date !== selectionDate) {
-      state.slotHover = null;
-    }
     if (state.appliedSelection && state.appliedSelection.date !== selectionDate) {
       state.appliedSelection = null;
     }
@@ -1772,8 +1768,6 @@ import { createSlackSuccessFlow } from "./features/slack/success-flow.js";
       }),
     );
 
-    const hoverMatchesDate = state.slotHover && state.slotHover.date === selectionDate;
-
     flushSync(() => {
       renderRadarGrid(gridHost, {
         timeline,
@@ -1781,8 +1775,6 @@ import { createSlackSuccessFlow } from "./features/slack/success-flow.js";
         layout: timelineLayout,
         roomColumnLabel: tabLabel,
         minTrackWidth: Math.max(320, timelineLayout.trackWidth + CALENDAR_SIDE_MARGIN),
-        hoveredRoomId: hoverMatchesDate ? state.slotHover.roomId : null,
-        hoveredStartMinute: hoverMatchesDate ? state.slotHover.startMinute : null,
         defaultReservationMinutes: LMS_DEFAULT_RESERVATION_MINUTES,
         renderRoomLabel: (container, room) => {
           if (!(container instanceof HTMLElement)) {
@@ -1793,35 +1785,7 @@ import { createSlackSuccessFlow } from "./features/slack/success-flow.js";
             titleMode: "overlay",
           });
         },
-        onSlotHover: (room, slot) => {
-          if (
-            state.slotHover &&
-            state.slotHover.date === selectionDate &&
-            state.slotHover.roomId === room.id &&
-            state.slotHover.startMinute === slot.startMinute
-          ) {
-            return;
-          }
-          state.slotHover = {
-            date: selectionDate,
-            roomId: room.id,
-            startMinute: slot.startMinute,
-          };
-          renderMapCalendarOverlay(scheduleData);
-        },
-        onRoomLeave: (room) => {
-          if (
-            !state.slotHover ||
-            state.slotHover.date !== selectionDate ||
-            state.slotHover.roomId !== room.id
-          ) {
-            return;
-          }
-          state.slotHover = null;
-          renderMapCalendarOverlay(scheduleData);
-        },
         onSlotClick: (room, startIndex, endIndex) => {
-          state.slotHover = null;
           queueTimelineSelectionApply({
             date: selectionDate,
             startMinute: timeline[startIndex].startMinute,

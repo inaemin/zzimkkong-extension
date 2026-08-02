@@ -42,12 +42,6 @@ export interface RadarGridProps {
   /** 라벨 pane 헤더의 두 번째 열 제목("회의실"/"페어룸"). */
   roomColumnLabel: string;
 
-  /** 현재 hover 중인 방. null 이면 아무 데도 없다. */
-  hoveredRoomId: string | number | null;
-  /** hover 미리보기의 시작 슬롯(분). */
-  hoveredStartMinute: number | null;
-  onSlotHover: (room: RoomSchedule, slot: TimelineSlot) => void;
-  onRoomLeave: (room: RoomSchedule) => void;
   onSlotClick: (room: RoomSchedule, startIndex: number, endIndex: number) => void;
 
   /** 클릭 시 기본으로 잡히는 길이(분). hover 미리보기도 같은 값을 쓴다. */
@@ -64,16 +58,25 @@ export function RadarGrid({
   floorGroups,
   layout,
   roomColumnLabel,
-  hoveredRoomId,
-  hoveredStartMinute,
-  onSlotHover,
-  onRoomLeave,
   onSlotClick,
   defaultReservationMinutes,
   renderRoomLabel,
   timelinePaneRef,
   minTrackWidth,
 }: RadarGridProps) {
+  // hover 는 그리드 안에서만 쓰인다. 바깥 상태로 두면 hover 한 번에 오버레이
+  // 전체가 다시 그려지는데, 여기서 들고 있으면 React 가 바뀐 행만 갱신한다.
+  const [hover, setHover] = React.useState<{
+    roomId: string | number;
+    startMinute: number;
+  } | null>(null);
+
+  // 날짜·탭이 바뀌면 이전 hover 는 의미가 없다. 방 목록이 갈리면 지운다.
+  const roomIds = floorGroups.flatMap((group) => group.rooms.map(({ room }) => room.id)).join(",");
+  React.useEffect(() => {
+    setHover(null);
+  }, [roomIds]);
+
   return (
     <div className="zzk-map-calendar-grid-wrap">
       <div className="zzk-map-calendar-label-pane">
@@ -96,7 +99,7 @@ export function RadarGrid({
                   <div
                     key={room.id}
                     className={`zzk-map-calendar-row zzk-map-calendar-label-row${
-                      hoveredRoomId === room.id ? " hovered" : ""
+                      hover?.roomId === room.id ? " hovered" : ""
                     }`}
                   >
                     <RoomNameCell room={room} render={renderRoomLabel} />
@@ -164,10 +167,14 @@ export function RadarGrid({
                       key={gridRoom.room.id}
                       gridRoom={gridRoom}
                       layout={layout}
-                      isHovered={hoveredRoomId === gridRoom.room.id}
-                      hoveredStartMinute={hoveredStartMinute}
-                      onSlotHover={onSlotHover}
-                      onRoomLeave={onRoomLeave}
+                      isHovered={hover?.roomId === gridRoom.room.id}
+                      hoveredStartMinute={hover?.startMinute ?? null}
+                      onSlotHover={(room, slot) => {
+                        setHover({ roomId: room.id, startMinute: slot.startMinute });
+                      }}
+                      onRoomLeave={(room) => {
+                        setHover((current) => (current?.roomId === room.id ? null : current));
+                      }}
                       onSlotClick={onSlotClick}
                       defaultReservationMinutes={defaultReservationMinutes}
                     />
@@ -218,8 +225,8 @@ function RadarGridRow({
   layout: RadarGridProps["layout"];
   isHovered: boolean;
   hoveredStartMinute: number | null;
-  onSlotHover: RadarGridProps["onSlotHover"];
-  onRoomLeave: RadarGridProps["onRoomLeave"];
+  onSlotHover: (room: RoomSchedule, slot: TimelineSlot) => void;
+  onRoomLeave: (room: RoomSchedule) => void;
   onSlotClick: RadarGridProps["onSlotClick"];
   defaultReservationMinutes: number;
 }) {
