@@ -57,6 +57,11 @@ import {
   buildHostFieldDescriptor,
   readHostFieldDisplayValue,
 } from "./features/form-fields/shared.js";
+import {
+  buildSlotStates,
+  buildSlotTitle,
+  resolveSelectionEndIndex,
+} from "./features/radar/slot-model.js";
 import { createElement } from "react";
 import { flushSync } from "react-dom";
 import { closeFloorMapZoom, openFloorMapZoom } from "./ui/floor-map-zoom-modal.js";
@@ -1885,29 +1890,7 @@ import { createSlackSuccessFlow } from "./features/slack/success-flow.js";
       slots.style.gridTemplateColumns = timelineLayout.templateColumns;
       row.appendChild(slots);
 
-      const reservations = Array.isArray(room.reservations) ? room.reservations : [];
-
-      const slotMetas = timeline.map((slot) => {
-        const overlappedReservations = reservations.filter(
-          (reservation) =>
-            Number.isInteger(reservation.startMinute) &&
-            Number.isInteger(reservation.endMinute) &&
-            reservation.startMinute < slot.endMinute &&
-            reservation.endMinute > slot.startMinute,
-        );
-
-        const isPastBlocked =
-          Number.isFinite(earliestSelectableMinute) && slot.startMinute < earliestSelectableMinute;
-
-        return {
-          slot,
-          overlappedReservations,
-          isBusy: overlappedReservations.length > 0,
-          isPastBlocked,
-          isRoomLocked: false,
-          isSelectable: overlappedReservations.length === 0 && !isPastBlocked,
-        };
-      });
+      const slotMetas = buildSlotStates(room, timeline, earliestSelectableMinute);
 
       const appliedSelectionForRoom =
         state.appliedSelection &&
@@ -1943,29 +1926,13 @@ import { createSlackSuccessFlow } from "./features/slack/success-flow.js";
           (meta) => meta.slot.startMinute === state.slotHover?.startMinute,
         );
 
-        if (hoverStartIndex >= 0 && slotMetas[hoverStartIndex].isSelectable) {
-          // lms+ 는 클릭 시 기본 60분(30분 슬롯 2칸)을 선택하므로, hover 미리보기도
-          // 같은 범위(다음 칸이 막혀 있으면 1칸)를 보여줘 클릭 결과와 일치시킨다.
-          const hoverStartMinute = timeline[hoverStartIndex].startMinute;
-          const hoverTargetEndMinute = hoverStartMinute + LMS_DEFAULT_RESERVATION_MINUTES;
-          let lmsMaxIndex = hoverStartIndex;
-          for (
-            let candidateIndex = hoverStartIndex;
-            candidateIndex < slotMetas.length &&
-            timeline[candidateIndex].endMinute <= hoverTargetEndMinute;
-            candidateIndex += 1
-          ) {
-            lmsMaxIndex = candidateIndex;
-          }
-          const hardMaxIndex = Math.min(slotMetas.length - 1, lmsMaxIndex);
-
-          for (let index = hoverStartIndex; index <= hardMaxIndex; index += 1) {
-            if (!slotMetas[index].isSelectable) {
-              break;
-            }
-            hoverMaxIndex = index;
-          }
-        } else {
+        // hover 미리보기 범위는 클릭 결과와 같아야 한다. 같은 함수를 쓴다.
+        hoverMaxIndex = resolveSelectionEndIndex(
+          slotMetas,
+          hoverStartIndex,
+          LMS_DEFAULT_RESERVATION_MINUTES,
+        );
+        if (hoverMaxIndex < 0) {
           state.slotHover = null;
         }
       }
@@ -1984,8 +1951,7 @@ import { createSlackSuccessFlow } from "./features/slack/success-flow.js";
       });
 
       slotMetas.forEach((slotMeta, index) => {
-        const { slot, isBusy, isPastBlocked, isSelectable, isRoomLocked, overlappedReservations } =
-          slotMeta;
+        const { slot, isBusy, isPastBlocked, isSelectable } = slotMeta;
         const slotElement = document.createElement("div");
         slotElement.className = "zzk-map-calendar-slot";
         // 슬롯 시작 시각을 데이터 속성으로 남겨 두면 테스트/디버깅에서 특정 블록을 집기 쉽다.
@@ -1999,10 +1965,6 @@ import { createSlackSuccessFlow } from "./features/slack/success-flow.js";
         if (isPastBlocked) {
           slotElement.classList.add("past-blocked");
         }
-        if (isRoomLocked) {
-          slotElement.classList.add("room-locked-disabled");
-        }
-
         const isSelectedRange =
           appliedSelectionForRoom &&
           appliedSelectionForRoom.startMinute < slot.endMinute &&
@@ -2024,26 +1986,7 @@ import { createSlackSuccessFlow } from "./features/slack/success-flow.js";
         }
 
         const slotEndLabel = minuteToHourMinute(slot.endMinute);
-        const reservationPreview = overlappedReservations
-          .slice(0, 2)
-          .map((reservation) =>
-            reservation.owner
-              ? `${reservation.startTime}~${reservation.endTime} ${reservation.owner}`
-              : `${reservation.startTime}~${reservation.endTime}`,
-          )
-          .join(" | ");
-
-        if (isBusy) {
-          slotElement.title = `${room.name} ${slot.label}~${slotEndLabel} 예약 있음${
-            reservationPreview ? ` (${reservationPreview})` : ""
-          }`;
-        } else if (isPastBlocked) {
-          slotElement.title = `${room.name} ${slot.label}~${slotEndLabel} 선택 불가 (현재 시간 이전)`;
-        } else if (isRoomLocked) {
-          slotElement.title = `${room.name} ${slot.label}~${slotEndLabel} 조회 전용 (수정 중 공간만 선택 가능)`;
-        } else {
-          slotElement.title = `${room.name} ${slot.label}~${slotEndLabel} 비어 있음`;
-        }
+        slotElement.title = buildSlotTitle(room.name, slotMeta, slotEndLabel);
 
         slotElement.addEventListener("mouseenter", () => {
           if (!isSelectable) {
@@ -2079,30 +2022,11 @@ import { createSlackSuccessFlow } from "./features/slack/success-flow.js";
             return;
           }
 
-          // lms+ 는 클릭 한 번에 기본 60분(30분 슬롯 2칸)을 선택하되,
-          // 다음 칸이 예약 등으로 막혀 있으면 30분만 선택한다.
-          const clickStartMinute = timeline[index].startMinute;
-          const lmsTargetEndMinute = clickStartMinute + LMS_DEFAULT_RESERVATION_MINUTES;
-          let lmsMaxIndex = index;
-          for (
-            let candidateIndex = index;
-            candidateIndex < slotMetas.length &&
-            timeline[candidateIndex].endMinute <= lmsTargetEndMinute;
-            candidateIndex += 1
-          ) {
-            lmsMaxIndex = candidateIndex;
-          }
-          const hardMaxIndex = Math.min(slotMetas.length - 1, lmsMaxIndex);
-
-          let autoEndIndex = index;
-
-          for (let selectionIndex = index; selectionIndex <= hardMaxIndex; selectionIndex += 1) {
-            if (!slotMetas[selectionIndex].isSelectable) {
-              break;
-            }
-            autoEndIndex = selectionIndex;
-          }
-
+          const autoEndIndex = resolveSelectionEndIndex(
+            slotMetas,
+            index,
+            LMS_DEFAULT_RESERVATION_MINUTES,
+          );
           const selectionStartMinute = timeline[index].startMinute;
           const selectionEndMinute = timeline[autoEndIndex].endMinute;
           state.slotHover = null;
