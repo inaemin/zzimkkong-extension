@@ -1329,7 +1329,7 @@ import { createSlackSuccessFlow } from "./features/slack/success-flow.js";
     // (2-pane 의 timeline-pane)의 scrollLeft 를 보존해야 한다. body 를 읽으면 항상 0 이라
     // 리렌더마다 맨 앞으로 튀는 버그가 생긴다.
     const previousScrollEl = getMapCalendarScrollElement(overlay);
-    const previousBody = queryRadarOverlay(".zzk-map-calendar-body");
+    const previousBody = queryRadarOverlay('[data-testid="radar-body"]');
     const preservedBodyScroll = {
       left: previousScrollEl instanceof HTMLElement ? previousScrollEl.scrollLeft : 0,
       top: previousBody instanceof HTMLElement ? previousBody.scrollTop : 0,
@@ -1973,7 +1973,7 @@ import { createSlackSuccessFlow } from "./features/slack/success-flow.js";
       return;
     }
 
-    const card = queryRadarOverlay(".zzk-map-calendar-card");
+    const card = queryRadarOverlay('[data-testid="radar-card"]');
     if (!(card instanceof HTMLElement)) {
       return;
     }
@@ -2058,11 +2058,11 @@ import { createSlackSuccessFlow } from "./features/slack/success-flow.js";
     if (!(overlay instanceof HTMLElement)) {
       return null;
     }
-    const pane = queryRadarOverlay(".zzk-map-calendar-timeline-pane");
+    const pane = queryRadarOverlay('[data-testid="radar-timeline-pane"]');
     if (pane instanceof HTMLElement) {
       return pane;
     }
-    const body = queryRadarOverlay(".zzk-map-calendar-body");
+    const body = queryRadarOverlay('[data-testid="radar-body"]');
     return body instanceof HTMLElement ? body : null;
   }
 

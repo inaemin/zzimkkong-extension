@@ -253,7 +253,7 @@ export function createRadarWorkflow(deps: Deps) {
 
   function syncMapCalendarBodyLoadingState() {
     // 오버레이가 shadow root 안이라 document 로는 자식을 찾을 수 없다.
-    const body = queryRadarOverlay(".zzk-map-calendar-body");
+    const body = queryRadarOverlay('[data-testid="radar-body"]');
     if (!(body instanceof HTMLElement)) {
       return;
     }

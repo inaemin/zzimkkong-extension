@@ -160,14 +160,14 @@ test("API 403 still renders the modal shell with an error message, not a blank",
     .toBe(true);
 
   const errorText = await page.evaluate(() => {
-    const el = window.__zzkQuery(".zzk-map-calendar-error-message");
+    const el = window.__zzkQuery('[data-testid="radar-error-message"]');
     return el ? el.textContent : null;
   });
   expect(errorText).toContain("로그인");
 
   // 다시 시도 버튼도 있어야 한다.
   const hasRetry = await page.evaluate(() =>
-    Boolean(window.__zzkQuery(".zzk-map-calendar-error-retry")),
+    Boolean(window.__zzkQuery('[data-testid="radar-error-retry"]')),
   );
   expect(hasRetry).toBe(true);
 });
@@ -236,15 +236,15 @@ test("라벨 pane 은 타임라인 스크롤과 분리돼 타임블록이 침범
 
   // 가로 스크롤이 생기도록 카드 폭을 좁히고, 스크롤을 맨 끝으로 옮긴다.
   await page.evaluate((overlayId) => {
-    const card = window.__zzkQuery(".zzk-map-calendar-card");
+    const card = window.__zzkQuery('[data-testid="radar-card"]');
     if (card) card.style.width = "520px";
   }, MAP_CALENDAR_OVERLAY_ID);
   await page.waitForTimeout(200);
 
   const result = await page.evaluate((overlayId) => {
     const overlay = window.__zzkRoot();
-    const labelPane = overlay.querySelector(".zzk-map-calendar-label-pane");
-    const pane = overlay.querySelector(".zzk-map-calendar-timeline-pane");
+    const labelPane = overlay.querySelector('[data-testid="radar-label-pane"]');
+    const pane = overlay.querySelector('[data-testid="radar-timeline-pane"]');
 
     // 스크롤 전 라벨 pane 오른쪽 경계.
     const labelRightBefore = labelPane.getBoundingClientRect().right;
@@ -285,7 +285,7 @@ test("07:00 슬롯 앞에는 정시 여백만 있고(다른 정시와 리듬 동
     timeout: 4000,
   });
   await page.evaluate((overlayId) => {
-    const pane = window.__zzkQuery(".zzk-map-calendar-timeline-pane");
+    const pane = window.__zzkQuery('[data-testid="radar-timeline-pane"]');
     pane.scrollLeft = 0;
   }, MAP_CALENDAR_OVERLAY_ID);
   await page.waitForTimeout(200);
@@ -329,7 +329,7 @@ test("회의실↔타임블록 세로 구분선이 헤더~마지막 행까지 �
     const gw = overlay.querySelector(".zzk-map-calendar-grid-wrap");
     const gwr = gw.getBoundingClientRect();
     // 회의실↔타임블록 세로 구분선 = 라벨 pane 의 오른쪽 border.
-    const labelPane = overlay.querySelector(".zzk-map-calendar-label-pane");
+    const labelPane = overlay.querySelector('[data-testid="radar-label-pane"]');
     const lpr = labelPane.getBoundingClientRect();
     const cs = getComputedStyle(labelPane);
     // 마지막 타임블록 행의 하단.
@@ -361,15 +361,15 @@ test("회의실↔타임블록 세로 구분선이 헤더~마지막 행까지 �
 
 test("lms+ 레이더 하단에 층별 평면도 영역이 기본 접힘으로 붙는다", async ({ page }) => {
   await mountServicePage(page);
-  await page.waitForSelector(`#${MAP_CALENDAR_OVERLAY_ID} .zzk-map-calendar-floormap-section`, {
+  await page.waitForSelector(`#${MAP_CALENDAR_OVERLAY_ID} [data-testid="radar-floormaps"]`, {
     timeout: 4000,
   });
 
   const initial = await page.evaluate((overlayId) => {
     const overlay = window.__zzkRoot();
-    const section = overlay.querySelector(".zzk-map-calendar-floormap-section");
-    const header = section.querySelector(".zzk-map-calendar-floormap-header");
-    const scroller = section.querySelector(".zzk-map-calendar-floormap-scroller");
+    const section = overlay.querySelector('[data-testid="radar-floormaps"]');
+    const header = section.querySelector('[data-testid="radar-floormaps-toggle"]');
+    const scroller = section.querySelector('[data-testid="radar-floormaps-scroller"]');
     return {
       hasSection: section instanceof HTMLElement,
       isOpen: section.classList.contains("open"),
@@ -398,16 +398,16 @@ test("lms+ 레이더 하단에 층별 평면도 영역이 기본 접힘으로 �
 
 test("평면도 헤더를 누르면 펼쳐지고 가로 스크롤이 생긴다", async ({ page }) => {
   await mountServicePage(page);
-  await page.waitForSelector(`#${MAP_CALENDAR_OVERLAY_ID} .zzk-map-calendar-floormap-header`, {
+  await page.waitForSelector(`#${MAP_CALENDAR_OVERLAY_ID} [data-testid="radar-floormaps-toggle"]`, {
     timeout: 4000,
   });
 
-  await page.click(`#${MAP_CALENDAR_OVERLAY_ID} .zzk-map-calendar-floormap-header`);
+  await page.click(`#${MAP_CALENDAR_OVERLAY_ID} [data-testid="radar-floormaps-toggle"]`);
 
   // 넓은 모달에서는 3장이 다 들어가 스크롤이 안 생길 수 있으므로, 카드를 좁혀
   // 평면도가 실제로 넘치는 상황을 만든다.
   await page.evaluate((overlayId) => {
-    const card = window.__zzkQuery(".zzk-map-calendar-card");
+    const card = window.__zzkQuery('[data-testid="radar-card"]');
     if (card) card.style.width = "520px";
   }, MAP_CALENDAR_OVERLAY_ID);
 
@@ -416,7 +416,7 @@ test("평면도 헤더를 누르면 펼쳐지고 가로 스크롤이 생긴다",
     .poll(
       () =>
         page.evaluate((overlayId) => {
-          const scroller = window.__zzkQuery(".zzk-map-calendar-floormap-scroller");
+          const scroller = window.__zzkQuery('[data-testid="radar-floormaps-scroller"]');
           return scroller ? scroller.scrollWidth - scroller.clientWidth > 2 : false;
         }, MAP_CALENDAR_OVERLAY_ID),
       { timeout: 3000 },
@@ -425,8 +425,8 @@ test("평면도 헤더를 누르면 펼쳐지고 가로 스크롤이 생긴다",
 
   const opened = await page.evaluate((overlayId) => {
     const overlay = window.__zzkRoot();
-    const section = overlay.querySelector(".zzk-map-calendar-floormap-section");
-    const scroller = section.querySelector(".zzk-map-calendar-floormap-scroller");
+    const section = overlay.querySelector('[data-testid="radar-floormaps"]');
+    const scroller = section.querySelector('[data-testid="radar-floormaps-scroller"]');
     return {
       isOpen: section.classList.contains("open"),
       scrollerDisplay: getComputedStyle(scroller).display,
@@ -441,12 +441,12 @@ test("평면도 헤더를 누르면 펼쳐지고 가로 스크롤이 생긴다",
 
 test("평면도를 누르고 있는 동안에만 확대 모달이 보인다", async ({ page }) => {
   await mountServicePage(page);
-  await page.waitForSelector(`#${MAP_CALENDAR_OVERLAY_ID} .zzk-map-calendar-floormap-header`, {
+  await page.waitForSelector(`#${MAP_CALENDAR_OVERLAY_ID} [data-testid="radar-floormaps-toggle"]`, {
     timeout: 4000,
   });
 
   // 평면도 영역을 펼친다.
-  await page.click(`#${MAP_CALENDAR_OVERLAY_ID} .zzk-map-calendar-floormap-header`);
+  await page.click(`#${MAP_CALENDAR_OVERLAY_ID} [data-testid="radar-floormaps-toggle"]`);
   const firstImage = page
     .locator(`#${MAP_CALENDAR_OVERLAY_ID} .zzk-map-calendar-floormap-image`)
     .first();
@@ -493,20 +493,20 @@ test("평면도를 누르고 있는 동안에만 확대 모달이 보인다", as
 
 test("리렌더돼도 평면도 가로 스크롤 위치가 유지된다", async ({ page }) => {
   await mountServicePage(page);
-  await page.waitForSelector(`#${MAP_CALENDAR_OVERLAY_ID} .zzk-map-calendar-floormap-header`, {
+  await page.waitForSelector(`#${MAP_CALENDAR_OVERLAY_ID} [data-testid="radar-floormaps-toggle"]`, {
     timeout: 4000,
   });
 
   // 평면도를 펼치고, 가로로 넘치도록 카드를 좁힌다.
-  await page.click(`#${MAP_CALENDAR_OVERLAY_ID} .zzk-map-calendar-floormap-header`);
+  await page.click(`#${MAP_CALENDAR_OVERLAY_ID} [data-testid="radar-floormaps-toggle"]`);
   await page.evaluate((overlayId) => {
-    const card = window.__zzkQuery(".zzk-map-calendar-card");
+    const card = window.__zzkQuery('[data-testid="radar-card"]');
     if (card) card.style.width = "520px";
   }, MAP_CALENDAR_OVERLAY_ID);
   await expect
     .poll(() =>
       page.evaluate((overlayId) => {
-        const s = window.__zzkQuery(".zzk-map-calendar-floormap-scroller");
+        const s = window.__zzkQuery('[data-testid="radar-floormaps-scroller"]');
         return s ? s.scrollWidth - s.clientWidth > 2 : false;
       }, MAP_CALENDAR_OVERLAY_ID),
     )
@@ -514,11 +514,12 @@ test("리렌더돼도 평면도 가로 스크롤 위치가 유지된다", async 
 
   // 평면도를 오른쪽으로 스크롤한다.
   await page.evaluate((overlayId) => {
-    const s = window.__zzkQuery(".zzk-map-calendar-floormap-scroller");
+    const s = window.__zzkQuery('[data-testid="radar-floormaps-scroller"]');
     s.scrollLeft = s.scrollWidth - s.clientWidth; // 맨 오른쪽(13F)
   }, MAP_CALENDAR_OVERLAY_ID);
   const scrolled = await page.evaluate(
-    (overlayId) => Math.round(window.__zzkQuery(".zzk-map-calendar-floormap-scroller").scrollLeft),
+    (overlayId) =>
+      Math.round(window.__zzkQuery('[data-testid="radar-floormaps-scroller"]').scrollLeft),
     MAP_CALENDAR_OVERLAY_ID,
   );
   expect(scrolled).toBeGreaterThan(0);
@@ -527,7 +528,7 @@ test("리렌더돼도 평면도 가로 스크롤 위치가 유지된다", async 
   await page.evaluate(() => window.__zzkTestApi?.renderScheduleForDate?.("2099-01-02"));
   // 좁힌 카드 폭은 리렌더로 초기화되므로 다시 좁히고, 스크롤 복원(다음 프레임)을 기다린다.
   await page.evaluate((overlayId) => {
-    const card = window.__zzkQuery(".zzk-map-calendar-card");
+    const card = window.__zzkQuery('[data-testid="radar-card"]');
     if (card) card.style.width = "520px";
   }, MAP_CALENDAR_OVERLAY_ID);
 
@@ -536,7 +537,7 @@ test("리렌더돼도 평면도 가로 스크롤 위치가 유지된다", async 
     .poll(() =>
       page.evaluate(
         (overlayId) =>
-          Math.round(window.__zzkQuery(".zzk-map-calendar-floormap-scroller").scrollLeft),
+          Math.round(window.__zzkQuery('[data-testid="radar-floormaps-scroller"]').scrollLeft),
         MAP_CALENDAR_OVERLAY_ID,
       ),
     )
@@ -685,12 +686,12 @@ test("에러 화면에서 다시 시도하면 정상 오버레이로 바뀐다",
   await page.goto(`${WEB_ORIGIN}/space-reservations`, { waitUntil: "domcontentloaded" });
   await loadContentBundle(page);
 
-  await page.waitForSelector(`#${MAP_CALENDAR_OVERLAY_ID} .zzk-map-calendar-error-message`, {
+  await page.waitForSelector(`#${MAP_CALENDAR_OVERLAY_ID} [data-testid="radar-error-message"]`, {
     timeout: 5000,
   });
 
   shouldFail = false;
-  await page.click(`#${MAP_CALENDAR_OVERLAY_ID} .zzk-map-calendar-error-retry`);
+  await page.click(`#${MAP_CALENDAR_OVERLAY_ID} [data-testid="radar-error-retry"]`);
 
   // 에러가 사라지고 슬롯이 그려져야 한다.
   await expect
@@ -703,7 +704,7 @@ test("에러 화면에서 다시 시도하면 정상 오버레이로 바뀐다",
     .toBeGreaterThan(0);
 
   const stillHasError = await page.evaluate(
-    (overlayId) => Boolean(window.__zzkQuery(".zzk-map-calendar-error-message")),
+    (overlayId) => Boolean(window.__zzkQuery('[data-testid="radar-error-message"]')),
     MAP_CALENDAR_OVERLAY_ID,
   );
   expect(stillHasError).toBe(false);
@@ -723,7 +724,7 @@ test("표시할 일정이 없으면 안내 문구가 뜬다", async ({ page }) =
   await expect
     .poll(() =>
       page.evaluate(
-        (overlayId) => window.__zzkQuery(".zzk-map-calendar-empty")?.textContent ?? null,
+        (overlayId) => window.__zzkQuery('[data-testid="radar-empty"]')?.textContent ?? null,
         MAP_CALENDAR_OVERLAY_ID,
       ),
     )
@@ -733,7 +734,7 @@ test("표시할 일정이 없으면 안내 문구가 뜬다", async ({ page }) =
     const overlay = window.__zzkRoot();
     return {
       slots: overlay.querySelectorAll(".zzk-map-calendar-slot").length,
-      hasFloorMaps: Boolean(overlay.querySelector(".zzk-map-calendar-floormap-section")),
+      hasFloorMaps: Boolean(overlay.querySelector('[data-testid="radar-floormaps"]')),
     };
   }, MAP_CALENDAR_OVERLAY_ID);
 

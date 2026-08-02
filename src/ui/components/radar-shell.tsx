@@ -126,16 +126,22 @@ export function RadarShell({
         </button>
       </div>
 
-      <div className="zzk-map-calendar-card" ref={setCardRef} {...stopProps}>
+      <div
+        className="zzk-map-calendar-card"
+        data-testid="radar-card"
+        ref={setCardRef}
+        {...stopProps}
+      >
         <div
           className="zzk-map-calendar-resize-handle"
+          data-testid="radar-resize-handle"
           role="separator"
           aria-orientation="vertical"
           aria-label="레이더 너비 조절"
           ref={resizeHandleRef}
         />
-        <div className="zzk-map-calendar-header" ref={headerRef} />
-        <div className="zzk-map-calendar-body" ref={bodyRef} />
+        <div className="zzk-map-calendar-header" data-testid="radar-header" ref={headerRef} />
+        <div className="zzk-map-calendar-body" data-testid="radar-body" ref={bodyRef} />
       </div>
     </div>
   );

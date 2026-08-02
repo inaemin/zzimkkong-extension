@@ -38,10 +38,14 @@ export function RadarFloorMaps({
   }
 
   return (
-    <section className={`zzk-map-calendar-floormap-section${open ? " open" : ""}`}>
+    <section
+      className={`zzk-map-calendar-floormap-section${open ? " open" : ""}`}
+      data-testid="radar-floormaps"
+    >
       <button
         type="button"
         className="zzk-map-calendar-floormap-header"
+        data-testid="radar-floormaps-toggle"
         aria-expanded={open}
         onClick={() => onOpenChange(!open)}
       >
@@ -51,7 +55,7 @@ export function RadarFloorMaps({
         <span className="zzk-map-calendar-floormap-title">평면도</span>
       </button>
 
-      <div className="zzk-map-calendar-floormap-scroller">
+      <div className="zzk-map-calendar-floormap-scroller" data-testid="radar-floormaps-scroller">
         {cards.map(({ floor, dataUri }) => (
           <FloorMapCard
             key={floor}

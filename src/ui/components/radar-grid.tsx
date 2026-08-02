@@ -88,7 +88,9 @@ export function RadarGrid({
     // 빈 상태에서도 평면도는 보여준다(공간 위치는 일정과 무관하게 유용하다).
     return (
       <>
-        <p className="zzk-map-calendar-empty">{emptyMessage}</p>
+        <p className="zzk-map-calendar-empty" data-testid="radar-empty">
+          {emptyMessage}
+        </p>
         <RadarFloorMaps {...floorMaps} />
       </>
     );
@@ -97,7 +99,7 @@ export function RadarGrid({
   return (
     <>
       <div className="zzk-map-calendar-grid-wrap">
-        <div className="zzk-map-calendar-label-pane">
+        <div className="zzk-map-calendar-label-pane" data-testid="radar-label-pane">
           <div className="zzk-map-calendar-grid zzk-map-calendar-label-grid">
             <div className="zzk-map-calendar-axis-row zzk-map-calendar-label-row">
               <div className="zzk-map-calendar-floor-name axis">층</div>
@@ -134,7 +136,11 @@ export function RadarGrid({
           </div>
         </div>
 
-        <div className="zzk-map-calendar-timeline-pane" ref={timelinePaneRef}>
+        <div
+          className="zzk-map-calendar-timeline-pane"
+          data-testid="radar-timeline-pane"
+          ref={timelinePaneRef}
+        >
           <div
             className="zzk-map-calendar-timeline-track"
             style={{ minWidth: `${minTrackWidth}px` }}
