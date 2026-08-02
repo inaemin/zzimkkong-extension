@@ -69,6 +69,7 @@ import { closeFloorMapZoom, openFloorMapZoom } from "./ui/floor-map-zoom-modal.j
 import { RadarShell } from "./ui/components/radar-shell.js";
 import { getRadarOverlayRoot } from "./ui/radar-overlay-mount.js";
 import { renderRadarHeader } from "./ui/radar-header-mount.js";
+import { renderRadarGrid } from "./ui/radar-grid-mount.js";
 import { ensurePageTailwindStyle } from "./ui/page-styles.js";
 import {
   MAP_CALENDAR_OVERLAY_ID,
@@ -1448,6 +1449,18 @@ import { createSlackSuccessFlow } from "./features/slack/success-flow.js";
     card.appendChild(body);
   }
 
+  /** 본문 안의 소유 구역을 만들어(또는 찾아) 돌려준다. */
+  function ensureBodyChild(body, className) {
+    const existing = body.querySelector(`:scope > .${className}`);
+    if (existing instanceof HTMLElement) {
+      return existing;
+    }
+    const host = document.createElement("div");
+    host.className = className;
+    body.appendChild(host);
+    return host;
+  }
+
   function renderMapCalendarOverlay(scheduleData) {
     if (!state.scheduleOverlayEnabled) {
       removeMapCalendarOverlay();
@@ -1688,12 +1701,17 @@ import { createSlackSuccessFlow } from "./features/slack/success-flow.js";
     }
 
     // 본문 엘리먼트는 React 가 그린다(카드의 직계 자식이어야 CSS 높이 배분이 맞다).
-    // 내용만 아직 명령형으로 채우므로, 매 렌더마다 비우고 다시 그린다.
+    //
+    // 본문 안은 둘로 나눈다: 그리드는 React 루트가, 평면도는 아직 명령형 코드가
+    // 소유한다. 한 컨테이너를 공유하면 서로의 DOM 을 지운다(비우면 React 가 자기
+    // 노드가 사라진 줄 모르고, React 가 렌더하면 명령형으로 붙인 게 날아간다).
     const body = shellRefs.body;
     if (!(body instanceof HTMLElement)) {
       return;
     }
-    body.textContent = "";
+    const gridHost = ensureBodyChild(body, "zzk-map-calendar-grid-host");
+    const floorMapHost = ensureBodyChild(body, "zzk-map-calendar-floormap-host");
+    floorMapHost.textContent = "";
     syncMapCalendarBodyLoadingState();
 
     if (state.mapCalendarCollapsed) {
@@ -1727,199 +1745,71 @@ import { createSlackSuccessFlow } from "./features/slack/success-flow.js";
     //  - 라벨 열(층/회의실)은 스크롤 밖 labelPane 에 두어 가로 스크롤바가 라벨 아래로
     //    번지지 않게 한다. 타임블록/정시 헤더는 timelinePane 안에서만 스크롤된다.
     //  - 두 pane 의 각 행은 동일한 고정 높이(--zzk-cal-row-h)로 렌더해 세로 정렬을 맞춘다.
-    const gridWrap = document.createElement("div");
-    gridWrap.className = "zzk-map-calendar-grid-wrap";
-    body.appendChild(gridWrap);
+    // 그리드는 React 가 그린다. 슬롯 상태·층 그룹은 순수 함수로 미리 계산해
+    // 넘기고, 컴포넌트는 그리기만 한다.
+    const gridRoomsByFloor = groupRoomsByFloor(rooms, resolveMapCalendarRoomFloor).map(
+      (floorGroup) => ({
+        ...floorGroup,
+        rooms: floorGroup.rooms.map((room) => {
+          const applied =
+            state.appliedSelection &&
+            state.appliedSelection.date === selectionDate &&
+            state.appliedSelection.roomId === room.id &&
+            Number.isInteger(state.appliedSelection.startMinute) &&
+            Number.isInteger(state.appliedSelection.endMinute) &&
+            state.appliedSelection.startMinute < state.appliedSelection.endMinute
+              ? state.appliedSelection
+              : null;
 
-    const labelPane = document.createElement("div");
-    labelPane.className = "zzk-map-calendar-label-pane";
-    gridWrap.appendChild(labelPane);
+          return {
+            room,
+            slotStates: buildSlotStates(room, timeline, earliestSelectableMinute),
+            appliedRange: applied
+              ? { startMinute: applied.startMinute, endMinute: applied.endMinute }
+              : null,
+          };
+        }),
+      }),
+    );
 
-    const timelinePane = document.createElement("div");
-    timelinePane.className = "zzk-map-calendar-timeline-pane";
-    gridWrap.appendChild(timelinePane);
+    const hoverMatchesDate = state.slotHover && state.slotHover.date === selectionDate;
 
-    // 타임블록 트랙(스크롤되는 콘텐츠). 정시 헤더/경계선/세로선이 이 안에서 함께 스크롤된다.
-    const timelineTrack = document.createElement("div");
-    timelineTrack.className = "zzk-map-calendar-timeline-track";
-    timelineTrack.style.minWidth = `${Math.max(
-      320,
-      timelineLayout.trackWidth + CALENDAR_SIDE_MARGIN,
-    )}px`;
-    timelinePane.appendChild(timelineTrack);
-
-    // 정시 세로 경계선(hour boundary) 레이어 — 타임블록 트랙 안에 절대배치.
-    const boundaryLayer = document.createElement("div");
-    boundaryLayer.className = "zzk-map-calendar-hour-boundary-layer";
-    const boundaryTrack = document.createElement("div");
-    boundaryTrack.className = "zzk-map-calendar-hour-boundary-track";
-    boundaryTrack.style.gridTemplateColumns = timelineLayout.templateColumns;
-    boundaryLayer.appendChild(boundaryTrack);
-    timelineTrack.appendChild(boundaryLayer);
-    renderMapCalendarHourBoundaryCells(boundaryTrack, timelineLayout.boundaryColumnStarts);
-
-    // 라벨 pane 의 그리드(층/회의실 열).
-    const labelGrid = document.createElement("div");
-    labelGrid.className = "zzk-map-calendar-grid zzk-map-calendar-label-grid";
-    labelPane.appendChild(labelGrid);
-
-    // 층↔회의실 세로 구분선(라벨 pane 안).
-    const dividerLayer = document.createElement("div");
-    dividerLayer.className = "zzk-map-calendar-divider-layer";
-    const dividerTrack = document.createElement("div");
-    dividerTrack.className = "zzk-map-calendar-divider-track";
-    dividerLayer.appendChild(dividerTrack);
-    labelPane.appendChild(dividerLayer);
-
-    // 타임블록 트랙의 그리드(정시 헤더 + 슬롯 행들).
-    const grid = document.createElement("div");
-    grid.className = "zzk-map-calendar-grid zzk-map-calendar-timeline-grid";
-    timelineTrack.appendChild(grid);
-
-    // 라벨 pane 의 헤더 행(층 / 회의실 제목).
-    const axisLabelRow = document.createElement("div");
-    axisLabelRow.className = "zzk-map-calendar-axis-row zzk-map-calendar-label-row";
-    labelGrid.appendChild(axisLabelRow);
-
-    const axisFloor = document.createElement("div");
-    axisFloor.className = "zzk-map-calendar-floor-name axis";
-    axisFloor.textContent = "층";
-    axisLabelRow.appendChild(axisFloor);
-
-    const axisRoomLabel = document.createElement("div");
-    axisRoomLabel.className = "zzk-map-calendar-room-name axis";
-    axisRoomLabel.textContent = tabLabel;
-    axisLabelRow.appendChild(axisRoomLabel);
-
-    // 타임블록 트랙의 헤더 행(정시 라벨).
-    const axisRow = document.createElement("div");
-    axisRow.className = "zzk-map-calendar-axis-row zzk-map-calendar-timeline-row";
-    grid.appendChild(axisRow);
-
-    const axisSlots = document.createElement("div");
-    axisSlots.className = "zzk-map-calendar-slots";
-    axisSlots.style.gridTemplateColumns = timelineLayout.templateColumns;
-    axisRow.appendChild(axisSlots);
-
-    timeline.forEach((slot, index) => {
-      const slotLabel = document.createElement("div");
-      slotLabel.className = "zzk-map-calendar-hour-label";
-      if (slot.isHourMark) {
-        slotLabel.classList.add("hour-boundary");
-      }
-      slotLabel.style.gridColumn = String(timelineLayout.slotColumnStarts[index]);
-      slotLabel.textContent = slot.isHourMark ? slot.label : "";
-      axisSlots.appendChild(slotLabel);
-    });
-
-    // 라벨 pane / 타임블록 pane 에 동일 구조의 층 그룹을 만든다(행 높이가 같아 정렬됨).
-    const makeFloorGroup = (isFloorDivider) => {
-      const group = document.createElement("div");
-      group.className = "zzk-map-calendar-floor-group floor-boundary";
-      if (isFloorDivider) {
-        group.classList.add("floor-divider");
-      }
-      const roomsHost = document.createElement("div");
-      roomsHost.className = "zzk-map-calendar-floor-rooms";
-      return { group, roomsHost };
-    };
-
-    // 두 pane 이 각자 묶으면 경계 판단이 어긋날 수 있어 한 번만 묶어 공유한다.
-    const floorGroups = groupRoomsByFloor(rooms, resolveMapCalendarRoomFloor);
-
-    floorGroups.forEach((floorGroup) => {
-      // 라벨 pane: 층 이름 열 + 회의실 이름 행들.
-      const labelFloor = makeFloorGroup(floorGroup.isFloorDivider);
-      const floorName = document.createElement("div");
-      floorName.className = "zzk-map-calendar-floor-name";
-      floorName.textContent = floorGroup.floorLabel;
-      labelFloor.group.appendChild(floorName);
-      labelFloor.group.appendChild(labelFloor.roomsHost);
-      labelGrid.appendChild(labelFloor.group);
-      const currentLabelRooms = labelFloor.roomsHost;
-
-      // 타임블록 pane: 같은 층 그룹(슬롯 행들). floor-name 은 없지만 구조/높이를 맞춘다.
-      const timelineFloor = makeFloorGroup(floorGroup.isFloorDivider);
-      timelineFloor.group.classList.add("zzk-map-calendar-floor-group-timeline");
-      timelineFloor.group.appendChild(timelineFloor.roomsHost);
-      grid.appendChild(timelineFloor.group);
-      const currentTimelineRooms = timelineFloor.roomsHost;
-
-      floorGroup.rooms.forEach((room) => {
-        // 라벨 pane 의 회의실 이름 행.
-        const labelRow = document.createElement("div");
-        labelRow.className = "zzk-map-calendar-row zzk-map-calendar-label-row";
-        const roomName = document.createElement("div");
-        roomName.className = "zzk-map-calendar-room-name";
-        renderRoomLabel(roomName, room, {
-          formatter: formatMapCalendarRoomLabel,
-          titleMode: "overlay",
-        });
-        roomName.title = `공간 ID: ${room.id}`;
-        labelRow.appendChild(roomName);
-        currentLabelRooms.appendChild(labelRow);
-
-        // 타임블록 pane 의 슬롯 행. hover/selection 은 이 행에 적용된다.
-        const row = document.createElement("div");
-        row.className = "zzk-map-calendar-row zzk-map-calendar-timeline-row";
-        currentTimelineRooms.appendChild(row);
-        // hover 시 라벨 행도 같이 강조하려고 서로 참조를 걸어 둔다.
-        row.__zzkLabelRow = labelRow;
-        labelRow.__zzkTimelineRow = row;
-
-        const slots = document.createElement("div");
-        slots.className = "zzk-map-calendar-slots";
-        slots.style.gridTemplateColumns = timelineLayout.templateColumns;
-        row.appendChild(slots);
-
-        const slotMetas = buildSlotStates(room, timeline, earliestSelectableMinute);
-
-        const appliedSelectionForRoom =
-          state.appliedSelection &&
-          state.appliedSelection.date === selectionDate &&
-          state.appliedSelection.roomId === room.id &&
-          Number.isInteger(state.appliedSelection.startMinute) &&
-          Number.isInteger(state.appliedSelection.endMinute) &&
-          state.appliedSelection.startMinute < state.appliedSelection.endMinute
-            ? state.appliedSelection
-            : null;
-
-        // lms+ 는 클릭 한 번에 예약이 확정되므로(아래 click 핸들러) 2단계 드래그 선택이
-        // 없다. slotSelection 은 hoverMinute 만 갖고 startMinute 은 아무도 쓰지 않아,
-        // 예전 선택 미리보기 분기(selectable/preview/anchor)는 도달할 수 없었다.
-        const hoverMatchesRoom =
-          state.slotHover != null &&
-          state.slotHover.date === selectionDate &&
-          state.slotHover.roomId === room.id;
-
-        if (hoverMatchesRoom) {
-          row.classList.add("hovered");
-          // 라벨 pane 의 같은 행도 강조해 회의실 이름 셀에도 파란 배경이 보이게 한다.
-          if (row.__zzkLabelRow instanceof HTMLElement) {
-            row.__zzkLabelRow.classList.add("hovered");
+    flushSync(() => {
+      renderRadarGrid(gridHost, {
+        timeline,
+        floorGroups: gridRoomsByFloor,
+        layout: timelineLayout,
+        roomColumnLabel: tabLabel,
+        minTrackWidth: Math.max(320, timelineLayout.trackWidth + CALENDAR_SIDE_MARGIN),
+        hoveredRoomId: hoverMatchesDate ? state.slotHover.roomId : null,
+        hoveredStartMinute: hoverMatchesDate ? state.slotHover.startMinute : null,
+        defaultReservationMinutes: LMS_DEFAULT_RESERVATION_MINUTES,
+        renderRoomLabel: (container, room) => {
+          if (!(container instanceof HTMLElement)) {
+            return;
           }
-        }
-
-        let hoverStartIndex = -1;
-        let hoverMaxIndex = -1;
-
-        if (hoverMatchesRoom) {
-          hoverStartIndex = slotMetas.findIndex(
-            (meta) => meta.slot.startMinute === state.slotHover?.startMinute,
-          );
-
-          // hover 미리보기 범위는 클릭 결과와 같아야 한다. 같은 함수를 쓴다.
-          hoverMaxIndex = resolveSelectionEndIndex(
-            slotMetas,
-            hoverStartIndex,
-            LMS_DEFAULT_RESERVATION_MINUTES,
-          );
-          if (hoverMaxIndex < 0) {
-            state.slotHover = null;
+          renderRoomLabel(container, room, {
+            formatter: formatMapCalendarRoomLabel,
+            titleMode: "overlay",
+          });
+        },
+        onSlotHover: (room, slot) => {
+          if (
+            state.slotHover &&
+            state.slotHover.date === selectionDate &&
+            state.slotHover.roomId === room.id &&
+            state.slotHover.startMinute === slot.startMinute
+          ) {
+            return;
           }
-        }
-
-        slots.addEventListener("mouseleave", () => {
+          state.slotHover = {
+            date: selectionDate,
+            roomId: room.id,
+            startMinute: slot.startMinute,
+          };
+          renderMapCalendarOverlay(scheduleData);
+        },
+        onRoomLeave: (room) => {
           if (
             !state.slotHover ||
             state.slotHover.date !== selectionDate ||
@@ -1927,112 +1817,24 @@ import { createSlackSuccessFlow } from "./features/slack/success-flow.js";
           ) {
             return;
           }
-
           state.slotHover = null;
           renderMapCalendarOverlay(scheduleData);
-        });
-
-        slotMetas.forEach((slotMeta, index) => {
-          const { slot, isBusy, isPastBlocked, isSelectable } = slotMeta;
-          const slotElement = document.createElement("div");
-          slotElement.className = "zzk-map-calendar-slot";
-          // 슬롯 시작 시각을 데이터 속성으로 남겨 두면 테스트/디버깅에서 특정 블록을 집기 쉽다.
-          slotElement.dataset.zzkSlotStart = slot.label;
-          slotElement.style.gridColumn = String(timelineLayout.slotColumnStarts[index]);
-          if (isBusy) {
-            slotElement.classList.add("busy");
-          } else {
-            slotElement.classList.add("free");
-          }
-          if (isPastBlocked) {
-            slotElement.classList.add("past-blocked");
-            if (slotMeta.isPastReserved) {
-              // 지난 시간이지만 예약이 있었던 칸. 그냥 비어 있던 과거와 구분한다.
-              slotElement.classList.add("past-reserved");
-            }
-          }
-          const isSelectedRange =
-            appliedSelectionForRoom &&
-            appliedSelectionForRoom.startMinute < slot.endMinute &&
-            appliedSelectionForRoom.endMinute > slot.startMinute;
-
-          if (isSelectedRange) {
-            slotElement.classList.add("selected");
-          }
-
-          const isHoverPreviewRangeSlot =
-            hoverStartIndex >= 0 &&
-            hoverMaxIndex >= hoverStartIndex &&
-            index >= hoverStartIndex &&
-            index <= hoverMaxIndex &&
-            slotMetas[index].isSelectable;
-
-          if (isHoverPreviewRangeSlot) {
-            slotElement.classList.add("hover-preview");
-          }
-
-          const slotEndLabel = minuteToHourMinute(slot.endMinute);
-          slotElement.title = buildSlotTitle(room.name, slotMeta, slotEndLabel);
-
-          slotElement.addEventListener("mouseenter", () => {
-            if (!isSelectable) {
-              return;
-            }
-
-            let shouldRerender = false;
-
-            if (
-              !state.slotHover ||
-              state.slotHover.date !== selectionDate ||
-              state.slotHover.roomId !== room.id ||
-              state.slotHover.startMinute !== slot.startMinute
-            ) {
-              state.slotHover = {
-                date: selectionDate,
-                roomId: room.id,
-                startMinute: slot.startMinute,
-              };
-              shouldRerender = true;
-            }
-
-            if (shouldRerender) {
-              renderMapCalendarOverlay(scheduleData);
-            }
+        },
+        onSlotClick: (room, startIndex, endIndex) => {
+          state.slotHover = null;
+          queueTimelineSelectionApply({
+            date: selectionDate,
+            startMinute: timeline[startIndex].startMinute,
+            endMinute: timeline[endIndex].endMinute,
+            room,
           });
-
-          slotElement.addEventListener("click", (event) => {
-            event.preventDefault();
-            event.stopPropagation();
-
-            if (!isSelectable) {
-              return;
-            }
-
-            const autoEndIndex = resolveSelectionEndIndex(
-              slotMetas,
-              index,
-              LMS_DEFAULT_RESERVATION_MINUTES,
-            );
-            const selectionStartMinute = timeline[index].startMinute;
-            const selectionEndMinute = timeline[autoEndIndex].endMinute;
-            state.slotHover = null;
-
-            queueTimelineSelectionApply({
-              date: selectionDate,
-              startMinute: selectionStartMinute,
-              endMinute: selectionEndMinute,
-              room,
-            });
-          });
-
-          slots.appendChild(slotElement);
-        });
+        },
       });
     });
 
     // lms+ 에는 지도가 없어 공간의 물리적 위치를 알 수 없다. 타임라인 아래에
     // 층별 평면도(SVG)를 접이식으로 붙여, 페어룸 등이 실제 어디인지 확인할 수 있게 한다.
-    renderMapCalendarFloorMapSection(body, preservedFloorMapScrollLeft);
+    renderMapCalendarFloorMapSection(floorMapHost, preservedFloorMapScrollLeft);
 
     const scrollEl = getMapCalendarScrollElement(overlay);
     syncMapCalendarBodyScrollState(body);

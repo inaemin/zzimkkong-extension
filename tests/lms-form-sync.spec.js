@@ -268,14 +268,23 @@ test("clicking a 30-min block wires through to the lms+ form", async ({ page }) 
     .toBe(true);
 
   const clicked = await page.evaluate(() => {
+    // 두 pane 은 같은 순서로 행을 그린다. 라벨 pane 에서 찾은 위치가
+    // 타임라인 pane 의 같은 위치다(예전에는 DOM 에 서로 참조를 걸어 뒀다).
     const labelRows = Array.from(
-      document.querySelectorAll(".zzk-map-calendar-row.zzk-map-calendar-label-row"),
+      document.querySelectorAll(
+        ".zzk-map-calendar-label-pane .zzk-map-calendar-row.zzk-map-calendar-label-row",
+      ),
     );
-    const labelRow = labelRows.find((r) => {
+    const roomIndex = labelRows.findIndex((r) => {
       const n = r.querySelector(".zzk-map-calendar-room-name");
       return n && (n.textContent || "").includes("은하수");
     });
-    const row = labelRow && labelRow.__zzkTimelineRow;
+    const timelineRows = Array.from(
+      document.querySelectorAll(
+        ".zzk-map-calendar-timeline-pane .zzk-map-calendar-row.zzk-map-calendar-timeline-row",
+      ),
+    );
+    const row = roomIndex >= 0 ? timelineRows[roomIndex] : null;
     if (!row) return { ok: false };
     const slot = row.querySelector('.zzk-map-calendar-slot[data-zzk-slot-start="10:00"]');
     if (!slot) return { ok: false };
@@ -293,14 +302,23 @@ test("clicking a 30-min block wires through to the lms+ form", async ({ page }) 
 // 은하수 행의 특정 슬롯을 실제로 hover 한다.
 async function hoverSlot(page, label) {
   const handle = await page.evaluateHandle((label) => {
+    // 두 pane 은 같은 순서로 행을 그린다. 라벨 pane 에서 찾은 위치가
+    // 타임라인 pane 의 같은 위치다(예전에는 DOM 에 서로 참조를 걸어 뒀다).
     const labelRows = Array.from(
-      document.querySelectorAll(".zzk-map-calendar-row.zzk-map-calendar-label-row"),
+      document.querySelectorAll(
+        ".zzk-map-calendar-label-pane .zzk-map-calendar-row.zzk-map-calendar-label-row",
+      ),
     );
-    const labelRow = labelRows.find((r) => {
+    const roomIndex = labelRows.findIndex((r) => {
       const n = r.querySelector(".zzk-map-calendar-room-name");
       return n && (n.textContent || "").includes("은하수");
     });
-    const row = labelRow && labelRow.__zzkTimelineRow;
+    const timelineRows = Array.from(
+      document.querySelectorAll(
+        ".zzk-map-calendar-timeline-pane .zzk-map-calendar-row.zzk-map-calendar-timeline-row",
+      ),
+    );
+    const row = roomIndex >= 0 ? timelineRows[roomIndex] : null;
     return row ? row.querySelector(`.zzk-map-calendar-slot[data-zzk-slot-start="${label}"]`) : null;
   }, label);
   await handle.hover();
@@ -308,14 +326,23 @@ async function hoverSlot(page, label) {
 
 function readHoverPreview(page) {
   return page.evaluate(() => {
+    // 두 pane 은 같은 순서로 행을 그린다. 라벨 pane 에서 찾은 위치가
+    // 타임라인 pane 의 같은 위치다(예전에는 DOM 에 서로 참조를 걸어 뒀다).
     const labelRows = Array.from(
-      document.querySelectorAll(".zzk-map-calendar-row.zzk-map-calendar-label-row"),
+      document.querySelectorAll(
+        ".zzk-map-calendar-label-pane .zzk-map-calendar-row.zzk-map-calendar-label-row",
+      ),
     );
-    const labelRow = labelRows.find((r) => {
+    const roomIndex = labelRows.findIndex((r) => {
       const n = r.querySelector(".zzk-map-calendar-room-name");
       return n && (n.textContent || "").includes("은하수");
     });
-    const row = labelRow && labelRow.__zzkTimelineRow;
+    const timelineRows = Array.from(
+      document.querySelectorAll(
+        ".zzk-map-calendar-timeline-pane .zzk-map-calendar-row.zzk-map-calendar-timeline-row",
+      ),
+    );
+    const row = roomIndex >= 0 ? timelineRows[roomIndex] : null;
     if (!row) return [];
     return Array.from(row.querySelectorAll(".zzk-map-calendar-slot"))
       .filter((s) => s.className.includes("hover-preview"))
@@ -384,21 +411,29 @@ test("슬롯 hover 시 회의실 이름 셀에도 파란 배경이 적용된다"
 
   await hoverSlot(page, "10:00");
 
-  const style = await page.evaluate(() => {
-    const rows = Array.from(document.querySelectorAll(".zzk-map-calendar-row"));
-    const row = rows.find((r) => {
-      const n = r.querySelector(".zzk-map-calendar-room-name");
-      return n && (n.textContent || "").includes("은하수");
+  // hover 는 React 리렌더를 거치므로 스타일이 바로 반영되지 않는다.
+  const readStyle = () =>
+    page.evaluate(() => {
+      // 회의실 이름 셀은 라벨 pane 에만 있다.
+      const rows = Array.from(
+        document.querySelectorAll(".zzk-map-calendar-label-pane .zzk-map-calendar-row"),
+      );
+      const row = rows.find((r) => {
+        const n = r.querySelector(".zzk-map-calendar-room-name");
+        return n && (n.textContent || "").includes("은하수");
+      });
+      if (!row) return null;
+      const roomName = row.querySelector(".zzk-map-calendar-room-name");
+      return {
+        rowHovered: row.className.includes("hovered"),
+        rowBg: getComputedStyle(row).backgroundColor,
+        // 회의실 이름 셀 배경이 흰색이 아니라 파란 틴트여야 한다.
+        cellBg: getComputedStyle(roomName).backgroundColor,
+      };
     });
-    if (!row) return null;
-    const roomName = row.querySelector(".zzk-map-calendar-room-name");
-    return {
-      rowHovered: row.className.includes("hovered"),
-      rowBg: getComputedStyle(row).backgroundColor,
-      // 회의실 이름 셀 배경이 흰색이 아니라 파란 틴트여야 한다.
-      cellBg: getComputedStyle(roomName).backgroundColor,
-    };
-  });
+
+  await expect.poll(async () => (await readStyle())?.rowBg).toBe("rgba(14, 165, 233, 0.12)");
+  const style = await readStyle();
 
   expect(style).not.toBeNull();
   expect(style.rowHovered).toBe(true);

@@ -635,13 +635,21 @@ test("지난 예약 칸은 더 진하고 예약 내용을 알려준다", async (
       count: overlay.querySelectorAll(".past-reserved").length,
       reservedAlpha: alpha(getComputedStyle(pastReserved).backgroundColor),
       emptyAlpha: alpha(getComputedStyle(pastEmpty).backgroundColor),
-      title: pastReserved.title,
     };
   }, MAP_CALENDAR_OVERLAY_ID);
 
   expect(rendered.count).toBeGreaterThan(0);
   // 빈 과거보다 진해야 구분이 된다.
   expect(rendered.reservedAlpha).toBeGreaterThan(rendered.emptyAlpha);
-  expect(rendered.title).toContain("지난 예약");
-  expect(rendered.title).toContain("아무개");
+
+  // 예약 내용은 툴팁으로 알려준다(hover 즉시 뜬다).
+  const pastReservedSlot = page
+    .locator(`#${MAP_CALENDAR_OVERLAY_ID} .zzk-map-calendar-slot.past-reserved`)
+    .first();
+  const slotBox = await pastReservedSlot.boundingBox();
+  await page.mouse.move(slotBox.x + slotBox.width / 2, slotBox.y + slotBox.height / 2);
+
+  const tooltip = page.locator('[data-slot="tooltip-content"]');
+  await expect(tooltip).toContainText("지난 예약");
+  await expect(tooltip).toContainText("아무개");
 });
