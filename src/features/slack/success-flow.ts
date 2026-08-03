@@ -1,5 +1,7 @@
 import { debugLog, pushDebugEvent } from "../../utils/shared.js";
 
+// DI 팩토리 래퍼: 길이가 곧 복잡도가 아니다(안쪽 함수는 개별 측정된다).
+// eslint-disable-next-line max-lines-per-function
 export function createSlackSuccessFlow(deps: Deps) {
   const {
     state,

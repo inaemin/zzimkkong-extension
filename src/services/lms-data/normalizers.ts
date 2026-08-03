@@ -12,6 +12,8 @@ export interface LmsDataNormalizerDeps {
 }
 
 // lms+ 응답을 레이더가 쓰는 공통 형태로 바꾼다.
+// DI 팩토리 래퍼: 길이가 곧 복잡도가 아니다(안쪽 함수는 개별 측정된다).
+// eslint-disable-next-line max-lines-per-function
 export function createLmsDataNormalizers(deps: LmsDataNormalizerDeps) {
   const {
     getProperty,
@@ -58,49 +60,71 @@ export function createLmsDataNormalizers(deps: LmsDataNormalizerDeps) {
     return Number.isInteger(floor) ? `${floor}층` : "";
   }
 
+  /** API 의 space 한 건을 Room 으로. */
+  function toRoom(space: unknown): Room {
+    const id = Number(getProperty(space, "id"));
+    const rawName = getProperty(space, "name");
+    const floor = Number(getProperty(space, "floor"));
+
+    return {
+      id,
+      name: typeof rawName === "string" && rawName.trim() !== "" ? rawName.trim() : `공간 ${id}`,
+      // API 가 색상을 주지 않으므로 기본 회색을 쓴다.
+      color: "#9CA3AF",
+      floor: Number.isInteger(floor) ? floor : null,
+      floorLabel: normalizeFloorLabel(getProperty(space, "floor")),
+      windowStartMinute: parseTimeToMinute(getProperty(space, "openTime")),
+      windowEndMinute: parseTimeToMinute(getProperty(space, "closeTime")),
+      reservationUnitMinutes: Number(getProperty(space, "reservationUnitMinutes")) || null,
+      maxReservationMinutes: Number(getProperty(space, "maxReservationMinutes")) || null,
+    };
+  }
+
+  /** 층 → 이름 → id 순. 서버가 내려준 floor 가 1순위다. */
+  function compareRooms(a: Room, b: Room): number {
+    const floorA = Number.isInteger(a.floor) ? a.floor : Number.MAX_SAFE_INTEGER;
+    const floorB = Number.isInteger(b.floor) ? b.floor : Number.MAX_SAFE_INTEGER;
+    if (floorA !== floorB) {
+      return floorA - floorB;
+    }
+    return a.name.localeCompare(b.name, "ko-KR") || a.id - b.id;
+  }
+
   function buildTargetRooms(spaces: unknown[], roomType: SpaceTab | null = null): Room[] {
     const normalizedRoomType = normalizeRoomType(roomType);
+    const matchesType = (room: Room) =>
+      !normalizedRoomType || getRoomTypeForRoomName(room.name) === normalizedRoomType;
 
     return spaces
       .filter((space) => getProperty(space, "active") !== false)
-      .map((space) => {
-        const id = Number(getProperty(space, "id"));
-        const rawName = getProperty(space, "name");
-        const name =
-          typeof rawName === "string" && rawName.trim() !== "" ? rawName.trim() : `공간 ${id}`;
-        const floor = Number(getProperty(space, "floor"));
+      .map(toRoom)
+      .filter((room) => Number.isInteger(room.id) && matchesType(room))
+      .sort(compareRooms);
+  }
 
-        return {
-          id,
-          name,
-          // API 가 색상을 주지 않으므로 기본 회색을 쓴다.
-          color: "#9CA3AF",
-          floor: Number.isInteger(floor) ? floor : null,
-          floorLabel: normalizeFloorLabel(getProperty(space, "floor")),
-          windowStartMinute: parseTimeToMinute(getProperty(space, "openTime")),
-          windowEndMinute: parseTimeToMinute(getProperty(space, "closeTime")),
-          reservationUnitMinutes: Number(getProperty(space, "reservationUnitMinutes")) || null,
-          maxReservationMinutes: Number(getProperty(space, "maxReservationMinutes")) || null,
-        };
-      })
-      .filter((room) => {
-        if (!Number.isInteger(room.id)) {
-          return false;
-        }
-        if (!normalizedRoomType) {
-          return true;
-        }
-        return getRoomTypeForRoomName(room.name) === normalizedRoomType;
-      })
-      .sort((a, b) => {
-        // 개편 서비스는 서버가 내려준 floor를 1순위 정렬 기준으로 삼는다.
-        const floorA = Number.isInteger(a.floor) ? a.floor : Number.MAX_SAFE_INTEGER;
-        const floorB = Number.isInteger(b.floor) ? b.floor : Number.MAX_SAFE_INTEGER;
-        if (floorA !== floorB) {
-          return floorA - floorB;
-        }
-        return a.name.localeCompare(b.name, "ko-KR") || a.id - b.id;
-      });
+  /** 문자열 필드를 다듬는다. 비어 있으면 빈 문자열. */
+  function trimmedString(value: unknown): string {
+    return typeof value === "string" && value.trim() !== "" ? value.trim() : "";
+  }
+
+  /** 예약 한 건. 시작·끝을 못 읽으면 null(호출부가 걸러낸다). */
+  function toReservation(reservation: unknown): Reservation | null {
+    const startMinute = parseTimeToMinute(getProperty(reservation, "startTime"));
+    const endMinute = parseTimeToMinute(getProperty(reservation, "endTime"));
+    if (!Number.isInteger(startMinute) || !Number.isInteger(endMinute)) {
+      return null;
+    }
+
+    return {
+      id: Number(getProperty(reservation, "id")),
+      title: trimmedString(getProperty(reservation, "purpose")) || "예약",
+      owner: trimmedString(getProperty(reservation, "reserverName")),
+      mine: getProperty(reservation, "mine") === true,
+      startMinute,
+      endMinute,
+      startTime: minuteToHourMinute(startMinute),
+      endTime: minuteToHourMinute(endMinute),
+    };
   }
 
   function normalizeReservations(reservationsValue: unknown): Reservation[] {
@@ -109,31 +133,7 @@ export function createLmsDataNormalizers(deps: LmsDataNormalizerDeps) {
     }
 
     return reservationsValue
-      .map((reservation) => {
-        const startMinute = parseTimeToMinute(getProperty(reservation, "startTime"));
-        const endMinute = parseTimeToMinute(getProperty(reservation, "endTime"));
-
-        if (!Number.isInteger(startMinute) || !Number.isInteger(endMinute)) {
-          return null;
-        }
-
-        const rawPurpose = getProperty(reservation, "purpose");
-        const purpose =
-          typeof rawPurpose === "string" && rawPurpose.trim() !== "" ? rawPurpose.trim() : "";
-        const rawOwner = getProperty(reservation, "reserverName");
-        const owner = typeof rawOwner === "string" && rawOwner.trim() !== "" ? rawOwner.trim() : "";
-
-        return {
-          id: Number(getProperty(reservation, "id")),
-          title: purpose || "예약",
-          owner,
-          mine: getProperty(reservation, "mine") === true,
-          startMinute,
-          endMinute,
-          startTime: minuteToHourMinute(startMinute),
-          endTime: minuteToHourMinute(endMinute),
-        };
-      })
+      .map(toReservation)
       .filter((reservation) => reservation != null)
       .sort((a, b) => a.startMinute - b.startMinute);
   }
@@ -158,36 +158,43 @@ export function createLmsDataNormalizers(deps: LmsDataNormalizerDeps) {
     );
   }
 
-  function computeTimelineRange(
-    rooms: Array<Pick<Room, "windowStartMinute" | "windowEndMinute">>,
-  ): TimelineRange {
-    const fallbackStartMinute = 7 * 60;
-    const fallbackEndMinute = 23 * 60;
+  /** 방들의 운영 시간에서 가장 이른 시작·가장 늦은 끝. 없으면 07:00~23:00. */
+  function collectWindowBounds(rooms: Array<Pick<Room, "windowStartMinute" | "windowEndMinute">>): {
+    rawStartMinute: number;
+    rawEndMinute: number;
+  } {
+    const starts = rooms.map((room) => room.windowStartMinute).filter(Number.isInteger);
+    const ends = rooms.map((room) => room.windowEndMinute).filter(Number.isInteger);
+    return {
+      rawStartMinute: starts.length > 0 ? Math.min(...starts) : 7 * 60,
+      rawEndMinute: ends.length > 0 ? Math.max(...ends) : 23 * 60,
+    };
+  }
 
-    const startCandidates = rooms
-      .map((room) => room.windowStartMinute)
-      .filter((minute) => Number.isInteger(minute));
-    const endCandidates = rooms
-      .map((room) => room.windowEndMinute)
-      .filter((minute) => Number.isInteger(minute));
-
-    const rawStartMinute =
-      startCandidates.length > 0 ? Math.min(...startCandidates) : fallbackStartMinute;
-    const rawEndMinute = endCandidates.length > 0 ? Math.max(...endCandidates) : fallbackEndMinute;
-
+  /** 슬롯 경계에 맞춰 시작은 내리고 끝은 올린다. 최소 한 칸은 확보한다. */
+  function alignToSlots(
+    rawStartMinute: number,
+    rawEndMinute: number,
+  ): { startMinute: number; endMinute: number } {
     const startMinute = Math.max(
       0,
       Math.floor(rawStartMinute / timelineSlotMinutes) * timelineSlotMinutes,
     );
-    const alignedEndMinute = Math.min(
+    const alignedEnd = Math.min(
       24 * 60,
       Math.ceil(rawEndMinute / timelineSlotMinutes) * timelineSlotMinutes,
     );
-    // 반올림 결과가 시작과 같거나 앞서면 최소 한 칸은 확보한다.
     const endMinute =
-      alignedEndMinute <= startMinute
-        ? Math.min(24 * 60, startMinute + timelineSlotMinutes)
-        : alignedEndMinute;
+      alignedEnd <= startMinute ? Math.min(24 * 60, startMinute + timelineSlotMinutes) : alignedEnd;
+    return { startMinute, endMinute };
+  }
+
+  function computeTimelineRange(
+    rooms: Array<Pick<Room, "windowStartMinute" | "windowEndMinute">>,
+  ): TimelineRange {
+    const { rawStartMinute, rawEndMinute } = collectWindowBounds(rooms);
+
+    const { startMinute, endMinute } = alignToSlots(rawStartMinute, rawEndMinute);
 
     return {
       startMinute,

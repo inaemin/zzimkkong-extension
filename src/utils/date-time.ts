@@ -195,27 +195,41 @@ export function sanitizeTimeForApi(value: unknown): string {
   return minuteToHourMinute(minute);
 }
 
-export function getNextHourRange() {
-  const earliestMinute = 7 * 60;
-  const latestEndMinute = 23 * 60;
-  const nowMinute = getCurrentMinuteOfDayInKST();
-  const snappedNow = Math.ceil(nowMinute / TIME_STEP_MINUTES) * TIME_STEP_MINUTES;
-  const startMinute = Math.max(earliestMinute, snappedNow);
+/** 회의실 운영 시간(07:00~23:00). 이 밖이면 다음 날로 넘긴다. */
+const OPENING_MINUTE = 7 * 60;
+const CLOSING_MINUTE = 23 * 60;
 
-  const endMinute = Math.min(latestEndMinute, startMinute + 60);
-  if (startMinute < latestEndMinute && endMinute > startMinute) {
-    return {
-      startTime: minuteToHourMinute(startMinute),
-      endTime: minuteToHourMinute(endMinute),
-      useNextDay: false,
-    };
+/** 지금 이후로 잡을 수 있는 가장 이른 시작 시각(10분 단위로 올림). */
+function nextSelectableStartMinute(): number {
+  const snappedNow =
+    Math.ceil(getCurrentMinuteOfDayInKST() / TIME_STEP_MINUTES) * TIME_STEP_MINUTES;
+  return Math.max(OPENING_MINUTE, snappedNow);
+}
+
+export function getNextHourRange() {
+  const startMinute = nextSelectableStartMinute();
+  const endMinute = Math.min(CLOSING_MINUTE, startMinute + 60);
+
+  // 오늘 안에 한 칸도 못 잡으면 다음 날 첫 시간으로 넘긴다.
+  if (startMinute >= CLOSING_MINUTE || endMinute <= startMinute) {
+    return { startTime: "07:00", endTime: "08:00", useNextDay: true };
   }
 
   return {
-    startTime: "07:00",
-    endTime: "08:00",
-    useNextDay: true,
+    startTime: minuteToHourMinute(startMinute),
+    endTime: minuteToHourMinute(endMinute),
+    useNextDay: false,
   };
+}
+
+/** 오늘 안에서 지금까지 지나간 부분. 시각을 못 읽으면 0(제한 없음). */
+function elapsedMinuteToday(): number {
+  const nowMinute = getCurrentMinuteOfDayInKST();
+  if (!Number.isFinite(nowMinute)) {
+    return 0;
+  }
+  const snappedMinute = Math.ceil(nowMinute / TIME_STEP_MINUTES) * TIME_STEP_MINUTES;
+  return Math.max(0, Math.min(24 * 60, snappedMinute));
 }
 
 export function getEarliestSelectableMinuteForDate(date: unknown): number {
@@ -223,20 +237,14 @@ export function getEarliestSelectableMinuteForDate(date: unknown): number {
   if (!isDateString(date)) {
     return 0;
   }
+  // 지난 날짜는 하루 전체가 막힌다. 미래는 처음부터 고를 수 있다.
   if (date < todayDate) {
     return 24 * 60;
   }
   if (date > todayDate) {
     return 0;
   }
-
-  const nowMinute = getCurrentMinuteOfDayInKST();
-  if (!Number.isFinite(nowMinute)) {
-    return 0;
-  }
-
-  const snappedMinute = Math.ceil(nowMinute / TIME_STEP_MINUTES) * TIME_STEP_MINUTES;
-  return Math.max(0, Math.min(24 * 60, snappedMinute));
+  return elapsedMinuteToday();
 }
 
 export function addDaysToDateString(dateString: string, dayOffset: number): string {

@@ -113,6 +113,39 @@ declare global {
       .catch(() => null);
   }
 
+  /**
+   * 예약 이벤트를 보낸다. 보낼 대상인지 판단도 여기서 한다.
+   *
+   * force 는 본문 파싱이 실패한 경로다. 이때는 URL/attemptId 만으로 판단한다
+   * — 예약 요청이었다는 사실은 이미 알고 있으므로 놓치면 안 된다.
+   */
+  function emitFetchReservationEvent(detail) {
+    const { url, eventUrl, method, reservationAttemptId, force } = detail;
+    const shouldEmit = force
+      ? isReservationMutationRequest(url, method) ||
+        isReservationMutationRequest(eventUrl, method) ||
+        Boolean(reservationAttemptId)
+      : shouldEmitReservationMutationEvent(url, method) ||
+        shouldEmitReservationMutationEvent(eventUrl, method);
+
+    if (!shouldEmit) {
+      return;
+    }
+
+    emitReservationEvent(
+      buildReservationMutationEventPayload({
+        via: "fetch",
+        url: eventUrl,
+        method,
+        status: detail.status,
+        ownerNameCandidate: detail.ownerNameCandidate,
+        requestContext: detail.requestContext,
+        reservationAttemptId,
+        responseBody: detail.responseBody,
+      }),
+    );
+  }
+
   window.__zzkReservationHookRestore = function restoreReservationNetworkHook() {
     if (typeof originalFetch === "function" && window.fetch !== originalFetch) {
       window.fetch = originalFetch;
@@ -171,44 +204,30 @@ declare global {
 
         Promise.all([ownerNamePromise, requestContextPromise, responseBodyPromise])
           .then(([ownerNameCandidate, requestContext, responseBody]) => {
-            const shouldEmit =
-              shouldEmitReservationMutationEvent(url, method) ||
-              shouldEmitReservationMutationEvent(eventUrl, method);
-            if (!shouldEmit) {
-              return;
-            }
-            emitReservationEvent(
-              buildReservationMutationEventPayload({
-                via: "fetch",
-                url: eventUrl,
-                method,
-                status: response.status,
-                ownerNameCandidate,
-                requestContext,
-                reservationAttemptId,
-                responseBody,
-              }),
-            );
+            emitFetchReservationEvent({
+              url,
+              eventUrl,
+              method,
+              status: response.status,
+              reservationAttemptId,
+              ownerNameCandidate,
+              requestContext,
+              responseBody,
+            });
           })
+          // 본문을 못 읽어도 예약 요청이었다면 알려야 한다(정보만 비운다).
           .catch(() => {
-            if (
-              !isReservationMutationRequest(url, method) &&
-              !isReservationMutationRequest(eventUrl, method) &&
-              !reservationAttemptId
-            ) {
-              return;
-            }
-            emitReservationEvent(
-              buildReservationMutationEventPayload({
-                via: "fetch",
-                url: eventUrl,
-                method,
-                status: response.status,
-                ownerNameCandidate: "",
-                requestContext: null,
-                reservationAttemptId,
-              }),
-            );
+            emitFetchReservationEvent({
+              url,
+              eventUrl,
+              method,
+              status: response.status,
+              reservationAttemptId,
+              ownerNameCandidate: "",
+              requestContext: null,
+              responseBody: null,
+              force: true,
+            });
           });
 
         return response;

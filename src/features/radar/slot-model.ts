@@ -23,6 +23,36 @@ export interface SlotState {
   isSelectable: boolean;
 }
 
+/** 이 슬롯과 겹치는 예약들. 경계는 열린 구간이라 끝나는 시각은 겹치지 않는다. */
+function findOverlappingReservations(reservations: Reservation[], slot: TimelineSlot) {
+  return reservations.filter(
+    (reservation) =>
+      Number.isInteger(reservation.startMinute) &&
+      Number.isInteger(reservation.endMinute) &&
+      reservation.startMinute < slot.endMinute &&
+      reservation.endMinute > slot.startMinute,
+  );
+}
+
+function toSlotState(
+  slot: TimelineSlot,
+  overlappedReservations: Reservation[],
+  earliestSelectableMinute: number,
+): SlotState {
+  const isPastBlocked =
+    Number.isFinite(earliestSelectableMinute) && slot.startMinute < earliestSelectableMinute;
+  const isBusy = overlappedReservations.length > 0;
+
+  return {
+    slot,
+    overlappedReservations,
+    isBusy,
+    isPastBlocked,
+    isPastReserved: isPastBlocked && isBusy,
+    isSelectable: !isBusy && !isPastBlocked,
+  };
+}
+
 export function buildSlotStates(
   room: RoomSchedule,
   timeline: TimelineSlot[],
@@ -30,28 +60,24 @@ export function buildSlotStates(
 ): SlotState[] {
   const reservations = Array.isArray(room.reservations) ? room.reservations : [];
 
-  return timeline.map((slot) => {
-    const overlappedReservations = reservations.filter(
-      (reservation) =>
-        Number.isInteger(reservation.startMinute) &&
-        Number.isInteger(reservation.endMinute) &&
-        reservation.startMinute < slot.endMinute &&
-        reservation.endMinute > slot.startMinute,
-    );
-    const isPastBlocked =
-      Number.isFinite(earliestSelectableMinute) && slot.startMinute < earliestSelectableMinute;
+  return timeline.map((slot) =>
+    toSlotState(slot, findOverlappingReservations(reservations, slot), earliestSelectableMinute),
+  );
+}
 
-    const isBusy = overlappedReservations.length > 0;
-
-    return {
-      slot,
-      overlappedReservations,
-      isBusy,
-      isPastBlocked,
-      isPastReserved: isPastBlocked && isBusy,
-      isSelectable: !isBusy && !isPastBlocked,
-    };
-  });
+/**
+ * startIndex 부터 보며 stop 이 처음 참이 되는 칸의 바로 앞 인덱스.
+ *
+ * 끝까지 참이 없으면 마지막 인덱스. "조건이 깨지는 순간 멈춘다"를 두 군데서
+ * 쓰고 있어 뽑았다.
+ */
+function lastIndexBefore(
+  slotStates: SlotState[],
+  startIndex: number,
+  stop: (state: SlotState) => boolean,
+): number {
+  const found = slotStates.findIndex((state, index) => index >= startIndex && stop(state));
+  return (found === -1 ? slotStates.length : found) - 1;
 }
 
 /**
@@ -75,18 +101,13 @@ export function resolveSelectionEndIndex(
 
   const targetEndMinute = slotStates[startIndex].slot.startMinute + defaultReservationMinutes;
 
-  // 기본 예약 길이 안에 들어오는 마지막 칸. 조건이 깨지는 순간 멈춰야 하므로
-  // findIndex 로 "처음 벗어나는 칸"을 찾아 그 앞까지만 본다.
-  const firstOutOfRange = slotStates.findIndex(
-    (state, index) => index >= startIndex && state.slot.endMinute > targetEndMinute,
+  // 기본 예약 길이를 넘는 칸, 그리고 고를 수 없는 칸. 각각 그 직전까지가 한계다.
+  const limitIndex = lastIndexBefore(
+    slotStates,
+    startIndex,
+    (state) => state.slot.endMinute > targetEndMinute,
   );
-  const limitIndex = (firstOutOfRange === -1 ? slotStates.length : firstOutOfRange) - 1;
-
-  // 그 범위 안에서 고를 수 없는 칸이 나오면 거기서 끊는다.
-  const firstBlocked = slotStates.findIndex(
-    (state, index) => index >= startIndex && !state.isSelectable,
-  );
-  const blockedLimit = firstBlocked === -1 ? slotStates.length - 1 : firstBlocked - 1;
+  const blockedLimit = lastIndexBefore(slotStates, startIndex, (state) => !state.isSelectable);
 
   return Math.max(startIndex, Math.min(limitIndex, blockedLimit, slotStates.length - 1));
 }
@@ -106,46 +127,69 @@ export interface FloorGroup<TRoom> {
  * 두 pane 이 각자 순회하며 그룹을 만들면 경계 판단이 어긋날 수 있어, 한 번만
  * 묶고 양쪽이 같은 결과를 쓰게 한다.
  */
+/** 누적 상태. previousLabeledFloor 는 "마지막으로 이름이 있었던 층"이다. */
+interface FloorGrouping<TRoom> {
+  groups: FloorGroup<TRoom>[];
+  previousLabeledFloor: string;
+}
+
+/** 마지막 그룹에 방을 덧붙인다(같은 층이 이어질 때). */
+function appendToLastGroup<TRoom>(acc: FloorGrouping<TRoom>, room: TRoom): FloorGrouping<TRoom> {
+  const lastGroup = acc.groups.at(-1);
+  if (!lastGroup) {
+    return acc;
+  }
+  return {
+    groups: [...acc.groups.slice(0, -1), { ...lastGroup, rooms: [...lastGroup.rooms, room] }],
+    previousLabeledFloor: acc.previousLabeledFloor,
+  };
+}
+
+/** 새 층 그룹을 연다. 이름이 있고 직전 이름과 다를 때만 구분선을 긋는다. */
+function startNewGroup<TRoom>(
+  acc: FloorGrouping<TRoom>,
+  room: TRoom,
+  floor: { floorKey: string; floorLabel: string },
+): FloorGrouping<TRoom> {
+  const { floorKey, floorLabel } = floor;
+  const isFloorDivider = Boolean(
+    floorLabel && acc.previousLabeledFloor && acc.previousLabeledFloor !== floorLabel,
+  );
+  return {
+    groups: [...acc.groups, { floorKey, floorLabel, rooms: [room], isFloorDivider }],
+    // 이름이 비어 있으면 직전 이름을 그대로 들고 간다(경계 판단에서 건너뛴다).
+    previousLabeledFloor: floorLabel || acc.previousLabeledFloor,
+  };
+}
+
 export function groupRoomsByFloor<TRoom>(
   rooms: TRoom[],
   resolveFloor: (room: TRoom) => { floorKey: string; floorLabel: string },
 ): FloorGroup<TRoom>[] {
-  // previousLabeledFloor: 층 이름이 비어 있는 그룹은 경계 판단에서 건너뛴다
-  // (이름을 모르는 방들). 그래서 "마지막으로 이름이 있었던 층"을 따로 들고 간다.
-  const { groups } = rooms.reduce<{
-    groups: FloorGroup<TRoom>[];
-    previousLabeledFloor: string;
-  }>(
+  const { groups } = rooms.reduce<FloorGrouping<TRoom>>(
     (acc, room) => {
       const { floorKey, floorLabel } = resolveFloor(room);
-      const lastGroup = acc.groups.at(-1);
-
-      if (lastGroup && lastGroup.floorKey === floorKey) {
-        return {
-          groups: [...acc.groups.slice(0, -1), { ...lastGroup, rooms: [...lastGroup.rooms, room] }],
-          previousLabeledFloor: acc.previousLabeledFloor,
-        };
-      }
-
-      return {
-        groups: [
-          ...acc.groups,
-          {
-            floorKey,
-            floorLabel,
-            rooms: [room],
-            isFloorDivider: Boolean(
-              floorLabel && acc.previousLabeledFloor && acc.previousLabeledFloor !== floorLabel,
-            ),
-          },
-        ],
-        previousLabeledFloor: floorLabel || acc.previousLabeledFloor,
-      };
+      const continuesLastGroup = acc.groups.at(-1)?.floorKey === floorKey;
+      return continuesLastGroup
+        ? appendToLastGroup(acc, room)
+        : startNewGroup(acc, room, { floorKey, floorLabel });
     },
     { groups: [], previousLabeledFloor: "" },
   );
 
   return groups;
+}
+
+/** 예약 미리보기. 두 건까지만 보여준다(더 붙으면 툴팁이 길어진다). */
+function buildReservationPreview(reservations: Reservation[]): string {
+  return reservations
+    .slice(0, 2)
+    .map((reservation) =>
+      reservation.owner
+        ? `${reservation.startTime}~${reservation.endTime} ${reservation.owner}`
+        : `${reservation.startTime}~${reservation.endTime}`,
+    )
+    .join(" | ");
 }
 
 /** 슬롯에 붙일 툴팁 문구. */
@@ -158,14 +202,7 @@ export function buildSlotTitle(
   const range = `${roomName} ${slot.label}~${slotEndLabel}`;
 
   if (isBusy) {
-    const preview = overlappedReservations
-      .slice(0, 2)
-      .map((reservation) =>
-        reservation.owner
-          ? `${reservation.startTime}~${reservation.endTime} ${reservation.owner}`
-          : `${reservation.startTime}~${reservation.endTime}`,
-      )
-      .join(" | ");
+    const preview = buildReservationPreview(overlappedReservations);
     // 지난 예약도 누가 썼는지는 알려준다. 지난 시간이라는 것만 덧붙인다.
     const label = isPastReserved ? "지난 예약" : "예약 있음";
     // 예약 내용은 줄을 바꿔 보여준다. 한 줄로 붙이면 방 이름·시간대·예약자가

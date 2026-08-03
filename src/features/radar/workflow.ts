@@ -5,6 +5,8 @@
 // 쪼개질 때 이 인터페이스를 구체 타입으로 좁힌다.
 type Deps = Record<string, any>;
 
+// DI 팩토리 래퍼: 길이가 곧 복잡도가 아니다(안쪽 함수는 개별 측정된다).
+// eslint-disable-next-line max-lines-per-function
 export function createRadarWorkflow(deps: Deps) {
   const {
     state,
