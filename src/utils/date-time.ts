@@ -21,26 +21,31 @@ export function normalizeDateString(value: unknown): string {
   return value;
 }
 
-export function parseHourMinute(value: unknown): number | null {
-  if (typeof value !== "string") {
-    return null;
-  }
-
-  const match = value.match(/^(\d{2}):(\d{2})$/);
-  if (!match) {
-    return null;
-  }
-
-  const hour = Number(match[1]);
-  const minute = Number(match[2]);
+/**
+ * 시/분 숫자쌍을 분으로. 범위를 벗어나면 null.
+ *
+ * parseHourMinute / parseLocalizedHourMinute / extractHourMinute 이 같은 검사를
+ * 반복하고 있어 한 곳으로 모았다.
+ */
+function toMinuteOfDay(hourValue: string, minuteValue: string): number | null {
+  const hour = Number(hourValue);
+  const minute = Number(minuteValue);
   if (!Number.isInteger(hour) || !Number.isInteger(minute)) {
     return null;
   }
   if (hour < 0 || hour > 23 || minute < 0 || minute > 59) {
     return null;
   }
-
   return hour * 60 + minute;
+}
+
+export function parseHourMinute(value: unknown): number | null {
+  if (typeof value !== "string") {
+    return null;
+  }
+
+  const match = value.match(/^(\d{2}):(\d{2})$/);
+  return match ? toMinuteOfDay(match[1], match[2]) : null;
 }
 
 export function minuteToHourMinute(totalMinute: number): string {
@@ -57,15 +62,12 @@ export function minuteToHourMinute(totalMinute: number): string {
 /** "오후 3시 30분" 형태의 매치를 분으로. 범위를 벗어나면 null. */
 function parseMeridiemMatch(match: RegExpMatchArray): number | null {
   const hour12 = Number(match[2]);
-  const minute = Number(match[3]);
-  if (!Number.isInteger(hour12) || !Number.isInteger(minute)) {
+  if (!Number.isInteger(hour12) || hour12 < 1 || hour12 > 12) {
     return null;
   }
-  if (hour12 < 1 || hour12 > 12 || minute < 0 || minute > 59) {
-    return null;
-  }
+  // 12시제 → 24시제. 오전 12시는 0시, 오후 12시는 12시다.
   const hour24 = (hour12 % 12) + (match[1] === "오후" ? 12 : 0);
-  return hour24 * 60 + minute;
+  return toMinuteOfDay(String(hour24), match[3]);
 }
 
 export function parseLocalizedHourMinute(value: unknown): number | null {
@@ -80,20 +82,7 @@ export function parseLocalizedHourMinute(value: unknown): number | null {
   }
 
   const compactMatch = normalized.match(/(^|[^0-9])(\d{1,2})\s*:\s*(\d{2})(?!\d)/);
-  if (!compactMatch) {
-    return null;
-  }
-
-  const hour = Number(compactMatch[2]);
-  const minute = Number(compactMatch[3]);
-  if (!Number.isInteger(hour) || !Number.isInteger(minute)) {
-    return null;
-  }
-  if (hour < 0 || hour > 23 || minute < 0 || minute > 59) {
-    return null;
-  }
-
-  return hour * 60 + minute;
+  return compactMatch ? toMinuteOfDay(compactMatch[2], compactMatch[3]) : null;
 }
 
 export function extractHourMinute(value: unknown): string {
@@ -102,20 +91,8 @@ export function extractHourMinute(value: unknown): string {
   }
 
   const match = value.match(/(^|[^0-9])(\d{1,2})\s*:\s*(\d{2})(?!\d)/);
-  if (!match) {
-    return null;
-  }
-
-  const hour = Number(match[2]);
-  const minute = Number(match[3]);
-  if (!Number.isInteger(hour) || !Number.isInteger(minute)) {
-    return null;
-  }
-  if (hour < 0 || hour > 23 || minute < 0 || minute > 59) {
-    return null;
-  }
-
-  return `${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}`;
+  const totalMinute = match ? toMinuteOfDay(match[2], match[3]) : null;
+  return totalMinute === null ? null : minuteToHourMinute(totalMinute);
 }
 
 export function normalizeHourMinute(value: unknown): string {

@@ -100,28 +100,24 @@ export function writeStoredText(storageKey: string, value: string): void {
   }
 }
 
+function parseStoredNumber(storageKey: string): number | null {
+  const rawValue = readRawStorageValue(storageKey);
+  if (typeof rawValue !== "string" || rawValue.trim() === "") {
+    return null;
+  }
+  const parsed = Number(rawValue);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
 export function readStoredNumber(
   storageKey: string,
   fallbackValue: number | null = null,
 ): number | null {
   const normalizedFallback = Number.isFinite(fallbackValue) ? fallbackValue : null;
-
   if (typeof storageKey !== "string" || storageKey === "") {
     return normalizedFallback;
   }
-
-  const rawValue = readRawStorageValue(storageKey);
-
-  if (typeof rawValue !== "string" || rawValue.trim() === "") {
-    return normalizedFallback;
-  }
-
-  const parsed = Number(rawValue);
-  if (!Number.isFinite(parsed)) {
-    return normalizedFallback;
-  }
-
-  return parsed;
+  return parseStoredNumber(storageKey) ?? normalizedFallback;
 }
 
 export function writeStoredNumber(storageKey: string, value: number): void {

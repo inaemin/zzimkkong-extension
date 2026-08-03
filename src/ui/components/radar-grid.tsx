@@ -345,30 +345,37 @@ function RadarGridSlot({
     .filter(Boolean)
     .join(" ");
 
+  const cell = (
+    <div
+      className={className}
+      // 슬롯 시작 시각을 남겨 두면 테스트에서 특정 블록을 집기 쉽다.
+      data-zzk-slot-start={slot.label}
+      style={{ gridColumn: String(columnStart) }}
+      onMouseEnter={() => {
+        if (isSelectable) {
+          onHover();
+        }
+      }}
+      onClick={(event: React.MouseEvent) => {
+        event.preventDefault();
+        event.stopPropagation();
+        if (isSelectable) {
+          onClick();
+        }
+      }}
+    />
+  );
+
+  // 비어 있는 칸은 툴팁을 띄우지 않는다. "예약 없음"은 칸 색으로 이미 보이고,
+  // 대부분의 칸이 여기 해당해서 지나갈 때마다 뜨면 방해가 된다.
+  // 예약이 있거나(지난 예약 포함) 지나간 칸만 설명이 필요하다.
+  if (!isBusy && !isPastBlocked) {
+    return cell;
+  }
+
   return (
     <Tooltip>
-      <TooltipTrigger
-        render={
-          <div
-            className={className}
-            // 슬롯 시작 시각을 남겨 두면 테스트에서 특정 블록을 집기 쉽다.
-            data-zzk-slot-start={slot.label}
-            style={{ gridColumn: String(columnStart) }}
-            onMouseEnter={() => {
-              if (isSelectable) {
-                onHover();
-              }
-            }}
-            onClick={(event: React.MouseEvent) => {
-              event.preventDefault();
-              event.stopPropagation();
-              if (isSelectable) {
-                onClick();
-              }
-            }}
-          />
-        }
-      />
+      <TooltipTrigger render={cell} />
       <TooltipContent>
         {buildSlotTitle(room.name, slotState, minuteToHourMinute(slot.endMinute))}
       </TooltipContent>

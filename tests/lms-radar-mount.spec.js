@@ -654,6 +654,17 @@ test("지난 예약 칸은 더 진하고 예약 내용을 알려준다", async (
   // 예약 내용은 줄을 바꿔 보여준다(한 줄로 붙으면 읽기 어렵다).
   const tooltipText = await tooltip.textContent();
   expect(tooltipText).toContain("\n");
+
+  // 비어 있는 칸은 툴팁을 띄우지 않는다. "예약 없음"은 칸 색으로 이미 보이고,
+  // 대부분의 칸이 여기 해당해서 지나갈 때마다 뜨면 방해가 된다.
+  const freeSlot = page
+    .locator(
+      `#${MAP_CALENDAR_OVERLAY_ID} .zzk-map-calendar-slot.free:not(.past-blocked):not(.past-reserved)`,
+    )
+    .first();
+  const freeBox = await freeSlot.boundingBox();
+  await page.mouse.move(freeBox.x + freeBox.width / 2, freeBox.y + freeBox.height / 2);
+  await expect(tooltip).toHaveCount(0);
 });
 
 // 에러 화면과 정상 오버레이는 같은 엘리먼트에 그려진다(React 루트 공유).
