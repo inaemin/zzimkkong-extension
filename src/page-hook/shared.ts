@@ -106,36 +106,38 @@ export function normalizeOwnerCandidate(value: unknown): string {
   return normalized;
 }
 
+/** 예약자 이름이 들어오는 필드 키. lms+ 가 요청마다 다른 이름을 쓴다. */
+const OWNER_FIELD_KEYS = new Set([
+  "name",
+  "owner",
+  "ownername",
+  "requester",
+  "requestername",
+  "reserver",
+  "reservername",
+  "booker",
+  "bookername",
+  "guest",
+  "guestname",
+  "reservationowner",
+  "reservationownername",
+  "applicant",
+  "applicantname",
+  "username",
+  "이름",
+  "예약자",
+  "예약자명",
+  "신청자",
+  "신청자명",
+]);
+
 export function isOwnerFieldKey(key: unknown): boolean {
   const normalized = normalizeText(toDisplayString(key)).replace(/\s+/g, "").toLowerCase();
   if (!normalized) {
     return false;
   }
 
-  const exactMatch = [
-    "name",
-    "owner",
-    "ownername",
-    "requester",
-    "requestername",
-    "reserver",
-    "reservername",
-    "booker",
-    "bookername",
-    "guest",
-    "guestname",
-    "reservationowner",
-    "reservationownername",
-    "applicant",
-    "applicantname",
-    "username",
-    "이름",
-    "예약자",
-    "예약자명",
-    "신청자",
-    "신청자명",
-  ].includes(normalized);
-  if (exactMatch) {
+  if (OWNER_FIELD_KEYS.has(normalized)) {
     return true;
   }
 

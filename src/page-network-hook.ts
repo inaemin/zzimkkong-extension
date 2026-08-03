@@ -146,6 +146,32 @@ declare global {
     );
   }
 
+  /**
+   * fetch 인자에서 URL 과 메서드를 뽑는다.
+   *
+   * input 은 문자열·URL·Request 셋 다 올 수 있다. init.method 가 있으면
+   * input.method 를 덮어쓴다(fetch 사양 순서).
+   */
+  function readFetchTarget(input, init) {
+    const isUrlLike = typeof input === "string" || input instanceof URL;
+    const isRequestLike = !isUrlLike && Boolean(input) && typeof input === "object";
+
+    const url = isUrlLike
+      ? String(input)
+      : isRequestLike && typeof input.url === "string"
+        ? input.url
+        : "";
+
+    const method =
+      init && typeof init === "object" && typeof init.method === "string"
+        ? normalizeMethod(init.method)
+        : isRequestLike
+          ? normalizeMethod(input.method)
+          : "GET";
+
+    return { url, method };
+  }
+
   window.__zzkReservationHookRestore = function restoreReservationNetworkHook() {
     if (typeof originalFetch === "function" && window.fetch !== originalFetch) {
       window.fetch = originalFetch;
@@ -170,22 +196,7 @@ declare global {
         init,
       ).catch(() => null);
 
-      const isUrlLike = typeof input === "string" || input instanceof URL;
-      const isRequestLike = !isUrlLike && Boolean(input) && typeof input === "object";
-
-      const url = isUrlLike
-        ? String(input)
-        : isRequestLike && typeof input.url === "string"
-          ? input.url
-          : "";
-
-      // init.method 가 input.method 를 덮어쓴다(원래 순서 유지).
-      const method =
-        init && typeof init === "object" && typeof init.method === "string"
-          ? normalizeMethod(init.method)
-          : isRequestLike
-            ? normalizeMethod(input.method)
-            : "GET";
+      const { url, method } = readFetchTarget(input, init);
 
       // 원본 fetch 에 인자를 그대로 넘겨야 해서 arguments 를 쓴다.
       // rest 로 바꾸면 호출부가 넘긴 형태(Request 객체 등)를 잃을 수 있다.

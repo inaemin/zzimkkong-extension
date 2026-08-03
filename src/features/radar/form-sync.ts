@@ -138,6 +138,39 @@ export function createRadarFormSync(deps: Deps) {
     createTimelineSelectionRequestId();
   }
 
+  /** 고른 구간을 패널 입력에 적어 넣고, 정규화된 값을 돌려준다. */
+  function writeSelectionToPanel(selection) {
+    const normalizedDate = clampDateToMin(selection.date, getTodayDateInKST());
+    const startTime = minuteToHourMinute(selection.startMinute);
+    const endTime = minuteToHourMinute(selection.endMinute);
+
+    state.elements.dateInput.value = normalizedDate;
+    state.elements.startInput.value = startTime;
+    state.elements.endInput.value = endTime;
+    state.appliedSelection = {
+      date: normalizedDate,
+      roomId: selection.room.id,
+      startMinute: selection.startMinute,
+      endMinute: selection.endMinute,
+    };
+
+    normalizeDateInput(state.elements.dateInput);
+    normalizeTimeInput(state.elements.startInput);
+    normalizeTimeInput(state.elements.endInput);
+    return { normalizedDate, startTime, endTime };
+  }
+
+  /** 캐시가 살아 있으면 서버 응답을 기다리지 않고 먼저 그린다. */
+  function renderCachedOverlayForDate(normalizedDate) {
+    const cached = state.scheduleOverlayEnabled ? getFreshScheduleCache(normalizedDate) : null;
+    if (!cached) {
+      return;
+    }
+    state.activeScheduleDate = normalizedDate;
+    setScheduleLoadingDate(normalizedDate, false);
+    renderMapCalendarOverlay(cached);
+  }
+
   async function applyTimelineReservationSelection(
     selection,
     requestId = state.timelineSelectionRequestId,
@@ -158,37 +191,13 @@ export function createRadarFormSync(deps: Deps) {
       return;
     }
 
-    const normalizedDate = clampDateToMin(selection.date, getTodayDateInKST());
-    const startTime = minuteToHourMinute(selection.startMinute);
-    const endTime = minuteToHourMinute(selection.endMinute);
-
-    state.elements.dateInput.value = normalizedDate;
-    state.elements.startInput.value = startTime;
-    state.elements.endInput.value = endTime;
-
-    state.appliedSelection = {
-      date: normalizedDate,
-      roomId: selection.room.id,
-      startMinute: selection.startMinute,
-      endMinute: selection.endMinute,
-    };
-
-    normalizeDateInput(state.elements.dateInput);
-    normalizeTimeInput(state.elements.startInput);
-    normalizeTimeInput(state.elements.endInput);
+    const { normalizedDate, startTime, endTime } = writeSelectionToPanel(selection);
 
     if (!isLatestTimelineSelectionRequest(requestId)) {
       return;
     }
 
-    const timelineSelectionCached = state.scheduleOverlayEnabled
-      ? getFreshScheduleCache(normalizedDate)
-      : null;
-    if (timelineSelectionCached) {
-      state.activeScheduleDate = normalizedDate;
-      setScheduleLoadingDate(normalizedDate, false);
-      renderMapCalendarOverlay(timelineSelectionCached);
-    }
+    renderCachedOverlayForDate(normalizedDate);
 
     const syncPayload = {
       date: normalizedDate,
@@ -204,15 +213,17 @@ export function createRadarFormSync(deps: Deps) {
       return;
     }
 
+    const outcome = {
+      requestId,
+      date: normalizedDate,
+      roomId: selection.room.id,
+      roomName: selection.room.name,
+      startTime,
+      endTime,
+    };
+
     if (!hostSynced) {
-      pushDebugEvent("radar-form-sync", "sync-failed", {
-        requestId,
-        date: normalizedDate,
-        roomId: selection.room.id,
-        roomName: selection.room.name,
-        startTime,
-        endTime,
-      });
+      pushDebugEvent("radar-form-sync", "sync-failed", outcome);
       return;
     }
 
@@ -221,14 +232,7 @@ export function createRadarFormSync(deps: Deps) {
     }
 
     clearTimeout(state.inputRefreshTimer);
-    pushDebugEvent("radar-form-sync", "sync-succeeded", {
-      requestId,
-      date: normalizedDate,
-      roomId: selection.room.id,
-      roomName: selection.room.name,
-      startTime,
-      endTime,
-    });
+    pushDebugEvent("radar-form-sync", "sync-succeeded", outcome);
     refreshAvailability();
   }
 

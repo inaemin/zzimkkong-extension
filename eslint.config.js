@@ -187,9 +187,10 @@ export default defineConfig([
       "src/page-network-hook.ts",
     ],
     rules: {
-      // TODO(5단계): 목표는 20. 지금은 통과하는 선에서 걸어두고 파일을 정리할
-      // 때마다 조인다. 남은 위반 39건은 전부 21~81줄이라 실제로 쪼갤 값어치가 있다.
-      "max-lines-per-function": ["error", { max: 90, skipBlankLines: true, skipComments: true }],
+      // TODO(5단계 잔여): 목표는 20. 남은 위반 62건은 21~48줄이라 실제로 쪼갤
+      // 값어치가 있지만 양이 많아 나눠 진행한다. 지금은 통과하는 선에 걸어두고
+      // 파일을 정리할 때마다 내린다.
+      "max-lines-per-function": ["error", { max: 50, skipBlankLines: true, skipComments: true }],
     },
   },
   {
@@ -199,7 +200,10 @@ export default defineConfig([
       "src/services/lms-data/normalizers.ts",
     ],
     rules: {
-      // TODO(5단계): 목표는 10. 남은 위반은 14~18줄짜리 헬퍼들이다.
+      // TODO(5단계 잔여): 목표는 10. 남은 22건은 11~20줄인데, 전부 앞서 중복
+      // 제거로 뽑아낸 헬퍼이거나 서로 다른 에러 메시지를 내는 가드 나열이라
+      // 더 쪼갤 seam 이 없다. 10 을 지키려면 함수를 부수는 것 외에 방법이 없어
+      // 보류한다 — max-depth: 1 이 요구한 형태와 정면으로 부딪힌다.
       "max-lines-per-function": ["error", { max: 20, skipBlankLines: true, skipComments: true }],
     },
   },

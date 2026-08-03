@@ -145,40 +145,56 @@ export async function fetchReservationsForRoom(
 
 // 개편 서비스에는 availability 엔드포인트가 없어서, 각 공간의 당일 예약을 받아와
 // 요청 구간과 겹치는지로 예약 가능 여부를 계산한다.
-export async function fetchAvailability(payload: FetchPayload): Promise<AvailabilityResult> {
+/** 요청 구간을 검증해 정규화한다. 형식이 틀리면 여기서 던진다. */
+function sanitizeAvailabilityWindow(payload: FetchPayload) {
   const date = sanitizeDateForApi(payload && payload.date, {
     allowPastDate: payload?.allowPastDate === true,
   });
   const startTime = sanitizeTimeForApi(payload && payload.startTime);
   const endTime = sanitizeTimeForApi(payload && payload.endTime);
-  const roomType = normalizeFetchRoomType(payload && payload.roomType);
 
   if (startTime >= endTime) {
     throw new Error("종료 시간은 시작 시간보다 늦어야 합니다.");
   }
 
-  const startMinute = lmsDataNormalizers.parseTimeToMinute(startTime);
-  const endMinute = lmsDataNormalizers.parseTimeToMinute(endTime);
+  return {
+    date,
+    startTime,
+    endTime,
+    roomType: normalizeFetchRoomType(payload && payload.roomType),
+  };
+}
+
+/** 방마다 그날 예약을 받아와 요청 구간과 겹치는지 판정한다. */
+async function resolveRoomAvailability(
+  rooms: Room[],
+  window: { date: string; startMinute: number; endMinute: number },
+) {
+  return Promise.all(
+    rooms.map(async (room) => ({
+      id: room.id,
+      name: room.name,
+      color: room.color,
+      floor: room.floor,
+      floorLabel: room.floorLabel,
+      isAvailable: lmsDataNormalizers.isRoomAvailableInWindow(
+        await fetchReservationsForRoom(room.id, window.date),
+        window.startMinute,
+        window.endMinute,
+      ),
+    })),
+  );
+}
+
+export async function fetchAvailability(payload: FetchPayload): Promise<AvailabilityResult> {
+  const { date, startTime, endTime, roomType } = sanitizeAvailabilityWindow(payload);
   const spaceContext = await loadSpaceContext(roomType);
 
-  const rooms = await Promise.all(
-    spaceContext.targetRooms.map(async (room) => {
-      const reservations = await fetchReservationsForRoom(room.id, date);
-
-      return {
-        id: room.id,
-        name: room.name,
-        color: room.color,
-        floor: room.floor,
-        floorLabel: room.floorLabel,
-        isAvailable: lmsDataNormalizers.isRoomAvailableInWindow(
-          reservations,
-          startMinute,
-          endMinute,
-        ),
-      };
-    }),
-  );
+  const rooms = await resolveRoomAvailability(spaceContext.targetRooms, {
+    date,
+    startMinute: lmsDataNormalizers.parseTimeToMinute(startTime),
+    endMinute: lmsDataNormalizers.parseTimeToMinute(endTime),
+  });
 
   const availableCount = rooms.filter((room) => room.isAvailable).length;
 
