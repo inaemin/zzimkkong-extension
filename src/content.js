@@ -1699,7 +1699,6 @@ import { createSlackSuccessFlow } from "./features/slack/success-flow.js";
   const radarFormSync = createRadarFormSync({
     state,
     ensurePanel,
-    getErrorMessage,
     clampDateToMin,
     getMinimumSelectableDateForCurrentContext,
     getTodayDateInKST,
@@ -1710,11 +1709,6 @@ import { createSlackSuccessFlow } from "./features/slack/success-flow.js";
     setScheduleLoadingDate,
     renderMapCalendarOverlay,
     refreshAvailability,
-    parseHourMinute,
-    queryHostDateInput,
-    setFormElementValueSilently,
-    dispatchFormElementEvents,
-    normalizeDateString,
     syncLmsReservationForm,
   });
 

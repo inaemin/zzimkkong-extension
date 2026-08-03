@@ -254,6 +254,15 @@ function stripBearer(value: unknown): string {
   return typeof value === "string" ? value.replace(/^Bearer\s+/i, "").trim() : "";
 }
 
+/** 저장소 접근은 권한·오리진에 따라 던진다. 실패하면 기본값을 준다. */
+function safely<T>(read: () => T, fallback: T): T {
+  try {
+    return read();
+  } catch {
+    return fallback;
+  }
+}
+
 function extractJwtFromValue(rawValue: unknown): string {
   if (typeof rawValue !== "string" || rawValue === "") {
     return "";
@@ -281,28 +290,14 @@ function readLmsAuthToken(): string {
   }
 
   for (const store of stores) {
-    let length = 0;
-    try {
-      length = store.length;
-    } catch (error) {
-      continue;
-    }
-    for (let index = 0; index < length; index += 1) {
-      let key = null;
-      try {
-        key = store.key(index);
-      } catch (error) {
-        continue;
-      }
+    const length = safely(() => store.length, 0);
+    const keys = Array.from({ length }, (_, index) => safely(() => store.key(index), null));
+
+    for (const key of keys) {
       if (!key) {
         continue;
       }
-      let value = "";
-      try {
-        value = store.getItem(key) || "";
-      } catch (error) {
-        continue;
-      }
+      const value = safely(() => store.getItem(key) || "", "");
       if (!value.includes("eyJ")) {
         continue;
       }
@@ -332,14 +327,7 @@ export async function fetchApiJson(url: string): Promise<unknown> {
   });
 
   const text = await response.text();
-  let data = null;
-  if (text) {
-    try {
-      data = JSON.parse(text);
-    } catch (error) {
-      data = null;
-    }
-  }
+  const data: unknown = text ? safely(() => JSON.parse(text) as unknown, null) : null;
 
   if (!response.ok) {
     if (response.status === 401 || response.status === 403) {
@@ -349,9 +337,12 @@ export async function fetchApiJson(url: string): Promise<unknown> {
           : "로그인이 필요해요. 회의실 예약 페이지에 로그인한 뒤 다시 시도해 주세요.",
       );
     }
-    const message =
-      data && typeof data.message === "string" ? data.message : `요청 실패 (${response.status})`;
-    throw new Error(message);
+    // 에러 본문의 message 는 있을 수도 없을 수도 있다. 좁혀서 읽는다.
+    const serverMessage =
+      data && typeof data === "object" && "message" in data && typeof data.message === "string"
+        ? data.message
+        : null;
+    throw new Error(serverMessage ?? `요청 실패 (${response.status})`);
   }
 
   if (data == null || typeof data !== "object") {

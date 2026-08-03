@@ -4,7 +4,6 @@ export function createRadarFormSync(deps: Deps) {
   const {
     state,
     ensurePanel,
-    getErrorMessage,
     clampDateToMin,
     getMinimumSelectableDateForCurrentContext,
     getTodayDateInKST,
@@ -15,11 +14,6 @@ export function createRadarFormSync(deps: Deps) {
     setScheduleLoadingDate,
     renderMapCalendarOverlay,
     refreshAvailability,
-    parseHourMinute,
-    queryHostDateInput,
-    setFormElementValueSilently,
-    dispatchFormElementEvents,
-    normalizeDateString,
     syncLmsReservationForm,
   } = deps;
 
@@ -234,110 +228,6 @@ export function createRadarFormSync(deps: Deps) {
       endTime,
     });
     refreshAvailability();
-  }
-
-  function shouldUpdateStartBeforeEnd(
-    observedStartTime,
-    observedEndTime,
-    targetStartTime,
-    targetEndTime,
-  ) {
-    const observedStartMinute = parseHourMinute(String(observedStartTime || ""));
-    const observedEndMinute = parseHourMinute(String(observedEndTime || ""));
-    const targetStartMinute = parseHourMinute(String(targetStartTime || ""));
-    const targetEndMinute = parseHourMinute(String(targetEndTime || ""));
-
-    const hasAllMinutes =
-      Number.isInteger(observedStartMinute) &&
-      Number.isInteger(observedEndMinute) &&
-      Number.isInteger(targetStartMinute) &&
-      Number.isInteger(targetEndMinute);
-
-    if (!hasAllMinutes) {
-      return true;
-    }
-
-    const startFirstKeepsValid = targetStartMinute < observedEndMinute;
-    const endFirstKeepsValid = observedStartMinute < targetEndMinute;
-
-    if (startFirstKeepsValid && !endFirstKeepsValid) {
-      return true;
-    }
-    if (!startFirstKeepsValid && endFirstKeepsValid) {
-      return false;
-    }
-    if (targetStartMinute === observedStartMinute && targetEndMinute !== observedEndMinute) {
-      return false;
-    }
-    if (targetEndMinute === observedEndMinute && targetStartMinute !== observedStartMinute) {
-      return true;
-    }
-
-    return targetStartMinute <= observedStartMinute;
-  }
-
-  function applyHostTimeRangeByInputs(
-    startInput,
-    endInput,
-    observedStartTime,
-    observedEndTime,
-    targetStartTime,
-    targetEndTime,
-  ) {
-    if (!(startInput instanceof HTMLInputElement) || !(endInput instanceof HTMLInputElement)) {
-      return;
-    }
-
-    const startNeedsUpdate = startInput.value !== String(targetStartTime);
-    const endNeedsUpdate = endInput.value !== String(targetEndTime);
-    if (!startNeedsUpdate && !endNeedsUpdate) {
-      return;
-    }
-
-    const updateStartFirst = shouldUpdateStartBeforeEnd(
-      observedStartTime,
-      observedEndTime,
-      targetStartTime,
-      targetEndTime,
-    );
-
-    if (updateStartFirst) {
-      if (startNeedsUpdate) {
-        setFormElementValueSilently(startInput, targetStartTime);
-      }
-      if (endNeedsUpdate) {
-        setFormElementValueSilently(endInput, targetEndTime);
-      }
-      if (startNeedsUpdate) {
-        dispatchFormElementEvents(startInput);
-      }
-      if (endNeedsUpdate) {
-        dispatchFormElementEvents(endInput);
-      }
-      return;
-    }
-
-    if (endNeedsUpdate) {
-      setFormElementValueSilently(endInput, targetEndTime);
-    }
-    if (startNeedsUpdate) {
-      setFormElementValueSilently(startInput, targetStartTime);
-    }
-    if (endNeedsUpdate) {
-      dispatchFormElementEvents(endInput);
-    }
-    if (startNeedsUpdate) {
-      dispatchFormElementEvents(startInput);
-    }
-  }
-
-  function shouldCollapseHostTimePickersAfterSync(syncStartedAt) {
-    if (!Number.isFinite(syncStartedAt)) {
-      return true;
-    }
-
-    const lastManualInteractionAt = Number(state.lastHostTimePickerManualInteractionAt || 0);
-    return !Number.isFinite(lastManualInteractionAt) || lastManualInteractionAt <= syncStartedAt;
   }
 
   return {

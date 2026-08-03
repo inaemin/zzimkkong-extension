@@ -509,61 +509,49 @@ export function extractReservationRequestContextFromEntries(
     return finalizeReservationRequestContext(initialContext);
   }
 
-  let context = initialContext && typeof initialContext === "object" ? { ...initialContext } : {};
-  entries.forEach(([rawKey, rawValue]) => {
+  // 항목 하나가 문맥에 더할 조각. 해당 없으면 null 이라 병합하지 않는다.
+  const patchForEntry = (rawKey, rawValue) => {
     const normalizedKey = normalizeFieldKey(rawKey);
     if (!normalizedKey) {
-      return;
+      return null;
     }
 
     const stringValue = typeof rawValue === "string" ? rawValue : toDisplayString(rawValue);
     if (!normalizeText(stringValue)) {
-      return;
+      return null;
     }
 
     if (isStartDateTimeFieldKey(normalizedKey)) {
       const parts = extractDateTimeParts(stringValue);
-      context = mergeReservationRequestContext(context, {
-        date: parts.date,
-        startTime: parts.time,
-      });
-      return;
+      return { date: parts.date, startTime: parts.time };
     }
-
     if (isEndDateTimeFieldKey(normalizedKey)) {
       const parts = extractDateTimeParts(stringValue);
-      context = mergeReservationRequestContext(context, {
-        date: parts.date,
-        endTime: parts.time,
-      });
-      return;
+      return { date: parts.date, endTime: parts.time };
     }
-
     if (isDateFieldKey(normalizedKey)) {
-      const date = normalizeDateCandidate(stringValue);
-      context = mergeReservationRequestContext(context, { date });
-      return;
+      return { date: normalizeDateCandidate(stringValue) };
     }
-
     if (isDescriptionFieldKey(normalizedKey)) {
-      const description = normalizeDescriptionCandidate(stringValue);
-      context = mergeReservationRequestContext(context, { description });
-      return;
+      return { description: normalizeDescriptionCandidate(stringValue) };
     }
-
     if (isRoomIdFieldKey(normalizedKey)) {
       const roomId = parseReservationRoomIdCandidate(rawValue);
-      if (Number.isInteger(roomId)) {
-        context = mergeReservationRequestContext(context, { roomId });
-      }
-      return;
+      return Number.isInteger(roomId) ? { roomId } : null;
     }
-
     if (isRoomNameFieldKey(normalizedKey)) {
-      const roomName = normalizeText(stringValue);
-      context = mergeReservationRequestContext(context, { roomName });
+      return { roomName: normalizeText(stringValue) };
     }
-  });
+    return null;
+  };
+
+  const context = entries.reduce(
+    (acc, [rawKey, rawValue]) => {
+      const patch = patchForEntry(rawKey, rawValue);
+      return patch ? mergeReservationRequestContext(acc, patch) : acc;
+    },
+    initialContext && typeof initialContext === "object" ? { ...initialContext } : {},
+  );
 
   return finalizeReservationRequestContext(context);
 }
@@ -588,10 +576,11 @@ export function extractReservationRequestContextFromObject(
   }
 
   const entries = Object.entries(value);
-  let context = extractReservationRequestContextFromEntries(entries, initialContext);
-  entries.forEach(([, nestedValue]) => {
-    context = extractReservationRequestContextFromObject(nestedValue, depth + 1, context);
-  });
+  const context = entries.reduce(
+    (acc, [, nestedValue]) =>
+      extractReservationRequestContextFromObject(nestedValue, depth + 1, acc),
+    extractReservationRequestContextFromEntries(entries, initialContext),
+  );
   return finalizeReservationRequestContext(context);
 }
 
@@ -691,6 +680,10 @@ export async function extractReservationRequestContextFromFetchRequest(
   input: unknown,
   init?: RequestInit,
 ): Promise<ReservationRequestContext | null> {
+  // Request 본문은 formData → json → text 순으로 세 번 clone 해서 읽는다.
+  // 앞이 실패해야 뒤를 시도하는 순차 누적이라 reduce 로 옮기면 오히려 흐름이
+  // 가려진다. 여기서만 let 을 허용한다.
+  // eslint-disable-next-line no-restricted-syntax
   let context =
     init && typeof init === "object" ? extractReservationRequestContextFromBody(init.body) : null;
 

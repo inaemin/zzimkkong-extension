@@ -60,6 +60,17 @@ export function createRadarWorkflow(deps: Deps) {
     return DEBUG_MODE || manualVerificationEnabled;
   }
 
+  function createSlackTrigger(): HTMLButtonElement {
+    const trigger = document.createElement("button");
+    trigger.id = SLACK_MODAL_TRIGGER_ID;
+    trigger.type = "button";
+    trigger.textContent = "모달 테스트";
+    trigger.addEventListener("click", () => {
+      showSlackCopyModal(buildSlackReservationContext());
+    });
+    return trigger;
+  }
+
   function ensureSlackModalTrigger() {
     const existing = document.getElementById(SLACK_MODAL_TRIGGER_ID);
     if (!shouldShowSlackModalTrigger()) {
@@ -77,18 +88,7 @@ export function createRadarWorkflow(deps: Deps) {
       return;
     }
 
-    let trigger: HTMLButtonElement;
-    if (existing instanceof HTMLButtonElement) {
-      trigger = existing;
-    } else {
-      trigger = document.createElement("button");
-      trigger.id = SLACK_MODAL_TRIGGER_ID;
-      trigger.type = "button";
-      trigger.textContent = "모달 테스트";
-      trigger.addEventListener("click", () => {
-        showSlackCopyModal(buildSlackReservationContext());
-      });
-    }
+    const trigger = existing instanceof HTMLButtonElement ? existing : createSlackTrigger();
 
     if (trigger.parentElement !== actionContainer) {
       actionContainer.appendChild(trigger);
@@ -138,7 +138,8 @@ export function createRadarWorkflow(deps: Deps) {
         state.mapCalendarVisible = nextOpen;
         if (nextOpen) {
           openMapCalendarModal();
-        } else {
+        }
+        if (!nextOpen) {
           removeMapCalendarOverlay();
         }
         updateMapCalendarLauncherState();

@@ -87,10 +87,14 @@ declare global {
     if (!response || typeof response.clone !== "function") {
       return Promise.resolve(null);
     }
-    let cloned;
-    try {
-      cloned = response.clone();
-    } catch (error) {
+    const cloned = (() => {
+      try {
+        return response.clone();
+      } catch {
+        return null;
+      }
+    })();
+    if (!cloned) {
       return Promise.resolve(null);
     }
     return cloned
@@ -126,8 +130,6 @@ declare global {
 
   if (typeof originalFetch === "function") {
     window.fetch = function patchedFetch(input, init) {
-      let url = "";
-      let method = "GET";
       const reservationAttemptId = readReservationAttemptId();
       const ownerNamePromise = extractOwnerCandidateFromFetchRequest(input, init).catch(() => "");
       const requestContextPromise = extractReservationRequestContextFromFetchRequest(
@@ -135,16 +137,22 @@ declare global {
         init,
       ).catch(() => null);
 
-      if (typeof input === "string" || input instanceof URL) {
-        url = String(input);
-      } else if (input && typeof input === "object") {
-        url = typeof input.url === "string" ? input.url : "";
-        method = normalizeMethod(input.method);
-      }
+      const isUrlLike = typeof input === "string" || input instanceof URL;
+      const isRequestLike = !isUrlLike && Boolean(input) && typeof input === "object";
 
-      if (init && typeof init === "object" && typeof init.method === "string") {
-        method = normalizeMethod(init.method);
-      }
+      const url = isUrlLike
+        ? String(input)
+        : isRequestLike && typeof input.url === "string"
+          ? input.url
+          : "";
+
+      // init.method 가 input.method 를 덮어쓴다(원래 순서 유지).
+      const method =
+        init && typeof init === "object" && typeof init.method === "string"
+          ? normalizeMethod(init.method)
+          : isRequestLike
+            ? normalizeMethod(input.method)
+            : "GET";
 
       // 원본 fetch 에 인자를 그대로 넘겨야 해서 arguments 를 쓴다.
       // rest 로 바꾸면 호출부가 넘긴 형태(Request 객체 등)를 잃을 수 있다.

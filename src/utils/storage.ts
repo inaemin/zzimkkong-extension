@@ -101,13 +101,14 @@ export function readStoredNumber(
     return normalizedFallback;
   }
 
-  let rawValue: string | null = null;
-  try {
-    rawValue = window.localStorage.getItem(storageKey);
-  } catch (error) {
-    reportStorageFailure("read-failed", storageKey, error);
-    return normalizedFallback;
-  }
+  const rawValue = ((): string | null => {
+    try {
+      return window.localStorage.getItem(storageKey);
+    } catch (error) {
+      reportStorageFailure("read-failed", storageKey, error);
+      return null;
+    }
+  })();
 
   if (typeof rawValue !== "string" || rawValue.trim() === "") {
     return normalizedFallback;

@@ -3,7 +3,6 @@ import {
   CALENDAR_ROOM_COL_WIDTH,
   CALENDAR_ROW_GAP,
   CALENDAR_SIDE_MARGIN,
-  CALENDAR_SLOT_GAP,
   MAP_CALENDAR_MIN_WIDTH,
   MAP_CALENDAR_VIEWPORT_MARGIN,
   RADAR_OVERLAY_Z_INDEX,
@@ -86,9 +85,7 @@ export const RADAR_OVERLAY_CSS = `
   --zzk-floor-col-width: ${CALENDAR_FLOOR_COL_WIDTH}px;
   --zzk-room-col-width: ${CALENDAR_ROOM_COL_WIDTH}px;
   --zzk-row-gap: ${CALENDAR_ROW_GAP}px;
-  --zzk-slot-gap: ${CALENDAR_SLOT_GAP}px;
   --zzk-timeline-side-margin: ${CALENDAR_SIDE_MARGIN}px;
-  --zzk-boundary-color: rgba(15, 23, 42, 0.3);
   --zzk-section-divider-color: rgba(15, 23, 42, 0.18);
   --zzk-section-divider: 1px solid var(--zzk-section-divider-color);
   border: 1px solid rgba(15, 23, 42, 0.15);

@@ -78,15 +78,12 @@ export function computeSlackReminderDateTime(
     return null;
   }
 
-  let remindDate = dateValue;
-  let remindMinute = startMinute - normalizeSlackReminderLeadMinutes(leadMinutesValue);
-  if (remindMinute < 0) {
-    remindMinute += 24 * 60;
-    remindDate = addDaysToDateString(remindDate, -1);
-  }
+  const rawRemindMinute = startMinute - normalizeSlackReminderLeadMinutes(leadMinutesValue);
+  // 음수면 전날로 넘어간다.
+  const crossesMidnight = rawRemindMinute < 0;
 
   return {
-    date: remindDate,
-    time: minuteToHourMinute(remindMinute),
+    date: crossesMidnight ? addDaysToDateString(dateValue, -1) : dateValue,
+    time: minuteToHourMinute(crossesMidnight ? rawRemindMinute + 24 * 60 : rawRemindMinute),
   };
 }

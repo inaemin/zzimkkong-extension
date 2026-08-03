@@ -22,44 +22,38 @@ export function findGuestReservationTabContainer({
     }
   });
 
-  let bestContainer: HTMLElement | null = null;
-  let bestScore = Number.NEGATIVE_INFINITY;
-
-  parentCandidates.forEach((parent) => {
+  // 후보마다 점수를 매겨 가장 높은 것을 고른다. 점수가 같으면 먼저 나온 쪽이
+  // 이긴다(> 비교라 뒤엣것이 덮어쓰지 않는다).
+  const scored = [...parentCandidates].flatMap((parent) => {
     const childButtons = Array.from(parent.children).filter(
       (child) => child instanceof HTMLButtonElement && isElementVisible(child),
     );
 
     if (childButtons.length < 2) {
-      return;
+      return [];
     }
 
     const labels = childButtons.map((button) => normalizeTextForMatch(button.textContent || ""));
     const hasReserve = labels.some((label) => label === "예약하기");
     const hasStatus = labels.some((label) => label === "예약현황");
     if (!hasReserve || !hasStatus) {
-      return;
+      return [];
     }
 
-    let score = 0;
-    score += 20;
-    if (childButtons.length <= 4) {
-      score += 6;
-    }
-    if (isElementVisible(parent)) {
-      score += 4;
-    }
-    if (parent.closest("aside, nav, section")) {
-      score += 3;
-    }
+    const score =
+      20 +
+      (childButtons.length <= 4 ? 6 : 0) +
+      (isElementVisible(parent) ? 4 : 0) +
+      (parent.closest("aside, nav, section") ? 3 : 0);
 
-    if (score > bestScore) {
-      bestScore = score;
-      bestContainer = parent;
-    }
+    return [{ parent, score }];
   });
 
-  return bestContainer;
+  const best = scored.reduce<{ parent: HTMLElement; score: number } | null>(
+    (winner, candidate) => (winner && winner.score >= candidate.score ? winner : candidate),
+    null,
+  );
+  return best?.parent ?? null;
 }
 
 export function findGuestReservationTabStyleSource({

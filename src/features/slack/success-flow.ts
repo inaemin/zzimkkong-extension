@@ -78,13 +78,14 @@ export function createSlackSuccessFlow(deps: Deps) {
     }
 
     // 예약 생성 응답 body 로 바로 Slack 모달을 띄운다.
-    if (isTrustedReservationNetworkMessage(event, data.payload)) {
-      handleLmsReservationSuccess(data.payload);
-    } else {
+    if (!isTrustedReservationNetworkMessage(event, data.payload)) {
       pushDebugEvent("slack-success", "lms-ignored-untrusted", {
         origin: event.origin,
       });
+      return;
     }
+
+    handleLmsReservationSuccess(data.payload);
   }
 
   function queuePendingSlackCopyModal(
