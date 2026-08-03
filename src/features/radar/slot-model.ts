@@ -75,23 +75,20 @@ export function resolveSelectionEndIndex(
 
   const targetEndMinute = slotStates[startIndex].slot.startMinute + defaultReservationMinutes;
 
-  let limitIndex = startIndex;
-  for (
-    let index = startIndex;
-    index < slotStates.length && slotStates[index].slot.endMinute <= targetEndMinute;
-    index += 1
-  ) {
-    limitIndex = index;
-  }
+  // 기본 예약 길이 안에 들어오는 마지막 칸. 조건이 깨지는 순간 멈춰야 하므로
+  // findIndex 로 "처음 벗어나는 칸"을 찾아 그 앞까지만 본다.
+  const firstOutOfRange = slotStates.findIndex(
+    (state, index) => index >= startIndex && state.slot.endMinute > targetEndMinute,
+  );
+  const limitIndex = (firstOutOfRange === -1 ? slotStates.length : firstOutOfRange) - 1;
 
-  let endIndex = startIndex;
-  for (let index = startIndex; index <= Math.min(slotStates.length - 1, limitIndex); index += 1) {
-    if (!slotStates[index].isSelectable) {
-      break;
-    }
-    endIndex = index;
-  }
-  return endIndex;
+  // 그 범위 안에서 고를 수 없는 칸이 나오면 거기서 끊는다.
+  const firstBlocked = slotStates.findIndex(
+    (state, index) => index >= startIndex && !state.isSelectable,
+  );
+  const blockedLimit = firstBlocked === -1 ? slotStates.length - 1 : firstBlocked - 1;
+
+  return Math.max(startIndex, Math.min(limitIndex, blockedLimit, slotStates.length - 1));
 }
 
 /** 같은 층끼리 묶인 방 목록. 라벨 pane 과 타임라인 pane 이 같은 그룹을 그린다. */
@@ -113,31 +110,40 @@ export function groupRoomsByFloor<TRoom>(
   rooms: TRoom[],
   resolveFloor: (room: TRoom) => { floorKey: string; floorLabel: string },
 ): FloorGroup<TRoom>[] {
-  const groups: FloorGroup<TRoom>[] = [];
-  // 층 이름이 비어 있는 그룹은 경계 판단에서 건너뛴다(이름을 모르는 방들).
-  let previousLabeledFloor = "";
+  // previousLabeledFloor: 층 이름이 비어 있는 그룹은 경계 판단에서 건너뛴다
+  // (이름을 모르는 방들). 그래서 "마지막으로 이름이 있었던 층"을 따로 들고 간다.
+  const { groups } = rooms.reduce<{
+    groups: FloorGroup<TRoom>[];
+    previousLabeledFloor: string;
+  }>(
+    (acc, room) => {
+      const { floorKey, floorLabel } = resolveFloor(room);
+      const lastGroup = acc.groups.at(-1);
 
-  for (const room of rooms) {
-    const { floorKey, floorLabel } = resolveFloor(room);
-    const lastGroup = groups.at(-1);
+      if (lastGroup && lastGroup.floorKey === floorKey) {
+        return {
+          groups: [...acc.groups.slice(0, -1), { ...lastGroup, rooms: [...lastGroup.rooms, room] }],
+          previousLabeledFloor: acc.previousLabeledFloor,
+        };
+      }
 
-    if (lastGroup && lastGroup.floorKey === floorKey) {
-      lastGroup.rooms.push(room);
-      continue;
-    }
-
-    groups.push({
-      floorKey,
-      floorLabel,
-      rooms: [room],
-      isFloorDivider: Boolean(
-        floorLabel && previousLabeledFloor && previousLabeledFloor !== floorLabel,
-      ),
-    });
-    if (floorLabel) {
-      previousLabeledFloor = floorLabel;
-    }
-  }
+      return {
+        groups: [
+          ...acc.groups,
+          {
+            floorKey,
+            floorLabel,
+            rooms: [room],
+            isFloorDivider: Boolean(
+              floorLabel && acc.previousLabeledFloor && acc.previousLabeledFloor !== floorLabel,
+            ),
+          },
+        ],
+        previousLabeledFloor: floorLabel || acc.previousLabeledFloor,
+      };
+    },
+    { groups: [], previousLabeledFloor: "" },
+  );
 
   return groups;
 }

@@ -179,14 +179,15 @@ export function createLmsDataNormalizers(deps: LmsDataNormalizerDeps) {
       0,
       Math.floor(rawStartMinute / timelineSlotMinutes) * timelineSlotMinutes,
     );
-    let endMinute = Math.min(
+    const alignedEndMinute = Math.min(
       24 * 60,
       Math.ceil(rawEndMinute / timelineSlotMinutes) * timelineSlotMinutes,
     );
-
-    if (endMinute <= startMinute) {
-      endMinute = Math.min(24 * 60, startMinute + timelineSlotMinutes);
-    }
+    // 반올림 결과가 시작과 같거나 앞서면 최소 한 칸은 확보한다.
+    const endMinute =
+      alignedEndMinute <= startMinute
+        ? Math.min(24 * 60, startMinute + timelineSlotMinutes)
+        : alignedEndMinute;
 
     return {
       startMinute,
@@ -202,18 +203,17 @@ export function createLmsDataNormalizers(deps: LmsDataNormalizerDeps) {
     endMinute: number,
     slotMinutes: number,
   ): TimelineSlot[] {
-    const slots: TimelineSlot[] = [];
+    const slotCount = Math.max(0, Math.ceil((endMinute - startMinute) / slotMinutes));
 
-    for (let minute = startMinute; minute < endMinute; minute += slotMinutes) {
-      slots.push({
+    return Array.from({ length: slotCount }, (_, index) => {
+      const minute = startMinute + index * slotMinutes;
+      return {
         startMinute: minute,
         endMinute: minute + slotMinutes,
         label: minuteToHourMinute(minute),
         isHourMark: minute % 60 === 0,
-      });
-    }
-
-    return slots;
+      };
+    });
   }
 
   function normalizeQuota(quotaResponse: unknown): ReservationQuota | null {

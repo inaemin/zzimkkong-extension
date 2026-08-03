@@ -63,10 +63,9 @@ function cloneDebugValue(value: unknown, seen: WeakSet<object> = new WeakSet()):
     }
     seen.add(value);
     const source = value as Record<string, unknown>;
-    const output: Record<string, unknown> = {};
-    Object.keys(source).forEach((key) => {
-      output[key] = cloneDebugValue(source[key], seen);
-    });
+    const output = Object.fromEntries(
+      Object.keys(source).map((key) => [key, cloneDebugValue(source[key], seen)]),
+    );
     seen.delete(value);
     return output;
   }

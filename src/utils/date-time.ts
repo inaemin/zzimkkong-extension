@@ -7,6 +7,9 @@ import {
 
 import { getErrorMessage } from "./shared.js";
 
+// UTC 기준이라 서머타임 영향을 받지 않는다(Date.UTC 로 만든 값에만 쓴다).
+const MILLISECONDS_PER_DAY = 24 * 60 * 60 * 1000;
+
 export function isDateString(value: unknown): value is string {
   return typeof value === "string" && /^\d{4}-\d{2}-\d{2}$/.test(value);
 }
@@ -68,10 +71,7 @@ export function parseLocalizedHourMinute(value: unknown): number | null {
     if (hour12 < 1 || hour12 > 12 || minute < 0 || minute > 59) {
       return null;
     }
-    let hour24 = hour12 % 12;
-    if (meridiem === "오후") {
-      hour24 += 12;
-    }
+    const hour24 = (hour12 % 12) + (meridiem === "오후" ? 12 : 0);
     return hour24 * 60 + minute;
   }
 
@@ -269,10 +269,11 @@ export function addDaysToDateString(dateString: string, dayOffset: number): stri
   if (Number.isNaN(date.getTime())) {
     return dateString;
   }
-  date.setUTCDate(date.getUTCDate() + dayOffset);
-  const shiftedYear = String(date.getUTCFullYear()).padStart(4, "0");
-  const shiftedMonth = String(date.getUTCMonth() + 1).padStart(2, "0");
-  const shiftedDay = String(date.getUTCDate()).padStart(2, "0");
+  // setUTCDate 는 원본을 바꾼다. 옮긴 날짜로 새 Date 를 만든다.
+  const shifted = new Date(date.getTime() + dayOffset * MILLISECONDS_PER_DAY);
+  const shiftedYear = String(shifted.getUTCFullYear()).padStart(4, "0");
+  const shiftedMonth = String(shifted.getUTCMonth() + 1).padStart(2, "0");
+  const shiftedDay = String(shifted.getUTCDate()).padStart(2, "0");
   return `${shiftedYear}-${shiftedMonth}-${shiftedDay}`;
 }
 

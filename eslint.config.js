@@ -1,5 +1,6 @@
 import js from "@eslint/js";
 import prettierConfig from "eslint-config-prettier";
+import functional from "eslint-plugin-functional";
 import importX from "eslint-plugin-import-x";
 import globals from "globals";
 import tseslint from "typescript-eslint";
@@ -19,8 +20,8 @@ import { defineConfig, globalIgnores } from "eslint/config";
 //    지금도 ESLint 10 을 peer 로 받지 않는다(2.32.0 기준 ^9 까지). 포크는
 //    ^10 을 지원하고 order/no-cycle 규칙이 동일하다. 규칙 이름만 import-x/* 다.
 //  - functional 플러그인(no-let/immutable-data/no-expression-statements)은
-//    DOM 을 직접 조립하는 확장 코드 특성상 맞지 않아 제외했다.
-//    순수 도메인 계층이 분리되는 3단계 이후에 재검토한다.
+//    순수 도메인 계층에만 켠다(아래 해당 블록 참고). DOM 을 직접 조립하는
+//    나머지 확장 코드에는 여전히 맞지 않는다.
 //
 // 점진 강화 대상(5단계에서 켠다). 지금 켜면 전부 소음이 되는 규칙들:
 //  - no-ternary          : 기존 176곳. 삼항이 오히려 읽기 쉬운 자리가 많다.
@@ -112,6 +113,26 @@ export default defineConfig([
 
       // 전역 해체가 끝날 때까지는 경고. 끝나면 error 로 올린다.
       "no-unused-vars": ["warn", { argsIgnorePattern: "^_", caughtErrors: "none" }],
+    },
+  },
+
+  // 순수 도메인 계층: DOM 도 입출력도 없는 계산 모듈.
+  // 여기서만 함수형 규칙을 켠다.
+  //
+  // utils/shared.ts 는 뺐다. 디버그 이벤트 링버퍼와 console 로깅이 있어
+  // no-expression-statements 와 근본적으로 어긋난다 — console.log 자체가
+  // 표현식 문이고, 링버퍼는 가변인 게 목적이다.
+  {
+    files: [
+      "src/features/radar/slot-model.ts",
+      "src/utils/date-time.ts",
+      "src/services/lms-data/normalizers.ts",
+    ],
+    plugins: { functional },
+    rules: {
+      "functional/no-let": "error",
+      "functional/immutable-data": "error",
+      "functional/no-expression-statements": "error",
     },
   },
 
