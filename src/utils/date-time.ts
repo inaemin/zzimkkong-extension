@@ -54,6 +54,20 @@ export function minuteToHourMinute(totalMinute: number): string {
   return `${String(hour).padStart(2, "0")}:${String(remainMinute).padStart(2, "0")}`;
 }
 
+/** "오후 3시 30분" 형태의 매치를 분으로. 범위를 벗어나면 null. */
+function parseMeridiemMatch(match: RegExpMatchArray): number | null {
+  const hour12 = Number(match[2]);
+  const minute = Number(match[3]);
+  if (!Number.isInteger(hour12) || !Number.isInteger(minute)) {
+    return null;
+  }
+  if (hour12 < 1 || hour12 > 12 || minute < 0 || minute > 59) {
+    return null;
+  }
+  const hour24 = (hour12 % 12) + (match[1] === "오후" ? 12 : 0);
+  return hour24 * 60 + minute;
+}
+
 export function parseLocalizedHourMinute(value: unknown): number | null {
   if (typeof value !== "string") {
     return null;
@@ -62,17 +76,7 @@ export function parseLocalizedHourMinute(value: unknown): number | null {
   const normalized = value.replace(/\s+/g, " ").trim();
   const meridiemMatch = normalized.match(/(오전|오후)\s*(\d{1,2})\s*[:시]\s*(\d{1,2})/);
   if (meridiemMatch) {
-    const meridiem = meridiemMatch[1];
-    const hour12 = Number(meridiemMatch[2]);
-    const minute = Number(meridiemMatch[3]);
-    if (!Number.isInteger(hour12) || !Number.isInteger(minute)) {
-      return null;
-    }
-    if (hour12 < 1 || hour12 > 12 || minute < 0 || minute > 59) {
-      return null;
-    }
-    const hour24 = (hour12 % 12) + (meridiem === "오후" ? 12 : 0);
-    return hour24 * 60 + minute;
+    return parseMeridiemMatch(meridiemMatch);
   }
 
   const compactMatch = normalized.match(/(^|[^0-9])(\d{1,2})\s*:\s*(\d{2})(?!\d)/);
@@ -221,15 +225,13 @@ export function getNextHourRange() {
   const snappedNow = Math.ceil(nowMinute / TIME_STEP_MINUTES) * TIME_STEP_MINUTES;
   const startMinute = Math.max(earliestMinute, snappedNow);
 
-  if (startMinute < latestEndMinute) {
-    const endMinute = Math.min(latestEndMinute, startMinute + 60);
-    if (endMinute > startMinute) {
-      return {
-        startTime: minuteToHourMinute(startMinute),
-        endTime: minuteToHourMinute(endMinute),
-        useNextDay: false,
-      };
-    }
+  const endMinute = Math.min(latestEndMinute, startMinute + 60);
+  if (startMinute < latestEndMinute && endMinute > startMinute) {
+    return {
+      startTime: minuteToHourMinute(startMinute),
+      endTime: minuteToHourMinute(endMinute),
+      useNextDay: false,
+    };
   }
 
   return {

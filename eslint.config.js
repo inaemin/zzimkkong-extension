@@ -100,6 +100,9 @@ export default defineConfig([
       // 그중 대부분이 (값, 옵션, 문맥) 형태의 순수 함수라 억지로 객체로 묶으면
       // 읽기 어려워진다. 3 이면 남는 위반이 없다.
       "max-params": ["error", 3],
+      // 중첩 1단. try/catch 도 한 겹으로 세므로, 저장소·클립보드처럼 던지는
+      // 접근은 헬퍼로 뽑아 쓴다(safely/attempt 계열).
+      "max-depth": ["error", 1],
       // 의미 없는 변수명 금지. 확장 코드에 흔한 축약형을 추가했다.
       "id-denylist": [
         "error",
@@ -150,6 +153,7 @@ export default defineConfig([
     rules: {
       "no-restricted-syntax": "off",
       "max-params": "off",
+      "max-depth": "off",
     },
   },
 

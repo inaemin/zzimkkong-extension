@@ -60,6 +60,17 @@ export function createRadarWorkflow(deps: Deps) {
     return DEBUG_MODE || manualVerificationEnabled;
   }
 
+  /** 처음 열 때 한 번만 스케줄 오버레이를 켠다. */
+  function enableScheduleOverlayOnce() {
+    if (state.scheduleOverlayEnabled) {
+      return;
+    }
+    state.scheduleOverlayEnabled = true;
+    if (state.elements?.scheduleToggle instanceof HTMLInputElement) {
+      state.elements.scheduleToggle.checked = true;
+    }
+  }
+
   function createSlackTrigger(): HTMLButtonElement {
     const trigger = document.createElement("button");
     trigger.id = SLACK_MODAL_TRIGGER_ID;
@@ -73,18 +84,13 @@ export function createRadarWorkflow(deps: Deps) {
 
   function ensureSlackModalTrigger() {
     const existing = document.getElementById(SLACK_MODAL_TRIGGER_ID);
-    if (!shouldShowSlackModalTrigger()) {
-      if (existing instanceof HTMLElement) {
-        existing.remove();
-      }
-      return;
-    }
+    const actionContainer = shouldShowSlackModalTrigger()
+      ? findGuestReservationTabContainer()
+      : null;
 
-    const actionContainer = findGuestReservationTabContainer();
+    // 띄울 조건이 아니거나 붙일 자리가 없으면 있던 것을 걷는다.
     if (!(actionContainer instanceof HTMLElement)) {
-      if (existing instanceof HTMLElement) {
-        existing.remove();
-      }
+      existing?.remove();
       return;
     }
 
@@ -128,12 +134,7 @@ export function createRadarWorkflow(deps: Deps) {
     const launcher = renderRadarLauncher({
       open: isOpen,
       onOpenChange: (nextOpen) => {
-        if (!state.scheduleOverlayEnabled) {
-          state.scheduleOverlayEnabled = true;
-          if (state.elements?.scheduleToggle instanceof HTMLInputElement) {
-            state.elements.scheduleToggle.checked = true;
-          }
-        }
+        enableScheduleOverlayOnce();
 
         state.mapCalendarVisible = nextOpen;
         if (nextOpen) {

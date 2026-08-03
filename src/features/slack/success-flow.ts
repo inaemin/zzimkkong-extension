@@ -110,12 +110,33 @@ export function createSlackSuccessFlow(deps: Deps) {
     state.pendingSlackModalTimer = null;
   }
 
-  function persistPendingSlackModalState() {
+  /** sessionStorage 접근은 오리진·설정에 따라 던진다. 실패는 보고만 한다. */
+  function removePendingSlackModalStorage(event: string): void {
     try {
-      if (!state.pendingSlackModalContext) {
-        window.sessionStorage.removeItem(PENDING_SLACK_MODAL_STORAGE_KEY);
-        return;
-      }
+      window.sessionStorage.removeItem(PENDING_SLACK_MODAL_STORAGE_KEY);
+    } catch (error) {
+      reportSessionStorageFailure(event, PENDING_SLACK_MODAL_STORAGE_KEY, error);
+    }
+  }
+
+  /** 라우트 전환 직후엔 화면이 덜 그려져 있어 잠깐 뒤 다시 시도한다. */
+  function scheduleRetryAfterRouteChange(delayMs: number): void {
+    if (Number.isInteger(state.pendingSlackModalTimer)) {
+      return;
+    }
+    state.pendingSlackModalTimer = window.setTimeout(() => {
+      state.pendingSlackModalTimer = null;
+      tryOpenPendingSlackCopyModal();
+    }, delayMs);
+  }
+
+  function persistPendingSlackModalState() {
+    if (!state.pendingSlackModalContext) {
+      removePendingSlackModalStorage("write-failed");
+      return;
+    }
+
+    try {
       window.sessionStorage.setItem(
         PENDING_SLACK_MODAL_STORAGE_KEY,
         JSON.stringify({
@@ -126,33 +147,34 @@ export function createSlackSuccessFlow(deps: Deps) {
       );
     } catch (error) {
       reportSessionStorageFailure("write-failed", PENDING_SLACK_MODAL_STORAGE_KEY, error);
-      return;
+    }
+  }
+
+  /** 저장된 값을 읽어 파싱한다. 접근 실패·파싱 실패 모두 null. */
+  function readPendingSlackModalStorage() {
+    try {
+      const rawValue = window.sessionStorage.getItem(PENDING_SLACK_MODAL_STORAGE_KEY);
+      return rawValue ? JSON.parse(rawValue) : null;
+    } catch (error) {
+      reportSessionStorageFailure("read-failed", PENDING_SLACK_MODAL_STORAGE_KEY, error);
+      return null;
     }
   }
 
   function restorePendingSlackModalState() {
-    try {
-      const rawValue = window.sessionStorage.getItem(PENDING_SLACK_MODAL_STORAGE_KEY);
-      if (!rawValue) {
-        return;
-      }
-      const parsed = JSON.parse(rawValue);
-      if (
-        !parsed ||
-        typeof parsed !== "object" ||
-        !parsed.context ||
-        typeof parsed.context !== "object"
-      ) {
-        window.sessionStorage.removeItem(PENDING_SLACK_MODAL_STORAGE_KEY);
-        return;
-      }
-      state.pendingSlackModalContext = { ...parsed.context };
-      state.pendingSlackModalRequiresNonEditPage = parsed.requireNonEditPage === true;
-      state.pendingSlackModalReloadAttempted = parsed.reloadAttempted === true;
-    } catch (error) {
-      reportSessionStorageFailure("read-failed", PENDING_SLACK_MODAL_STORAGE_KEY, error);
+    const parsed = readPendingSlackModalStorage();
+    if (!parsed) {
       return;
     }
+
+    if (typeof parsed !== "object" || !parsed.context || typeof parsed.context !== "object") {
+      removePendingSlackModalStorage("read-failed");
+      return;
+    }
+
+    state.pendingSlackModalContext = { ...parsed.context };
+    state.pendingSlackModalRequiresNonEditPage = parsed.requireNonEditPage === true;
+    state.pendingSlackModalReloadAttempted = parsed.reloadAttempted === true;
   }
 
   function clearPendingSlackModalState() {
@@ -160,12 +182,7 @@ export function createSlackSuccessFlow(deps: Deps) {
     state.pendingSlackModalContext = null;
     state.pendingSlackModalRequiresNonEditPage = false;
     state.pendingSlackModalReloadAttempted = false;
-    try {
-      window.sessionStorage.removeItem(PENDING_SLACK_MODAL_STORAGE_KEY);
-    } catch (error) {
-      reportSessionStorageFailure("remove-failed", PENDING_SLACK_MODAL_STORAGE_KEY, error);
-      return;
-    }
+    removePendingSlackModalStorage("remove-failed");
   }
 
   function tryOpenPendingSlackCopyModal() {
@@ -182,12 +199,7 @@ export function createSlackSuccessFlow(deps: Deps) {
       elapsedSinceRouteChange >= 0 &&
       elapsedSinceRouteChange < 1200
     ) {
-      if (!Number.isInteger(state.pendingSlackModalTimer)) {
-        state.pendingSlackModalTimer = window.setTimeout(() => {
-          state.pendingSlackModalTimer = null;
-          tryOpenPendingSlackCopyModal();
-        }, 1200 - elapsedSinceRouteChange);
-      }
+      scheduleRetryAfterRouteChange(1200 - elapsedSinceRouteChange);
       return false;
     }
 

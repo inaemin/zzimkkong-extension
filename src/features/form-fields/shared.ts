@@ -188,14 +188,12 @@ export function readHostFieldDisplayValue(control: Element | null): string {
   if (control instanceof HTMLSelectElement) {
     const selectedOption =
       control.selectedIndex >= 0 ? control.options[control.selectedIndex] : null;
-    if (selectedOption instanceof HTMLOptionElement) {
-      const selectedText = normalizeSlackFieldText(selectedOption.textContent || "");
-      if (selectedText) {
-        return selectedText;
-      }
-    }
+    const selectedText =
+      selectedOption instanceof HTMLOptionElement
+        ? normalizeSlackFieldText(selectedOption.textContent || "")
+        : "";
 
-    return normalizeSlackFieldText(control.value || "");
+    return selectedText || normalizeSlackFieldText(control.value || "");
   }
 
   const valueSnapshots = [
@@ -205,11 +203,11 @@ export function readHostFieldDisplayValue(control: Element | null): string {
     control.getAttribute("aria-label") || "",
     control.getAttribute("title") || "",
   ];
-  for (const snapshot of valueSnapshots) {
-    const normalizedSnapshot = normalizeSlackFieldText(snapshot);
-    if (normalizedSnapshot) {
-      return normalizedSnapshot;
-    }
+  const firstFilled = valueSnapshots
+    .map((snapshot) => normalizeSlackFieldText(snapshot))
+    .find((snapshot) => Boolean(snapshot));
+  if (firstFilled) {
+    return firstFilled;
   }
 
   return "";

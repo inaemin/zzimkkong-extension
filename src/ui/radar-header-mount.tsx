@@ -14,9 +14,7 @@ let mountedInto: HTMLElement | null = null;
 
 export function renderRadarHeader(container: HTMLElement, props: RadarHeaderProps): void {
   if (!root || mountedInto !== container || !container.isConnected) {
-    if (root) {
-      root.unmount();
-    }
+    root?.unmount();
     root = createRoot(container);
     mountedInto = container;
   }

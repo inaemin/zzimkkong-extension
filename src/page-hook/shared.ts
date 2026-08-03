@@ -162,23 +162,55 @@ export function isOwnerFieldKey(key: unknown): boolean {
   return hasOwnerContext && !hasRoomContext;
 }
 
+/**
+ * 첫 번째로 값이 나오는 항목을 돌려준다.
+ *
+ * "찾을 때까지 순회하다 멈춘다"를 한 겹 중첩 없이 쓰기 위한 헬퍼다.
+ * map 이 전체를 훑지 않도록 find 로 먼저 거른 뒤 한 번만 변환한다.
+ */
+function firstNonEmpty<T>(items: T[], toValue: (item: T) => string): string {
+  const found = items.find((item) => Boolean(toValue(item)));
+  return found === undefined ? "" : toValue(found);
+}
+
+/** 던지면 빈 문자열. try 를 각 자리에 두면 중첩이 한 겹씩 늘어난다. */
+function attempt(read: () => string): string {
+  try {
+    return read();
+  } catch {
+    return "";
+  }
+}
+
+/** 값을 돌려주는 판. 던지면 null. */
+function attemptSync<T>(read: () => T): T | null {
+  try {
+    return read();
+  } catch {
+    return null;
+  }
+}
+
+/** 비동기판. 실패하면 null. */
+async function attemptAsync<T>(read: () => Promise<T>): Promise<T | null> {
+  try {
+    return await read();
+  } catch {
+    return null;
+  }
+}
+
 export function extractOwnerCandidateFromEntries(entries: Array<[string, unknown]>): string {
   if (!Array.isArray(entries) || entries.length === 0) {
     return "";
   }
 
-  for (const [rawKey, rawValue] of entries) {
-    if (!isOwnerFieldKey(rawKey)) {
-      continue;
-    }
-
-    const candidate = normalizeOwnerCandidate(rawValue);
-    if (candidate) {
-      return candidate;
-    }
-  }
-
-  return "";
+  return (
+    entries
+      .filter(([rawKey]) => isOwnerFieldKey(rawKey))
+      .map(([, rawValue]) => normalizeOwnerCandidate(rawValue))
+      .find((candidate) => Boolean(candidate)) || ""
+  );
 }
 
 export function extractOwnerCandidateFromObject(value: unknown, depth = 0): string {
@@ -187,13 +219,7 @@ export function extractOwnerCandidateFromObject(value: unknown, depth = 0): stri
   }
 
   if (Array.isArray(value)) {
-    for (const item of value) {
-      const nested = extractOwnerCandidateFromObject(item, depth + 1);
-      if (nested) {
-        return nested;
-      }
-    }
-    return "";
+    return firstNonEmpty(value, (item) => extractOwnerCandidateFromObject(item, depth + 1));
   }
 
   const entries = Object.entries(value);
@@ -202,14 +228,22 @@ export function extractOwnerCandidateFromObject(value: unknown, depth = 0): stri
     return direct;
   }
 
-  for (const [, nestedValue] of entries) {
-    const nested = extractOwnerCandidateFromObject(nestedValue, depth + 1);
-    if (nested) {
-      return nested;
-    }
-  }
+  return firstNonEmpty(entries, ([, nestedValue]) =>
+    extractOwnerCandidateFromObject(nestedValue, depth + 1),
+  );
+}
 
-  return "";
+/** 문자열 본문에서 예약자. JSON 을 먼저 보고 form-urlencoded 로 넘어간다. */
+function ownerFromStringBody(trimmed: string): string {
+  if (!trimmed) {
+    return "";
+  }
+  return (
+    attempt(() => extractOwnerCandidateFromObject(JSON.parse(trimmed))) ||
+    attempt(() =>
+      extractOwnerCandidateFromEntries(Array.from(new URLSearchParams(trimmed).entries())),
+    )
+  );
 }
 
 export function extractOwnerCandidateFromBody(body: unknown): string {
@@ -230,36 +264,7 @@ export function extractOwnerCandidateFromBody(body: unknown): string {
   }
 
   if (typeof body === "string") {
-    const trimmed = body.trim();
-    if (!trimmed) {
-      return "";
-    }
-
-    try {
-      const parsedJson = JSON.parse(trimmed);
-      const candidateFromJson = extractOwnerCandidateFromObject(parsedJson);
-      if (candidateFromJson) {
-        return candidateFromJson;
-      }
-    } catch (error) {
-      const ignoredError = error;
-      void ignoredError;
-    }
-
-    try {
-      const searchParams = new URLSearchParams(trimmed);
-      const candidateFromParams = extractOwnerCandidateFromEntries(
-        Array.from(searchParams.entries()),
-      );
-      if (candidateFromParams) {
-        return candidateFromParams;
-      }
-    } catch (error) {
-      const ignoredError = error;
-      void ignoredError;
-    }
-
-    return "";
+    return ownerFromStringBody(body.trim());
   }
 
   if (typeof body === "object") {
@@ -267,6 +272,20 @@ export function extractOwnerCandidateFromBody(body: unknown): string {
   }
 
   return "";
+}
+
+/**
+ * Request 본문을 formData → json → text 순으로 읽어 각각 넘겨준다.
+ *
+ * 본문은 한 번만 소비할 수 있어 매번 clone 한다. 세 형태를 모두 시도하는
+ * 이유는 lms+ 가 요청마다 다른 인코딩을 쓰기 때문이다. 두 추출기(예약자/문맥)가
+ * 같은 절차를 쓰므로 여기로 모았다.
+ */
+async function readRequestBodies(input: Request): Promise<unknown[]> {
+  const formData = await attemptAsync(() => input.clone().formData());
+  const json = await attemptAsync(() => input.clone().json());
+  const text = await attemptAsync(() => input.clone().text());
+  return [formData, json, text].filter((body) => body !== null);
 }
 
 export async function extractOwnerCandidateFromFetchRequest(
@@ -278,46 +297,12 @@ export async function extractOwnerCandidateFromFetchRequest(
     return fromInit;
   }
 
-  if (typeof Request !== "undefined" && input instanceof Request) {
-    try {
-      const clonedRequest = input.clone();
-      if (typeof clonedRequest.formData === "function") {
-        try {
-          const formData = await clonedRequest.formData();
-          const candidateFromFormData = extractOwnerCandidateFromBody(formData);
-          if (candidateFromFormData) {
-            return candidateFromFormData;
-          }
-        } catch (error) {
-          const ignoredError = error;
-          void ignoredError;
-        }
-      }
-
-      const secondClone = input.clone();
-      if (typeof secondClone.json === "function") {
-        try {
-          const jsonValue = await secondClone.json();
-          const candidateFromJson = extractOwnerCandidateFromBody(jsonValue);
-          if (candidateFromJson) {
-            return candidateFromJson;
-          }
-        } catch (error) {
-          const ignoredError = error;
-          void ignoredError;
-        }
-      }
-
-      const thirdClone = input.clone();
-      const text = await thirdClone.text();
-      return extractOwnerCandidateFromBody(text);
-    } catch (error) {
-      const ignoredError = error;
-      void ignoredError;
-    }
+  if (typeof Request === "undefined" || !(input instanceof Request)) {
+    return "";
   }
 
-  return "";
+  const bodies = await readRequestBodies(input);
+  return firstNonEmpty(bodies, (body) => extractOwnerCandidateFromBody(body));
 }
 
 export function normalizeFieldKey(value: unknown): string {
@@ -584,6 +569,22 @@ export function extractReservationRequestContextFromObject(
   return finalizeReservationRequestContext(context);
 }
 
+/** 문자열 본문에서 예약 문맥. 예약자 쪽과 같은 순서(JSON → form)로 본다. */
+function contextFromStringBody(trimmed: string): ReservationRequestContext | null {
+  if (!trimmed) {
+    return null;
+  }
+  const fromJson = attemptSync(() =>
+    extractReservationRequestContextFromObject(JSON.parse(trimmed)),
+  );
+  if (fromJson) {
+    return fromJson;
+  }
+  return attemptSync(() =>
+    extractReservationRequestContextFromEntries(Array.from(new URLSearchParams(trimmed).entries())),
+  );
+}
+
 export function extractReservationRequestContextFromBody(
   body: unknown,
 ): ReservationRequestContext | null {
@@ -604,35 +605,7 @@ export function extractReservationRequestContextFromBody(
   }
 
   if (typeof body === "string") {
-    const trimmed = body.trim();
-    if (!trimmed) {
-      return null;
-    }
-
-    try {
-      const parsed = JSON.parse(trimmed);
-      const fromJson = extractReservationRequestContextFromObject(parsed);
-      if (fromJson) {
-        return fromJson;
-      }
-    } catch (error) {
-      const ignoredError = error;
-      void ignoredError;
-    }
-
-    try {
-      const fromParams = extractReservationRequestContextFromEntries(
-        Array.from(new URLSearchParams(trimmed).entries()),
-      );
-      if (fromParams) {
-        return fromParams;
-      }
-    } catch (error) {
-      const ignoredError = error;
-      void ignoredError;
-    }
-
-    return null;
+    return contextFromStringBody(body.trim());
   }
 
   if (typeof body === "object") {
@@ -680,54 +653,20 @@ export async function extractReservationRequestContextFromFetchRequest(
   input: unknown,
   init?: RequestInit,
 ): Promise<ReservationRequestContext | null> {
-  // Request 본문은 formData → json → text 순으로 세 번 clone 해서 읽는다.
-  // 앞이 실패해야 뒤를 시도하는 순차 누적이라 reduce 로 옮기면 오히려 흐름이
-  // 가려진다. 여기서만 let 을 허용한다.
-  // eslint-disable-next-line no-restricted-syntax
-  let context =
+  const fromInit =
     init && typeof init === "object" ? extractReservationRequestContextFromBody(init.body) : null;
 
-  if (typeof Request !== "undefined" && input instanceof Request) {
-    try {
-      const clonedRequest = input.clone();
-      if (typeof clonedRequest.formData === "function") {
-        try {
-          const formData = await clonedRequest.formData();
-          context = mergeReservationRequestContext(
-            context,
-            extractReservationRequestContextFromBody(formData),
-          );
-        } catch (error) {
-          const ignoredError = error;
-          void ignoredError;
-        }
-      }
-
-      const secondClone = input.clone();
-      if (typeof secondClone.json === "function") {
-        try {
-          const jsonValue = await secondClone.json();
-          context = mergeReservationRequestContext(
-            context,
-            extractReservationRequestContextFromBody(jsonValue),
-          );
-        } catch (error) {
-          const ignoredError = error;
-          void ignoredError;
-        }
-      }
-
-      const thirdClone = input.clone();
-      const text = await thirdClone.text();
-      context = mergeReservationRequestContext(
-        context,
-        extractReservationRequestContextFromBody(text),
-      );
-    } catch (error) {
-      const ignoredError = error;
-      void ignoredError;
-    }
+  if (typeof Request === "undefined" || !(input instanceof Request)) {
+    return finalizeReservationRequestContext(fromInit);
   }
+
+  // 본문 형태마다 담긴 정보가 달라서, 읽히는 것을 모두 합친다.
+  const bodies = await readRequestBodies(input);
+  const context = bodies.reduce(
+    (acc, body) =>
+      mergeReservationRequestContext(acc, extractReservationRequestContextFromBody(body)),
+    fromInit,
+  );
 
   return finalizeReservationRequestContext(context);
 }

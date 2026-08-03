@@ -10,6 +10,27 @@ import {
 // 쪼개질 때 이 인터페이스를 구체 타입으로 좁힌다.
 type Deps = Record<string, any>;
 
+/** 클립보드 API 로 복사. 권한이 없거나 막히면 false. */
+async function writeToClipboard(textValue: string): Promise<boolean> {
+  if (!navigator.clipboard || typeof navigator.clipboard.writeText !== "function") {
+    return false;
+  }
+  try {
+    await navigator.clipboard.writeText(textValue);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function execCopyCommand(): boolean {
+  try {
+    return document.execCommand("copy");
+  } catch {
+    return false;
+  }
+}
+
 export function createSlackWorkflow(deps: Deps) {
   const {
     state,
@@ -104,24 +125,16 @@ export function createSlackWorkflow(deps: Deps) {
       return false;
     }
 
-    if (navigator.clipboard && typeof navigator.clipboard.writeText === "function") {
-      try {
-        await navigator.clipboard.writeText(textValue);
-        return true;
-      } catch (error) {
-        const ignoredError = error;
-        void ignoredError;
-      }
+    const copiedViaClipboardApi = await writeToClipboard(textValue);
+    if (copiedViaClipboardApi) {
+      return true;
     }
 
+    // 클립보드 API 가 막힌 환경(권한·비보안 컨텍스트)에서는 선택 후 execCommand.
     if (textAreaElement instanceof HTMLTextAreaElement) {
       textAreaElement.focus();
       textAreaElement.select();
-      try {
-        return document.execCommand("copy");
-      } catch (error) {
-        return false;
-      }
+      return execCopyCommand();
     }
 
     return false;

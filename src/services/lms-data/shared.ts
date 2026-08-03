@@ -98,6 +98,14 @@ function readCachedReservations(cacheKey: string): Reservation[] | null {
   return entry.reservations;
 }
 
+/** 그 사이 다른 요청이 자리를 차지했으면 건드리지 않는다. */
+function releaseInflight(query: string, request: Promise<Reservation[]>): void {
+  if (reservationInflight.get(query) !== request) {
+    return;
+  }
+  reservationInflight.delete(query);
+}
+
 export async function fetchReservationsForRoom(
   roomId: number,
   date: string,
@@ -131,9 +139,7 @@ export async function fetchReservationsForRoom(
   try {
     return await request;
   } finally {
-    if (reservationInflight.get(query) === request) {
-      reservationInflight.delete(query);
-    }
+    releaseInflight(query, request);
   }
 }
 
@@ -276,39 +282,40 @@ function extractJwtFromValue(rawValue: unknown): string {
   return match ? match[0] : "";
 }
 
+/** 접근 가능한 저장소만 모은다(오리진에 따라 접근 자체가 던진다). */
+function readableStores(): Storage[] {
+  return [
+    safely(() => (typeof localStorage !== "undefined" ? localStorage : null), null),
+    safely(() => (typeof sessionStorage !== "undefined" ? sessionStorage : null), null),
+  ].filter((store): store is Storage => store !== null);
+}
+
 function readLmsAuthToken(): string {
-  const stores = [];
-  try {
-    if (typeof localStorage !== "undefined") stores.push(localStorage);
-  } catch (error) {
-    /* 접근 불가 시 무시 */
-  }
-  try {
-    if (typeof sessionStorage !== "undefined") stores.push(sessionStorage);
-  } catch (error) {
-    /* 접근 불가 시 무시 */
-  }
-
-  for (const store of stores) {
+  // 저장소×키를 한 줄로 펼쳐 중첩을 없앤다.
+  const candidates = readableStores().flatMap((store) => {
     const length = safely(() => store.length, 0);
-    const keys = Array.from({ length }, (_, index) => safely(() => store.key(index), null));
+    return Array.from({ length }, (_, index) => safely(() => store.key(index), null))
+      .filter((key): key is string => Boolean(key))
+      .map((key) => safely(() => store.getItem(key) || "", ""));
+  });
 
-    for (const key of keys) {
-      if (!key) {
-        continue;
-      }
-      const value = safely(() => store.getItem(key) || "", "");
-      if (!value.includes("eyJ")) {
-        continue;
-      }
-      const token = extractJwtFromValue(value);
-      if (token) {
-        return token;
-      }
-    }
-  }
+  return (
+    candidates
+      .filter((value) => value.includes("eyJ"))
+      .map((value) => extractJwtFromValue(value))
+      .find((token) => Boolean(token)) || ""
+  );
+}
 
-  return "";
+/** 401/403 은 로그인 문제라 문구를 따로 준다. */
+function isAuthStatus(status: number): boolean {
+  return status === 401 || status === 403;
+}
+
+function authErrorMessage(hasToken: boolean): string {
+  return hasToken
+    ? "로그인 정보가 만료되었어요. 페이지를 새로고침한 뒤 다시 시도해 주세요."
+    : "로그인이 필요해요. 회의실 예약 페이지에 로그인한 뒤 다시 시도해 주세요.";
 }
 
 export async function fetchApiJson(url: string): Promise<unknown> {
@@ -329,14 +336,11 @@ export async function fetchApiJson(url: string): Promise<unknown> {
   const text = await response.text();
   const data: unknown = text ? safely(() => JSON.parse(text) as unknown, null) : null;
 
+  if (!response.ok && isAuthStatus(response.status)) {
+    throw new Error(authErrorMessage(Boolean(token)));
+  }
+
   if (!response.ok) {
-    if (response.status === 401 || response.status === 403) {
-      throw new Error(
-        token
-          ? "로그인 정보가 만료되었어요. 페이지를 새로고침한 뒤 다시 시도해 주세요."
-          : "로그인이 필요해요. 회의실 예약 페이지에 로그인한 뒤 다시 시도해 주세요.",
-      );
-    }
     // 에러 본문의 message 는 있을 수도 없을 수도 있다. 좁혀서 읽는다.
     const serverMessage =
       data && typeof data === "object" && "message" in data && typeof data.message === "string"

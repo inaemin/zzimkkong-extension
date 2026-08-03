@@ -44,6 +44,20 @@ export interface DebugEvent {
 
 const debugEvents: DebugEvent[] = [];
 
+/** 순환을 표시하며 객체를 복제한다. */
+function cloneDebugObject(value: object, seen: WeakSet<object>): unknown {
+  if (seen.has(value)) {
+    return "[circular]";
+  }
+  seen.add(value);
+  const source = value as Record<string, unknown>;
+  const output = Object.fromEntries(
+    Object.keys(source).map((key) => [key, cloneDebugValue(source[key], seen)]),
+  );
+  seen.delete(value);
+  return output;
+}
+
 function cloneDebugValue(value: unknown, seen: WeakSet<object> = new WeakSet()): unknown {
   if (value == null) {
     return value;
@@ -58,16 +72,7 @@ function cloneDebugValue(value: unknown, seen: WeakSet<object> = new WeakSet()):
     return value.map((entry) => cloneDebugValue(entry, seen));
   }
   if (typeof value === "object") {
-    if (seen.has(value)) {
-      return "[circular]";
-    }
-    seen.add(value);
-    const source = value as Record<string, unknown>;
-    const output = Object.fromEntries(
-      Object.keys(source).map((key) => [key, cloneDebugValue(source[key], seen)]),
-    );
-    seen.delete(value);
-    return output;
+    return cloneDebugObject(value, seen);
   }
   return toDisplayString(value);
 }

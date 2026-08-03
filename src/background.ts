@@ -17,6 +17,15 @@ import type {
   Room,
 } from "./services/lms-data/types.js";
 
+/** 부트스트랩 실패는 콘솔에만 남긴다(서비스워커라 UI 가 없다). */
+function reportBootstrapFailure(error: unknown): void {
+  if (typeof console === "undefined" || typeof console.error !== "function") {
+    return;
+  }
+  const detail = error instanceof Error ? error.stack || error.message : JSON.stringify(error);
+  console.error("[찜꽁 레이더] background bootstrap failed:", detail);
+}
+
 /** content script 가 sendMessage 로 보내는 조회 요청. */
 interface FetchPayload {
   date?: unknown;
@@ -345,9 +354,6 @@ interface SpaceContext {
       return "알 수 없는 오류가 발생했습니다.";
     }
   } catch (error) {
-    if (typeof console !== "undefined" && typeof console.error === "function") {
-      const detail = error instanceof Error && error.stack ? error.stack : String(error);
-      console.error("[찜꽁 레이더] background bootstrap failed:", detail);
-    }
+    reportBootstrapFailure(error);
   }
 })();
