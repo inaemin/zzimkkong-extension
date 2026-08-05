@@ -265,10 +265,13 @@ declare global {
 
       const { url, method } = readFetchTarget(input, init);
 
-      // 원본 fetch 에 인자를 그대로 넘겨야 해서 arguments 를 쓴다.
-      // rest 로 바꾸면 호출부가 넘긴 형태(Request 객체 등)를 잃을 수 있다.
-      // eslint-disable-next-line prefer-rest-params
-      return Promise.resolve(originalFetch.apply(this, arguments)).then((response) =>
+      // 원본 fetch 에 인자를 그대로 넘겨야 해서 arguments 를 쓴다. rest 로 바꾸면
+      // 호출부가 넘긴 형태(Request 객체 등)를 잃는다. 같은 이유로 튜플 타입으로
+      // 좁힐 수 없어 strictBindCallApply 를 만족시키려면 캐스팅이 필요하다.
+      /* eslint-disable-next-line prefer-rest-params */
+      const forwarded = arguments as unknown as Parameters<typeof originalFetch>;
+
+      return Promise.resolve(originalFetch.apply(this, forwarded)).then((response) =>
         reportFetchResponse(response, {
           url,
           method,
@@ -284,7 +287,7 @@ declare global {
     this.__zzkReservationMethod = normalizeMethod(method);
     this.__zzkReservationUrl = typeof url === "string" ? url : String(url || "");
     // eslint-disable-next-line prefer-rest-params
-    return originalXhrOpen.apply(this, arguments);
+    return originalXhrOpen.apply(this, arguments as unknown as Parameters<typeof originalXhrOpen>);
   };
 
   /** XHR 이 끝났을 때 예약 성공이면 이벤트를 띄운다. */
@@ -323,7 +326,7 @@ declare global {
     }
 
     // eslint-disable-next-line prefer-rest-params
-    return originalXhrSend.apply(this, arguments);
+    return originalXhrSend.apply(this, arguments as unknown as Parameters<typeof originalXhrSend>);
   };
 
   window.__zzkReservationHookLoaded = true;

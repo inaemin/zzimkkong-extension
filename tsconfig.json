@@ -14,6 +14,13 @@
 
     // 초기에는 느슨하게. 전부 .ts 로 옮긴 뒤 5단계에서 조인다.
     "strict": false,
+    // strict 의 하위 플래그를 하나씩 켠다. 아래 셋은 지금 에러 0건이라 바로 켰다.
+    // 남은 것: strictNullChecks(31건), noImplicitAny(73건), strictBindCallApply(3건).
+    "strictFunctionTypes": true,
+    "noImplicitThis": true,
+    "alwaysStrict": true,
+    "useUnknownInCatchVariables": true,
+    "strictBindCallApply": true,
 
     "esModuleInterop": true,
     "resolveJsonModule": true,
