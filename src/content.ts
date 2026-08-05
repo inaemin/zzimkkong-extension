@@ -193,6 +193,18 @@ declare global {
   // 타임라인 아래에 층별 평면도(SVG)를 접이식으로 붙인다. lms+ 에는 지도가 없어
   // 공간의 물리적 위치를 알 수 없으므로, 평면도로 페어룸 등의 위치를 확인하게 한다.
 
+  // 리스너·훅을 한 번만 붙이기 위한 가드. state 에 둘 이유가 없다 —
+  // 각자 자기 install 함수 안에서만 쓰고, 밖에서 읽지 않는다.
+  let topNavBypassInstalled = false;
+  let topNavForwarding = false;
+  let reservationMessageListenerInstalled = false;
+  let reservationOwnerWatcherInstalled = false;
+  let hostTimePickerInteractionWatcherInstalled = false;
+  let reservationIntentWatcherInstalled = false;
+  let historyHookInstalled = false;
+  // 예약 시도마다 붙이는 일련번호.
+  let reservationAttemptSequence = 0;
+
   const state: RadarState = {
     mounted: false,
     loading: false,
@@ -234,27 +246,14 @@ declare global {
     inputRefreshTimer: null,
     autoScheduleRefreshTimer: null,
     mutationGuestUiSyncTimer: null,
-    topNavBypassInstalled: false,
-    topNavForwarding: false,
-    hostTimePickerIdleClass: null,
-    lastHostTimePickerManualInteractionAt: 0,
     hostDateSyncDepth: 0,
     lastGuestRouteChangeAt: 0,
-    lastObservedPathname: location.pathname,
     lastObservedRouteKey: getCurrentRouteKey(),
     lastAutoOpenPath: null,
-    editReservationBaselineConstraint: null,
-    editReservationBaselinePathKey: "",
     latestMapName: "",
-    reservationIntentWatcherInstalled: false,
-    reservationMessageListenerInstalled: false,
-    reservationOwnerWatcherInstalled: false,
-    hostTimePickerInteractionWatcherInstalled: false,
-    historyHookInstalled: false,
     lastReservationActionAt: 0,
     lastReservationContext: null,
     lastReservationAttemptId: "",
-    reservationAttemptSequence: 0,
     pendingReservationAttempts: new Map(),
     lastKnownReservationOwnerName: "",
     lastSlackModalFingerprint: "",
@@ -274,7 +273,6 @@ declare global {
         String(DEFAULT_SLACK_REMINDER_LEAD_TIME_MINUTES),
       ),
     ),
-    lastLauncherRemountAt: 0,
     // 스크롤 위치 계산에 쓰는 마지막 타임라인.
     mapCalendarTimelineSnapshot: [],
     elements: null,
@@ -515,15 +513,15 @@ declare global {
   }
 
   function installTopNavigationClickBypass() {
-    if (state.topNavBypassInstalled) {
+    if (topNavBypassInstalled) {
       return;
     }
-    state.topNavBypassInstalled = true;
+    topNavBypassInstalled = true;
 
     document.addEventListener(
       "click",
       (event) => {
-        if (!isRadarSupportedPage() || state.topNavForwarding) {
+        if (!isRadarSupportedPage() || topNavForwarding) {
           return;
         }
         if (!(event instanceof MouseEvent)) {
@@ -559,11 +557,11 @@ declare global {
         event.preventDefault();
         event.stopImmediatePropagation();
 
-        state.topNavForwarding = true;
+        topNavForwarding = true;
         try {
           expectedTarget.click();
         } finally {
-          state.topNavForwarding = false;
+          topNavForwarding = false;
         }
       },
       true,
@@ -1401,11 +1399,6 @@ declare global {
     // 헤더 맨 위까지 올려 보이게 한다. divider-track 이 top:0 으로 헤더를 관통하므로
     // 정시선도 위쪽을 자르지 않고(0) 같은 높이로 맞춘다.
     gridWrap.style.setProperty("--zzk-hour-boundary-clip-top", "0px");
-  }
-
-  function resetEditReservationBaselineConstraint() {
-    state.editReservationBaselineConstraint = null;
-    state.editReservationBaselinePathKey = "";
   }
 
   function syncMapCalendarBodyScrollState(bodyElement: Element | null) {
@@ -2649,15 +2642,11 @@ declare global {
   function handleLocationChange() {
     state.lastObservedRouteKey = getCurrentRouteKey();
     if (!isRadarSupportedPage()) {
-      resetEditReservationBaselineConstraint();
       teardownGuestUi();
       return;
     }
 
-    resetEditReservationBaselineConstraint();
-
     state.lastGuestRouteChangeAt = Date.now();
-    state.lastObservedPathname = location.pathname;
 
     syncMapCalendarAlwaysOpenPreference();
     if (!isGuestUiReadyForActivation()) {
@@ -2738,7 +2727,6 @@ declare global {
     if (!preserveReservationContext) {
       state.lastReservationContext = null;
       state.lastKnownReservationOwnerName = "";
-      resetEditReservationBaselineConstraint();
       clearPendingSlackModalState();
     }
     resetTimelineSelectionState();
@@ -2749,10 +2737,10 @@ declare global {
   }
 
   function hookHistoryChanges() {
-    if (state.historyHookInstalled) {
+    if (historyHookInstalled) {
       return;
     }
-    state.historyHookInstalled = true;
+    historyHookInstalled = true;
 
     // 원본을 붙잡아 apply 로 호출한다. 몽키패칭의 본질이라 unbound-method 는
     // 여기서 의도된 것이다(page-network-hook 과 같은 이유).
@@ -2775,42 +2763,42 @@ declare global {
   }
 
   function installReservationIntentWatcher() {
-    if (state.reservationIntentWatcherInstalled) {
+    if (reservationIntentWatcherInstalled) {
       return;
     }
 
     document.addEventListener("click", handleReservationIntentClick, true);
     document.addEventListener("submit", handleReservationIntentSubmit, true);
-    state.reservationIntentWatcherInstalled = true;
+    reservationIntentWatcherInstalled = true;
   }
 
   function installReservationNetworkMessageListener() {
-    if (state.reservationMessageListenerInstalled) {
+    if (reservationMessageListenerInstalled) {
       return;
     }
 
     window.addEventListener("message", handleReservationNetworkMessage);
-    state.reservationMessageListenerInstalled = true;
+    reservationMessageListenerInstalled = true;
   }
 
   function installReservationOwnerWatcher() {
-    if (state.reservationOwnerWatcherInstalled) {
+    if (reservationOwnerWatcherInstalled) {
       return;
     }
 
     document.addEventListener("input", handleReservationOwnerInputEvent, true);
     document.addEventListener("change", handleReservationOwnerInputEvent, true);
-    state.reservationOwnerWatcherInstalled = true;
+    reservationOwnerWatcherInstalled = true;
   }
 
   function installHostTimePickerInteractionWatcher() {
-    if (state.hostTimePickerInteractionWatcherInstalled) {
+    if (hostTimePickerInteractionWatcherInstalled) {
       return;
     }
 
     document.addEventListener("pointerdown", handleHostTimePickerManualInteraction, true);
     document.addEventListener("focusin", handleHostTimePickerManualInteraction, true);
-    state.hostTimePickerInteractionWatcherInstalled = true;
+    hostTimePickerInteractionWatcherInstalled = true;
   }
 
   function handleHostTimePickerManualInteraction(event: Event) {
@@ -2831,8 +2819,6 @@ declare global {
     if (!isHostTimeControlElement(control)) {
       return;
     }
-
-    state.lastHostTimePickerManualInteractionAt = Date.now();
   }
 
   function handleReservationOwnerInputEvent(event: Event) {
@@ -2990,8 +2976,8 @@ declare global {
   }
 
   function createReservationAttemptId() {
-    state.reservationAttemptSequence += 1;
-    return `zzk-${Date.now()}-${state.reservationAttemptSequence}`;
+    reservationAttemptSequence += 1;
+    return `zzk-${Date.now()}-${reservationAttemptSequence}`;
   }
 
   function prunePendingReservationAttempts() {

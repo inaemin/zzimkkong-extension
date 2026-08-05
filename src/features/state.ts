@@ -73,29 +73,16 @@ export interface RadarState {
   mutationGuestUiSyncTimer: number | null;
 
   // 호스트 페이지 감시·우회.
-  topNavBypassInstalled: boolean;
-  topNavForwarding: boolean;
-  hostTimePickerIdleClass: string | null;
-  lastHostTimePickerManualInteractionAt: number;
   hostDateSyncDepth: number;
   lastGuestRouteChangeAt: number;
-  lastObservedPathname: string;
   lastObservedRouteKey: string;
   lastAutoOpenPath: string | null;
-  editReservationBaselineConstraint: unknown;
-  editReservationBaselinePathKey: string;
   latestMapName: string;
 
   // 예약 감지(MAIN world 훅 → content script).
-  reservationIntentWatcherInstalled: boolean;
-  reservationMessageListenerInstalled: boolean;
-  reservationOwnerWatcherInstalled: boolean;
-  hostTimePickerInteractionWatcherInstalled: boolean;
-  historyHookInstalled: boolean;
   lastReservationActionAt: number;
   lastReservationContext: unknown;
   lastReservationAttemptId: string;
-  reservationAttemptSequence: number;
   pendingReservationAttempts: Map<string, unknown>;
   lastKnownReservationOwnerName: string;
 
@@ -112,7 +99,6 @@ export interface RadarState {
   slackChannelHistory: string[];
   slackReminderLeadMinutes: number;
 
-  lastLauncherRemountAt: number;
   /** 스크롤 위치 계산에 쓰는 마지막 타임라인. */
   mapCalendarTimelineSnapshot: TimelineSlot[];
   elements: PanelElements | null;
