@@ -180,37 +180,22 @@ export function groupRoomsByFloor<TRoom>(
   return groups;
 }
 
-/** 예약 미리보기. 두 건까지만 보여준다(더 붙으면 툴팁이 길어진다). */
-function buildReservationPreview(reservations: Reservation[]): string {
-  return reservations
+/**
+ * 슬롯에 붙일 툴팁 문구.
+ *
+ * 툴팁은 예약이 있는 칸에만 뜬다(radar-grid 참고). 그래서 화면에 이미 있는
+ * 정보는 뺀다 — 방 이름은 왼쪽 라벨에, 슬롯 시간대는 마우스 위치에, "지난
+ * 예약"인지는 칸 색에 드러난다. 남는 건 색만으로 알 수 없는 것뿐이다:
+ * 예약이 실제로 언제부터 언제까지이고 누구 것인지.
+ *
+ *   16:30~17:30 라텔(김규빈)
+ */
+export function buildSlotTitle(slotState: SlotState): string {
+  return slotState.overlappedReservations
     .slice(0, 2)
-    .map((reservation) =>
-      reservation.owner
-        ? `${reservation.startTime}~${reservation.endTime} ${reservation.owner}`
-        : `${reservation.startTime}~${reservation.endTime}`,
-    )
-    .join(" | ");
-}
-
-/** 슬롯에 붙일 툴팁 문구. */
-export function buildSlotTitle(
-  roomName: string,
-  slotState: SlotState,
-  slotEndLabel: string,
-): string {
-  const { slot, isBusy, isPastBlocked, isPastReserved, overlappedReservations } = slotState;
-  const range = `${roomName} ${slot.label}~${slotEndLabel}`;
-
-  if (isBusy) {
-    const preview = buildReservationPreview(overlappedReservations);
-    // 지난 예약도 누가 썼는지는 알려준다. 지난 시간이라는 것만 덧붙인다.
-    const label = isPastReserved ? "지난 예약" : "예약 있음";
-    // 예약 내용은 줄을 바꿔 보여준다. 한 줄로 붙이면 방 이름·시간대·예약자가
-    // 뭉쳐서 어디까지가 무엇인지 읽기 어렵다.
-    return preview ? `${range} ${label}\n(${preview})` : `${range} ${label}`;
-  }
-  if (isPastBlocked) {
-    return `${range} 선택 불가 (현재 시간 이전)`;
-  }
-  return `${range} 비어 있음`;
+    .map((reservation) => {
+      const range = `${reservation.startTime}~${reservation.endTime}`;
+      return reservation.owner ? `${range} ${reservation.owner}` : range;
+    })
+    .join("\n");
 }

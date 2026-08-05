@@ -200,7 +200,11 @@ test.describe("groupRoomsByFloor", () => {
 test.describe("buildSlotTitle", () => {
   const [slot] = makeTimeline(1);
 
-  test("예약이 있으면 예약자를 함께 알려준다", () => {
+  // 툴팁은 예약이 있는 칸에만 뜬다(radar-grid). 그래서 화면에 이미 있는
+  // 정보(방 이름·슬롯 시간대·지난 예약 여부)는 넣지 않고, 색만으로 알 수 없는
+  // "예약이 언제부터 언제까지, 누구 것인지"만 남긴다.
+
+  test("예약 시간과 예약자만 보여준다", () => {
     const [state] = buildSlotStates(
       makeRoom([
         { startMinute: 420, endMinute: 480, startTime: "07:00", endTime: "08:00", owner: "아무개" },
@@ -209,14 +213,21 @@ test.describe("buildSlotTitle", () => {
       0,
     );
 
-    const title = buildSlotTitle("보이저", state, "07:30");
-    expect(title).toContain("예약 있음");
-    expect(title).toContain("아무개");
-    // 예약 내용은 줄을 바꿔 보여준다.
-    expect(title).toContain("\n");
+    expect(buildSlotTitle(state)).toBe("07:00~08:00 아무개");
   });
 
-  test("지난 예약은 '지난 예약' 으로 구분한다", () => {
+  test("슬롯 시간대가 아니라 예약의 실제 시간을 보여준다", () => {
+    // 07:00~07:30 칸에 걸린 06:30~07:30 예약. 툴팁에는 예약 쪽 시간이 뜬다.
+    const [state] = buildSlotStates(
+      makeRoom([{ startMinute: 390, endMinute: 450, startTime: "06:30", endTime: "07:30" }]),
+      [slot],
+      0,
+    );
+
+    expect(buildSlotTitle(state)).toBe("06:30~07:30");
+  });
+
+  test("지난 예약도 같은 형식이다 — 지난 것인지는 칸 색이 알려준다", () => {
     const [state] = buildSlotStates(
       makeRoom([
         { startMinute: 420, endMinute: 480, startTime: "07:00", endTime: "08:00", owner: "아무개" },
@@ -225,21 +236,10 @@ test.describe("buildSlotTitle", () => {
       600,
     );
 
-    expect(buildSlotTitle("보이저", state, "07:30")).toContain("지난 예약");
+    expect(buildSlotTitle(state)).toBe("07:00~08:00 아무개");
   });
 
-  test("예약자가 없으면 시간만 보여준다", () => {
-    const [state] = buildSlotStates(
-      makeRoom([{ startMinute: 420, endMinute: 480, startTime: "07:00", endTime: "08:00" }]),
-      [slot],
-      0,
-    );
-
-    const title = buildSlotTitle("보이저", state, "07:30");
-    expect(title).toContain("07:00~08:00");
-  });
-
-  test("예약은 두 건까지만 미리 보여준다", () => {
+  test("예약이 겹치면 두 건까지, 줄을 바꿔 보여준다", () => {
     const [state] = buildSlotStates(
       makeRoom([
         { startMinute: 420, endMinute: 480, startTime: "07:00", endTime: "08:00", owner: "1번" },
@@ -250,17 +250,11 @@ test.describe("buildSlotTitle", () => {
       0,
     );
 
-    const title = buildSlotTitle("보이저", state, "07:30");
-    expect(title).toContain("1번");
-    expect(title).toContain("2번");
-    expect(title).not.toContain("3번");
+    expect(buildSlotTitle(state)).toBe("07:00~08:00 1번\n07:00~08:00 2번");
   });
 
-  test("지난 칸과 빈 칸은 문구가 다르다", () => {
-    const [pastState] = buildSlotStates(makeRoom(), [slot], 600);
-    const [freeState] = buildSlotStates(makeRoom(), [slot], 0);
-
-    expect(buildSlotTitle("보이저", pastState, "07:30")).toContain("선택 불가");
-    expect(buildSlotTitle("보이저", freeState, "07:30")).toContain("비어 있음");
+  test("예약이 없으면 빈 문자열이다(툴팁 자체가 안 뜬다)", () => {
+    const [state] = buildSlotStates(makeRoom(), [slot], 0);
+    expect(buildSlotTitle(state)).toBe("");
   });
 });

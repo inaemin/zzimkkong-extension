@@ -1,6 +1,5 @@
 import * as React from "react";
 
-import { minuteToHourMinute } from "@/utils/date-time";
 import type { RoomSchedule, TimelineSlot } from "@/services/lms-data/types";
 import {
   buildSlotTitle,
@@ -286,7 +285,6 @@ function RadarGridRow({
         {slotStates.map((slotState, index) => (
           <RadarGridSlot
             key={slotState.slot.startMinute}
-            room={room}
             slotState={slotState}
             columnStart={layout.slotColumnStarts[index]}
             isSelected={
@@ -316,7 +314,6 @@ function RadarGridRow({
 }
 
 function RadarGridSlot({
-  room,
   slotState,
   columnStart,
   isSelected,
@@ -324,7 +321,6 @@ function RadarGridSlot({
   onHover,
   onClick,
 }: {
-  room: RoomSchedule;
   slotState: SlotState;
   columnStart: number;
   isSelected: boolean;
@@ -378,9 +374,7 @@ function RadarGridSlot({
   return (
     <Tooltip>
       <TooltipTrigger render={cell} />
-      <TooltipContent>
-        {buildSlotTitle(room.name, slotState, minuteToHourMinute(slot.endMinute))}
-      </TooltipContent>
+      <TooltipContent>{buildSlotTitle(slotState)}</TooltipContent>
     </Tooltip>
   );
 }

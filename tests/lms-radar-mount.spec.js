@@ -643,13 +643,12 @@ test("지난 예약 칸은 더 진하고 예약 내용을 알려준다", async (
   const slotBox = await pastReservedSlot.boundingBox();
   await page.mouse.move(slotBox.x + slotBox.width / 2, slotBox.y + slotBox.height / 2);
 
+  // 툴팁에는 색만으로 알 수 없는 것(예약 시간·예약자)만 담는다. 방 이름은 왼쪽
+  // 라벨에, 슬롯 시간대는 마우스 위치에, 지난 예약인지는 칸 색에 이미 있다.
   const tooltip = page.locator('[data-slot="tooltip-content"]');
-  await expect(tooltip).toContainText("지난 예약");
   await expect(tooltip).toContainText("아무개");
-
-  // 예약 내용은 줄을 바꿔 보여준다(한 줄로 붙으면 읽기 어렵다).
-  const tooltipText = await tooltip.textContent();
-  expect(tooltipText).toContain("\n");
+  await expect(tooltip).toHaveText(/^\d{2}:\d{2}~\d{2}:\d{2} /);
+  await expect(tooltip).not.toContainText("지난 예약");
 
   // 예약이 없는 칸은 툴팁을 띄우지 않는다. "예약 없음"도 "선택 불가(현재 시간
   // 이전)"도 칸 색으로 이미 드러나고, 둘을 합치면 대부분의 칸이라 지나갈 때마다
