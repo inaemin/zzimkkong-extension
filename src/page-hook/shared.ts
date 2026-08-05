@@ -255,17 +255,22 @@ function ownerFromStringBody(trimmed: string): string {
   );
 }
 
+/** FormData 를 [key, value] 쌍으로. 파일 값은 빈 문자열로 둔다. */
+function toEntryPairs(formData: FormData): Array<[string, string]> {
+  const entries: Array<[string, string]> = [];
+  formData.forEach((value, key) => {
+    entries.push([key, typeof value === "string" ? value : ""]);
+  });
+  return entries;
+}
+
 export function extractOwnerCandidateFromBody(body: unknown): string {
   if (body == null) {
     return "";
   }
 
   if (typeof FormData !== "undefined" && body instanceof FormData) {
-    const entries = [];
-    body.forEach((value, key) => {
-      entries.push([key, typeof value === "string" ? value : ""]);
-    });
-    return extractOwnerCandidateFromEntries(entries);
+    return extractOwnerCandidateFromEntries(toEntryPairs(body));
   }
 
   if (typeof URLSearchParams !== "undefined" && body instanceof URLSearchParams) {
@@ -433,6 +438,18 @@ export function parseReservationRoomIdCandidate(value: unknown): number | null {
   return Number.isInteger(roomId) ? roomId : null;
 }
 
+/** 비어 있는 문자열 필드만 patch 로 채운다. 이미 값이 있으면 두 번 덮지 않는다. */
+function mergeTextFields(
+  next: ReservationRequestContext,
+  patchContext: ReservationRequestContext,
+): ReservationRequestContext {
+  const keys = ["date", "startTime", "endTime", "description", "roomName"] as const;
+  return keys.reduce((acc, key) => {
+    const value = normalizeText(String(patchContext[key] || ""));
+    return value && !acc[key] ? { ...acc, [key]: value } : acc;
+  }, next);
+}
+
 export function mergeReservationRequestContext(
   baseContext: ReservationRequestContext | null,
   patchContext: ReservationRequestContext | null,
@@ -442,16 +459,8 @@ export function mergeReservationRequestContext(
     return base;
   }
 
-  const next = { ...base };
-  ["date", "startTime", "endTime", "description", "roomName"].forEach((key) => {
-    const value = normalizeText(String(patchContext[key] || ""));
-    if (!value) {
-      return;
-    }
-    if (!next[key]) {
-      next[key] = value;
-    }
-  });
+  // 먼저 채워진 값이 이긴다(앞선 항목이 더 구체적인 경우가 많다).
+  const next = mergeTextFields({ ...base }, patchContext);
 
   if (Number.isInteger(patchContext.roomId) && !Number.isInteger(next.roomId)) {
     next.roomId = patchContext.roomId;
@@ -496,13 +505,14 @@ export function finalizeReservationRequestContext(
  */
 /** 키 종류별로 문맥 조각을 만든다. 해당 없으면 null. */
 function patchForKnownKey(normalizedKey: string, stringValue: string, rawValue: unknown) {
+  // 시작/종료는 "2026-08-05T09:00" 처럼 날짜와 시각이 붙어 온다.
   if (isStartDateTimeFieldKey(normalizedKey)) {
-    const parts = extractDateTimeParts(stringValue);
-    return { date: parts.date, startTime: parts.time };
+    const { date, time } = extractDateTimeParts(stringValue);
+    return { date, startTime: time };
   }
   if (isEndDateTimeFieldKey(normalizedKey)) {
-    const parts = extractDateTimeParts(stringValue);
-    return { date: parts.date, endTime: parts.time };
+    const { date, time } = extractDateTimeParts(stringValue);
+    return { date, endTime: time };
   }
   if (isDateFieldKey(normalizedKey)) {
     return { date: normalizeDateCandidate(stringValue) };
@@ -563,9 +573,10 @@ export function extractReservationRequestContextFromObject(
   }
 
   if (Array.isArray(value)) {
-    return value.reduce((acc, item) => {
-      return extractReservationRequestContextFromObject(item, depth + 1, acc);
-    }, initialContext);
+    return value.reduce(
+      (acc, item) => extractReservationRequestContextFromObject(item, depth + 1, acc),
+      initialContext,
+    );
   }
 
   if (typeof value !== "object") {

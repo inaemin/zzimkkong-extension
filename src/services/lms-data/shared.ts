@@ -126,8 +126,10 @@ export async function fetchReservationsForRoom(
     spaceId: String(roomId),
   }).toString();
 
+  // 캐시가 살아 있으면 그대로, 같은 요청이 날아가 있으면 거기 얹는다.
+  // (빈 배열도 유효한 캐시라 null 검사로 갈라야 한다 — 예약 0건인 방)
   const cached = readCachedReservations(query);
-  if (cached) {
+  if (cached !== null) {
     return cached;
   }
 
@@ -235,6 +237,19 @@ async function loadRoomSchedules(rooms: Room[], date: string) {
   );
 }
 
+/** 방들의 운영 시간에서 타임라인 범위와 슬롯을 만든다. */
+function buildTimeline(rooms: Parameters<typeof lmsDataNormalizers.computeTimelineRange>[0]) {
+  const range = lmsDataNormalizers.computeTimelineRange(rooms);
+  return {
+    range,
+    timeline: lmsDataNormalizers.buildTimelineSlots(
+      range.startMinute,
+      range.endMinute,
+      LMS_TIME_STEP_MINUTES,
+    ),
+  };
+}
+
 export async function fetchDailySchedule(payload: FetchPayload): Promise<DailyScheduleResult> {
   const date = sanitizeDateForApi(payload && payload.date, {
     allowPastDate: payload?.allowPastDate === true,
@@ -244,12 +259,7 @@ export async function fetchDailySchedule(payload: FetchPayload): Promise<DailySc
 
   const rooms = await loadRoomSchedules(spaceContext.targetRooms, date);
 
-  const range = lmsDataNormalizers.computeTimelineRange(rooms);
-  const timeline = lmsDataNormalizers.buildTimelineSlots(
-    range.startMinute,
-    range.endMinute,
-    LMS_TIME_STEP_MINUTES,
-  );
+  const { range, timeline } = buildTimeline(rooms);
 
   return {
     mapId: spaceContext.mapId,
