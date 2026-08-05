@@ -1,4 +1,4 @@
-import { debugLog, pushDebugEvent } from "../../utils/shared.js";
+import { pushDebugEvent } from "../../utils/shared.js";
 
 // DI 팩토리 래퍼: 길이가 곧 복잡도가 아니다(안쪽 함수는 개별 측정된다).
 // eslint-disable-next-line max-lines-per-function
@@ -265,15 +265,6 @@ export function createSlackSuccessFlow(deps: Deps) {
   // lms+ 에는 예약 수정 페이지가 없어 "수정 제출 후 복귀" 흐름 자체가 존재하지 않는다.
   // content.js 가 여전히 호출하므로 진입점만 남겨 둔다.
   function queueSlackModalFromPersistedEditSubmitIfNeeded() {}
-
-  function isSuccessfulReservationNetworkPayload(payload) {
-    if (!payload || typeof payload !== "object") {
-      return false;
-    }
-
-    const status = Number(payload.status);
-    return Number.isInteger(status) && status >= 200 && status < 300 && payload.ok === true;
-  }
 
   function isTrustedReservationNetworkMessage(event, payload) {
     if (!(event instanceof MessageEvent)) {

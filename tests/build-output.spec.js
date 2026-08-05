@@ -6,13 +6,10 @@ import {
   WEB_ORIGIN,
   ensureExtensionBuild,
   getBackgroundBundlePath,
-  getContentBundlePath,
-  getPageHookBundlePath,
   loadBackgroundBundle,
   loadContentBundle,
   loadPageHookBundle,
   readBuiltManifest,
-  resolveBuiltPath,
   stubServiceDocument,
 } from "./helpers/extension.js";
 

@@ -18,8 +18,6 @@ type Deps = Record<string, any> & {
   // content.js 에 있어 타입을 끌어올 수 없다. 쓰는 형태만 적는다.
   normalizeDateInput: (input: unknown) => string;
   formatDateSelectorText: typeof import("../../utils/date-time.js").formatDateSelectorText;
-  normalizeTextForMatch: typeof import("../../utils/shared.js").normalizeTextForMatch;
-  getErrorMessage: typeof import("../../utils/shared.js").getErrorMessage;
   findGuestReservationTabContainer: () => HTMLElement | null;
   findGuestReservationTabStyleSource: () => HTMLButtonElement | null;
 };
@@ -38,23 +36,13 @@ export function createRadarWorkflow(deps: Deps) {
     SLACK_MODAL_TRIGGER_ID,
     DEBUG_MODE,
     MAP_CALENDAR_ALWAYS_OPEN_STORAGE_KEY,
-    NAV_SAFE_Z_INDEX,
-    TARGET_ROOM_NAMES,
     findGuestReservationTabContainer,
     findGuestReservationTabStyleSource,
-    normalizeTextForMatch,
-    normalizeSlackFieldText,
-    normalizeHostRoomCandidate,
-    extractKnownRoomName,
-    readHostRoomName,
     buildSlackReservationContext,
     showSlackCopyModal,
     isRadarSupportedPage,
     shouldDelayGuestMapCalendarUi,
     isMapCalendarModalOpenRequested,
-    getHostReservationRoot,
-    isInsideExtensionSurface,
-    isElementVisible,
     readStoredBoolean,
     normalizeMapCalendarSpaceTab,
     isDateString,
@@ -64,8 +52,6 @@ export function createRadarWorkflow(deps: Deps) {
     setScheduleLoadingDate,
     refreshDailySchedule,
     refreshAvailability,
-    getErrorMessage,
-    queryHostDateInput,
     renderMapCalendarOverlay,
   } = deps;
 
