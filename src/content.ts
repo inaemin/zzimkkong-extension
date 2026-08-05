@@ -90,7 +90,6 @@ import {
   MAP_CALENDAR_FLOORMAP_OPEN_STORAGE_KEY,
   MAP_CALENDAR_MIN_WIDTH,
   MAP_CALENDAR_VIEWPORT_MARGIN,
-  MAP_CALENDAR_CURRENT_TIME_SCROLL_LEAD_MINUTES,
   MAP_CALENDAR_SPACE_TAB_MEETING,
   MAP_CALENDAR_SPACE_TAB_PAIR,
   RUNTIME_MESSAGE_TIMEOUT_MS,
@@ -98,10 +97,6 @@ import {
   DEFAULT_SLACK_REMINDER_LEAD_TIME_MINUTES,
   SLACK_REMINDER_LEAD_TIME_OPTIONS,
   LMS_DEFAULT_RESERVATION_MINUTES,
-  LMS_CALENDAR_SLOT_MIN_WIDTH,
-  CALENDAR_SLOT_GAP,
-  CALENDAR_HOUR_BOUNDARY_LINE_WIDTH,
-  CALENDAR_HOUR_BOUNDARY_SIDE_GAP,
   CALENDAR_SIDE_MARGIN,
   DRAG_SAFE_TOP,
   NAV_SAFE_Z_INDEX,
@@ -126,6 +121,10 @@ import {
   findGuestReservationTabContainer as radarFindGuestReservationTabContainer,
   findGuestReservationTabStyleSource as radarFindGuestReservationTabStyleSource,
 } from "./features/radar/shared.js";
+import {
+  buildMapCalendarTimelineGridLayout,
+  computeMapCalendarCurrentTimeScrollLeft,
+} from "./features/radar/timeline-layout.js";
 import { createRadarWorkflow } from "./features/radar/workflow.js";
 import { createRadarFormSync } from "./features/radar/form-sync.js";
 import { createSlackWorkflow } from "./features/slack/workflow.js";
@@ -1545,70 +1544,6 @@ declare global {
     window.requestAnimationFrame(update);
   }
 
-  function buildMapCalendarTimelineGridLayout(timeline, hasTerminalHourBoundary) {
-    if (!Array.isArray(timeline) || timeline.length === 0) {
-      return {
-        templateColumns: "",
-        slotColumnStarts: [],
-        boundaryColumnStarts: [],
-        trackWidth: 0,
-      };
-    }
-
-    const columns = [];
-    const slotColumnStarts = [];
-    const boundaryColumnStarts = [];
-    let trackWidth = 0;
-
-    // lms+ 는 30분 슬롯이라 시간당 2칸뿐이므로 클릭하기 좋게 더 넓게 그린다.
-    const slotWidth = LMS_CALENDAR_SLOT_MIN_WIDTH;
-
-    const addColumn = (width) => {
-      columns.push(width);
-      trackWidth += width;
-    };
-
-    const addBoundarySegment = () => {
-      addColumn(CALENDAR_HOUR_BOUNDARY_SIDE_GAP);
-      boundaryColumnStarts.push(columns.length + 1);
-      addColumn(CALENDAR_HOUR_BOUNDARY_LINE_WIDTH);
-      addColumn(CALENDAR_HOUR_BOUNDARY_SIDE_GAP);
-    };
-
-    // 첫 슬롯(보통 07:00) 앞에는 정시 세로 구분선을 그리지 않는다(회의실↔타임블록
-    // 세로 구분선과 겹쳐 이중선처럼 보이므로). 다만 다른 정시들은 앞뒤로 경계 여백을
-    // 갖는데 07:00 만 여백 없이 붙으면 어색하므로, 선 없이 '여백'만 넣어 리듬을 맞춘다.
-    // 여백 폭은 정시 경계 세그먼트(gap + line + gap)와 동일하게 잡는다.
-    if (timeline[0]?.isHourMark) {
-      addColumn(CALENDAR_HOUR_BOUNDARY_SIDE_GAP * 2 + CALENDAR_HOUR_BOUNDARY_LINE_WIDTH);
-    }
-
-    slotColumnStarts.push(columns.length + 1);
-    addColumn(slotWidth);
-
-    for (let index = 1; index < timeline.length; index += 1) {
-      if (timeline[index]?.isHourMark) {
-        addBoundarySegment();
-      } else {
-        addColumn(CALENDAR_SLOT_GAP);
-      }
-
-      slotColumnStarts.push(columns.length + 1);
-      addColumn(slotWidth);
-    }
-
-    if (hasTerminalHourBoundary) {
-      addBoundarySegment();
-    }
-
-    return {
-      templateColumns: columns.map((width) => `${width}px`).join(" "),
-      slotColumnStarts,
-      boundaryColumnStarts,
-      trackWidth,
-    };
-  }
-
   function isMapCalendarModalOpenRequested() {
     return Boolean(state.mapCalendarVisible);
   }
@@ -1814,60 +1749,6 @@ declare global {
     writeStoredNumber(MAP_CALENDAR_WIDTH_STORAGE_KEY, clamped);
   }
 
-  function computeMapCalendarCurrentTimeScrollLeft({
-    timeline,
-    trackStartOffset,
-    slotStride,
-    viewportWidth: _viewportWidth,
-    maxScrollLeft,
-    isToday,
-    currentMinute,
-  }) {
-    if (isToday !== true) {
-      return null;
-    }
-    if (!Array.isArray(timeline) || timeline.length === 0) {
-      return null;
-    }
-    if (!Number.isFinite(maxScrollLeft) || maxScrollLeft <= 0) {
-      return null;
-    }
-    if (!Number.isFinite(slotStride) || slotStride <= 0) {
-      return null;
-    }
-    if (!Number.isFinite(currentMinute)) {
-      return null;
-    }
-
-    // 타임라인 시작 이전(예: 새벽)이면 시작 시각으로 끌어올린다.
-    // 그러면 자연스럽게 첫 슬롯(=맨 처음)을 가리키게 된다.
-    const timelineStartMinute = Number(timeline[0]?.startMinute);
-    const effectiveMinute = Number.isFinite(timelineStartMinute)
-      ? Math.max(timelineStartMinute, currentMinute)
-      : currentMinute;
-
-    const leadMinute = effectiveMinute - MAP_CALENDAR_CURRENT_TIME_SCROLL_LEAD_MINUTES;
-
-    let targetIndex = timeline.findIndex((slot) => Number(slot?.endMinute) > leadMinute);
-    if (targetIndex < 0) {
-      targetIndex = timeline.length - 1;
-    }
-
-    // 첫 슬롯이면 맨 처음을 그대로 보여준다.
-    if (targetIndex <= 0) {
-      return 0;
-    }
-
-    // 층/회의실 열은 sticky 로 고정되어 스크롤을 소비하지 않는다. 따라서 목표 슬롯을
-    // (고정 열 바로 오른쪽) 왼쪽 끝에 두려면 sticky 열 폭(trackStartOffset)을 더하지 않고
-    // 슬롯 인덱스 × 슬롯 폭 만큼만 스크롤해야 한다. 이전에는 trackStartOffset 을 더해
-    // 고정 열 폭만큼 오른쪽으로 밀려(예: lms+ 좁은 모달에서 끝까지) 스크롤되는 버그가 있었다.
-    void trackStartOffset;
-    const targetLeft = targetIndex * slotStride;
-
-    return Math.min(maxScrollLeft, Math.max(0, Math.round(targetLeft)));
-  }
-
   // 가로 스크롤이 실제로 일어나는 요소. 2-pane 구조에서는 timeline-pane 이고,
   // 아직 렌더 전이면 body 로 대체한다.
   function getMapCalendarScrollElement(overlay = document.getElementById(MAP_CALENDAR_OVERLAY_ID)) {
@@ -1923,9 +1804,7 @@ declare global {
     const isToday = renderedDate === getTodayDateInKST();
     const scrollLeft = computeMapCalendarCurrentTimeScrollLeft({
       timeline,
-      trackStartOffset: metrics.trackStartOffset,
       slotStride: metrics.slotStride,
-      viewportWidth: body.clientWidth,
       maxScrollLeft,
       isToday,
       currentMinute: getCurrentMinuteOfDayInKST(),
