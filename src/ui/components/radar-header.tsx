@@ -34,7 +34,6 @@ export interface RadarHeaderProps {
   onAlwaysOpenChange: (nextAlwaysOpen: boolean) => void;
 
   /** 방 태그 범례. 아직 명령형이라 붙일 자리만 내준다. */
-  tagLegendRef?: React.Ref<HTMLDivElement>;
 }
 
 export function RadarHeader({
@@ -47,7 +46,6 @@ export function RadarHeader({
   onToggleCollapsed,
   alwaysOpen,
   onAlwaysOpenChange,
-  tagLegendRef,
 }: RadarHeaderProps) {
   // 최소일 이하로는 못 내려간다. 지난 날짜는 예약할 수 없기 때문이다.
   const canGoPrev = !minDate || date > minDate;
@@ -118,8 +116,6 @@ export function RadarHeader({
               {formatDateSelectorText(date)}
             </span>
           </div>
-
-          <div className="zzk-room-tag-legend" ref={tagLegendRef} />
         </div>
       </div>
 

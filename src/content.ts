@@ -631,7 +631,7 @@ declare global {
     const cachedAvailability = readAvailabilityCache(state, availabilityToken);
     if (cachedAvailability) {
       pushDebugEvent("availability", "cache-hit", { token: availabilityToken });
-      applyAvailabilityData(cachedAvailability, { roomType, date, startTime, endTime });
+      applyAvailabilityData(cachedAvailability, { roomType });
       if (state.scheduleOverlayEnabled) {
         try {
           await refreshDailySchedule(date);
@@ -686,7 +686,7 @@ declare global {
       }
 
       writeAvailabilityCache(state, availabilityToken, data);
-      applyAvailabilityData(data, { roomType, date, startTime, endTime });
+      applyAvailabilityData(data, { roomType });
 
       if (state.scheduleOverlayEnabled) {
         try {
@@ -791,10 +791,7 @@ declare global {
   }
 
   // 새로 받은 응답이든 캐시된 응답이든 화면 반영은 같은 경로를 쓴다.
-  function applyAvailabilityData(
-    data: unknown,
-    { roomType }: { roomType: unknown; date?: unknown; startTime?: unknown; endTime?: unknown },
-  ) {
+  function applyAvailabilityData(data: unknown, { roomType }: { roomType: unknown }) {
     const payload = (data ?? {}) as Record<string, unknown>;
     const rooms = Array.isArray(payload.rooms) ? payload.rooms : [];
 
@@ -1173,7 +1170,6 @@ declare global {
 
     // 헤더는 React 가 그린다. 날짜 선택은 손으로 만든 팝오버 대신 shadcn DatePicker
     // 를 쓰므로, 달력 그리기·위치 계산·바깥 클릭 감지 코드가 전부 빠졌다.
-    const headerRefs: { tagLegend?: HTMLElement | null; body?: HTMLElement | null } = {};
     const headerDateInput = state.elements?.dateInput;
     const headerDate =
       (headerDateInput instanceof HTMLInputElement ? headerDateInput.value : "") ||
@@ -1220,16 +1216,8 @@ declare global {
           // 스위치가 꺼진 상태로 보인다. 안 그리면 값만 바뀌고 화면은 그대로다.
           renderMapCalendarOverlay(scheduleData);
         },
-        tagLegendRef: (node) => {
-          headerRefs.tagLegend = node;
-        },
       });
     });
-
-    // 방 태그 범례는 아직 명령형이다. React 가 내준 자리에 그린다.
-    if (headerRefs.tagLegend instanceof HTMLElement) {
-      renderRoomTagLegend(headerRefs.tagLegend);
-    }
 
     // 본문 엘리먼트는 React 가 그린다(카드의 직계 자식이어야 CSS 높이 배분이 맞다).
     // 그리드와 평면도가 모두 컴포넌트라 본문 전체를 React 루트가 소유한다.
@@ -1299,10 +1287,7 @@ declare global {
           if (!(container instanceof HTMLElement)) {
             return;
           }
-          renderRoomLabel(container, room, {
-            formatter: formatMapCalendarRoomLabel,
-            titleMode: "overlay",
-          });
+          renderRoomLabel(container, room);
         },
         floorMaps: {
           floors: getAvailableFloorMapFloors(),
@@ -2042,15 +2027,7 @@ declare global {
     });
   }
 
-  function formatPlainRoomLabel(roomName: unknown) {
-    return typeof roomName === "string" ? roomName.trim() : "";
-  }
-
-  function renderRoomLabel(
-    container: HTMLElement | null,
-    room: RoomSchedule,
-    { formatter = formatPlainRoomLabel, titleMode = "default" } = {},
-  ) {
+  function renderRoomLabel(container: HTMLElement | null, room: RoomSchedule) {
     if (!(container instanceof HTMLElement)) {
       return;
     }
@@ -2058,7 +2035,7 @@ declare global {
     container.textContent = "";
     const roomNameText = document.createElement("span");
     roomNameText.className = "zzk-room-name-text";
-    roomNameText.textContent = formatter(room?.name);
+    roomNameText.textContent = formatMapCalendarRoomLabel(room?.name);
     container.appendChild(roomNameText);
 
     const roomTags = getRoomTags(room);
@@ -2067,22 +2044,10 @@ declare global {
       badge.className = "zzk-room-tag-badge";
       badge.setAttribute("data-label", tag.label);
       badge.title = tag.description;
-      badge.setAttribute("aria-label", tag.label);
-      if (titleMode === "overlay") {
-        badge.setAttribute("aria-label", tag.description);
-      }
+      // 배지에는 아이콘만 보이므로 스크린리더에는 설명 전체를 준다.
+      badge.setAttribute("aria-label", tag.description);
       container.appendChild(badge);
     });
-  }
-
-  function renderRoomTagLegend(container: HTMLElement | null) {
-    if (!(container instanceof HTMLElement)) {
-      return;
-    }
-
-    // 회의실 이름 옆 배지만으로 충분해 범례에서는 태그 항목을 노출하지 않는다.
-    container.textContent = "";
-    container.hidden = true;
   }
 
   function formatMapCalendarRoomLabel(roomName: unknown) {

@@ -218,17 +218,6 @@ transform 120ms ease;
   font-size: 14px;
 }
 
-:host .zzk-room-tag-legend[hidden] {
-  display: none !important;
-}
-
-:host .zzk-room-tag-legend {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-  margin-top: 6px;
-}
-
 :host .zzk-room-tag-badge {
   display: inline-flex;
   align-items: center;
