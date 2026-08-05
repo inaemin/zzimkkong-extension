@@ -1,3 +1,4 @@
+import type { RadarState } from "../state.js";
 import {
   closeSlackCopyModal as closeReactSlackCopyModal,
   openSlackCopyModal,
@@ -14,6 +15,7 @@ import {
  * 알 수 없어 형태만 적는다.
  */
 type Deps = Record<string, any> & {
+  state: RadarState;
   SLACK_CHANNEL_MENTION_STORAGE_KEY: string;
   SLACK_REMINDER_LEAD_TIME_STORAGE_KEY: string;
   SLACK_REMINDER_LEAD_TIME_OPTIONS: readonly number[];

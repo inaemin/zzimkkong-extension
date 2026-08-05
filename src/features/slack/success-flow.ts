@@ -1,3 +1,4 @@
+import type { RadarState } from "../state.js";
 import { pushDebugEvent } from "../../utils/shared.js";
 
 // DI 팩토리 래퍼: 길이가 곧 복잡도가 아니다(안쪽 함수는 개별 측정된다).
@@ -328,6 +329,7 @@ export function createSlackSuccessFlow(deps: Deps) {
  * 알 수 없어 형태만 적는다.
  */
 type Deps = Record<string, any> & {
+  state: RadarState;
   PAGE_RESERVATION_EVENT_TYPE: string;
   PENDING_SLACK_MODAL_STORAGE_KEY: string;
   isGuestUiReadyForActivation: () => boolean;

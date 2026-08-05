@@ -1,3 +1,4 @@
+import type { RadarState } from "../state.js";
 import { debugLog, pushDebugEvent } from "../../utils/shared.js";
 
 // DI 팩토리 래퍼: 길이가 곧 복잡도가 아니다(안쪽 함수는 개별 측정된다).
@@ -96,7 +97,9 @@ export function createRadarFormSync(deps: Deps) {
     const requestId = createTimelineSelectionRequestId();
     const hadPendingApply = state.timelineSelectionApplyTimer != null;
     clearTimeout(state.timelineSelectionApplyTimer);
-    state.timelineSelectionApplyTimer = setTimeout(
+    // 브라우저에서 setTimeout 은 number 를 준다. @types/node 가 섞여 Timeout 으로
+    // 추론되므로 명시한다.
+    state.timelineSelectionApplyTimer = window.setTimeout(
       () => runQueuedSelectionApply(selection, requestId),
       hadPendingApply ? 80 : 0,
     );
@@ -119,8 +122,6 @@ export function createRadarFormSync(deps: Deps) {
   }
 
   function resetTimelineSelectionState() {
-    state.slotSelection = null;
-    state.slotHover = null;
     state.appliedSelection = null;
     clearTimeout(state.timelineSelectionApplyTimer);
     state.timelineSelectionApplyTimer = null;
@@ -245,6 +246,7 @@ export function createRadarFormSync(deps: Deps) {
  * 알 수 없어 형태만 적는다.
  */
 type Deps = Record<string, any> & {
+  state: RadarState;
   minuteToHourMinute: typeof import("../../utils/date-time.js").minuteToHourMinute;
   getTodayDateInKST: typeof import("../../utils/date-time.js").getTodayDateInKST;
   // content.js 에 있어 타입을 끌어올 수 없다. 쓰는 형태만 적는다.

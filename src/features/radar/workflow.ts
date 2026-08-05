@@ -1,3 +1,5 @@
+import type { RadarState } from "../state.js";
+
 // content.js 가 주입하는 의존성 묶음.
 //
 // content.js 는 아직 .js 라(3단계에서 .tsx 로 다시 쓴다) 여기서 각 의존성의
@@ -9,6 +11,7 @@
  * 아직 .js 라 타입을 알 수 없어 unknown 계열로 남긴다.
  */
 type Deps = Record<string, any> & {
+  state: RadarState;
   queryRadarOverlay: typeof import("../../ui/radar-overlay-mount.js").queryRadarOverlay;
   renderRadarLauncher: typeof import("../../ui/radar-launcher-mount.js").renderRadarLauncher;
   removeRadarLauncher: typeof import("../../ui/radar-launcher-mount.js").removeRadarLauncher;
