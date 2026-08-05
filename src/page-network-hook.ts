@@ -45,8 +45,32 @@ declare global {
 
   // 개편 서비스(lms+) 예약 생성 POST 의 성공 응답 body 를 파싱한다.
   // 응답을 clone 해서 읽으므로 원본은 페이지 앱이 그대로 소비할 수 있다.
-  function isLmsReservationCreatePath(urlValue, methodValue) {
-    if (String(methodValue || "").toUpperCase() !== "POST") {
+  /** 예약 이벤트를 띄울 때 필요한 정보. */
+  interface FetchEventDetail {
+    url: string;
+    eventUrl: string;
+    method: string;
+    status?: number;
+    reservationAttemptId?: string;
+    ownerNameCandidate?: string;
+    requestContext?: ReservationRequestContext | null;
+    responseBody?: unknown;
+    /** 본문 파싱이 실패한 경로. URL/attemptId 만으로 판단한다. */
+    force?: boolean;
+  }
+
+  /** 응답을 기다리는 동안 들고 있는 요청 정보. */
+  interface FetchContext {
+    url: string;
+    method: string;
+    reservationAttemptId: string;
+    ownerNamePromise: Promise<string>;
+    requestContextPromise: Promise<ReservationRequestContext | null>;
+  }
+
+  function isLmsReservationCreatePath(urlValue: unknown, methodValue: unknown): boolean {
+    const method = typeof methodValue === "string" ? methodValue : "";
+    if (method.toUpperCase() !== "POST") {
       return false;
     }
     const parsed = parseUrl(urlValue);
@@ -58,7 +82,7 @@ declare global {
   }
 
   /** 응답을 복제한다. 이미 소비됐거나 복제할 수 없으면 null. */
-  function cloneResponse(response) {
+  function cloneResponse(response: Response | null): Response | null {
     if (!response || typeof response.clone !== "function") {
       return null;
     }
@@ -69,7 +93,11 @@ declare global {
     }
   }
 
-  function readReservationResponseBody(response, urlValue, methodValue) {
+  function readReservationResponseBody(
+    response: Response,
+    urlValue: unknown,
+    methodValue: unknown,
+  ): Promise<unknown> {
     if (!isLmsReservationCreatePath(urlValue, methodValue)) {
       return Promise.resolve(null);
     }
@@ -84,7 +112,7 @@ declare global {
   }
 
   /** JSON 객체면 그대로, 아니면 null. */
-  function parseJsonObject(text) {
+  function parseJsonObject(text: string): Record<string, unknown> | null {
     if (!text) {
       return null;
     }
@@ -108,7 +136,13 @@ declare global {
    * force 는 본문 파싱이 실패한 경로다. 이때는 URL/attemptId 만으로 본다 —
    * 예약 요청이었다는 사실은 이미 알고 있으므로 놓치면 안 된다.
    */
-  function shouldEmitFetchEvent({ url, eventUrl, method, reservationAttemptId, force }) {
+  function shouldEmitFetchEvent({
+    url,
+    eventUrl,
+    method,
+    reservationAttemptId,
+    force,
+  }: FetchEventDetail): boolean {
     if (force) {
       return (
         isReservationMutationRequest(url, method) ||
@@ -122,7 +156,7 @@ declare global {
     );
   }
 
-  function emitFetchReservationEvent(detail) {
+  function emitFetchReservationEvent(detail: FetchEventDetail): void {
     const { eventUrl, method, reservationAttemptId } = detail;
     if (!shouldEmitFetchEvent(detail)) {
       return;
@@ -149,22 +183,28 @@ declare global {
    * input.method 를 덮어쓴다(fetch 사양 순서).
    */
   /** input 이 문자열·URL 이면 그대로, Request 면 .url 을 쓴다. */
-  function readUrl(input, isUrlLike, isRequestLike) {
+  function readUrl(input: unknown, isUrlLike: boolean, isRequestLike: boolean): string {
     if (isUrlLike) {
-      return String(input);
+      return typeof input === "string" ? input : (input as URL).href;
     }
-    return isRequestLike && typeof input.url === "string" ? input.url : "";
+    const requestLike = input as { url?: unknown };
+    return isRequestLike && typeof requestLike.url === "string" ? requestLike.url : "";
   }
 
   /** init.method 가 input.method 를 덮어쓴다(fetch 사양 순서). */
-  function readMethod(input, init, isRequestLike) {
+  function readMethod(
+    input: unknown,
+    init: RequestInit | undefined,
+    isRequestLike: boolean,
+  ): string {
     if (init && typeof init === "object" && typeof init.method === "string") {
       return normalizeMethod(init.method);
     }
-    return isRequestLike ? normalizeMethod(input.method) : "GET";
+    const requestLike = input as { method?: unknown };
+    return isRequestLike ? normalizeMethod(requestLike.method) : "GET";
   }
 
-  function readFetchTarget(input, init) {
+  function readFetchTarget(input: unknown, init?: RequestInit): { url: string; method: string } {
     const isUrlLike = typeof input === "string" || input instanceof URL;
     const isRequestLike = !isUrlLike && Boolean(input) && typeof input === "object";
 
@@ -181,10 +221,15 @@ declare global {
    * 읽는다). 페이지 앱이 같은 응답을 다시 읽을 수 있어야 한다.
    */
   /** 세 조각이 모두 모이면 이벤트를 띄운다. 하나라도 실패하면 비운 채로 띄운다. */
-  function emitWhenDetailsResolved(base, promises) {
+  function emitWhenDetailsResolved(base: FetchEventDetail, promises: Promise<unknown>[]): void {
     Promise.all(promises)
       .then(([ownerNameCandidate, requestContext, responseBody]) => {
-        emitFetchReservationEvent({ ...base, ownerNameCandidate, requestContext, responseBody });
+        emitFetchReservationEvent({
+          ...base,
+          ownerNameCandidate: typeof ownerNameCandidate === "string" ? ownerNameCandidate : "",
+          requestContext: requestContext ?? null,
+          responseBody,
+        });
       })
       // 본문을 못 읽어도 예약 요청이었다면 알려야 한다(정보만 비운다).
       .catch(() => {
@@ -198,7 +243,7 @@ declare global {
       });
   }
 
-  function reportFetchResponse(response, context) {
+  function reportFetchResponse(response: Response, context: FetchContext): Response {
     if (!response || response.ok !== true) {
       return response;
     }
@@ -268,7 +313,7 @@ declare global {
   };
 
   /** XHR 이 끝났을 때 예약 성공이면 이벤트를 띄운다. */
-  function reportXhrReservation(xhr) {
+  function reportXhrReservation(xhr: XMLHttpRequest): void {
     const method = normalizeMethod(xhr.__zzkReservationMethod);
     const url = String(xhr.__zzkReservationUrl || "");
     const status = Number(xhr.status);

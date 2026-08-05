@@ -21,6 +21,18 @@ type Deps = Record<string, any> & {
   // content.js 에 있어 타입을 끌어올 수 없다. 쓰는 형태만 적는다.
   normalizeDateInput: (input: unknown) => string;
   formatDateSelectorText: typeof import("../../utils/date-time.js").formatDateSelectorText;
+  isRadarSupportedPage: typeof import("../../utils/routes.js").isRadarSupportedPage;
+  normalizeMapCalendarSpaceTab: typeof import("../../constants/runtime.js").normalizeMapCalendarSpaceTab;
+  // 아래는 content.js 에 있어 타입을 끌어올 수 없다. 쓰는 형태만 적는다.
+  shouldDelayGuestMapCalendarUi: () => boolean;
+  isMapCalendarModalOpenRequested: () => boolean;
+  refreshDailySchedule: (date: string) => Promise<unknown>;
+  setScheduleLoadingDate: (date: string, loading: boolean, tab?: string) => void;
+  getFreshScheduleCacheForTab: (date: string, tab: string) => unknown;
+  renderMapCalendarOverlay: (schedule: unknown) => void;
+  refreshAvailability: () => void;
+  buildSlackReservationContext: () => unknown;
+  showSlackCopyModal: (context: unknown) => void;
   findGuestReservationTabContainer: () => HTMLElement | null;
   findGuestReservationTabStyleSource: () => HTMLButtonElement | null;
 };

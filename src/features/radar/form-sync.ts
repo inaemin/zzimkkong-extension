@@ -253,4 +253,12 @@ type Deps = Record<string, any> & {
   normalizeDateInput: (input: unknown) => string;
   normalizeTimeInput: (input: unknown) => string;
   clampDateToMin: (value: unknown, minimum: unknown) => string;
+  // content.js 에 있어 타입을 끌어올 수 없다. 쓰는 형태만 적는다.
+  ensurePanel: () => void;
+  getMinimumSelectableDateForCurrentContext: (value?: unknown) => string;
+  getFreshScheduleCache: (date: string) => unknown;
+  setScheduleLoadingDate: (date: string, loading: boolean, tab?: string) => void;
+  renderMapCalendarOverlay: (schedule: unknown) => void;
+  refreshAvailability: () => void;
+  syncLmsReservationForm: (payload: unknown, requestId: number) => Promise<boolean>;
 };

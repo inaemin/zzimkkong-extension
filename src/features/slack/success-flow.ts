@@ -335,4 +335,9 @@ type Deps = Record<string, any> & {
   isGuestUiReadyForActivation: () => boolean;
   showSlackCopyModal: (context: unknown) => void;
   onReservationMutated?: () => void;
+  // content.js 에 있어 타입을 끌어올 수 없다. 쓰는 형태만 적는다.
+  normalizeReservationMutationMethod: (value: unknown) => string;
+  createSlackMessageFingerprint: (context: unknown, payload: unknown) => string;
+  shouldSkipSlackCopyModal: (fingerprint: string) => boolean;
+  buildLmsSlackReservationContext: (body: unknown) => Record<string, unknown> | null;
 };

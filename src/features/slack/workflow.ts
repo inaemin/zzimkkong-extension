@@ -23,6 +23,12 @@ type Deps = Record<string, any> & {
   normalizeSlackChannelToken: typeof import("./shared.js").normalizeSlackChannelToken;
   normalizeSlackReminderLeadMinutes: typeof import("./shared.js").normalizeSlackReminderLeadMinutes;
   setMapCalendarSuppressedBySlack: (suppressed: boolean) => void;
+  formatSlackReminderLeadOptionLabel: typeof import("./shared.js").formatSlackReminderLeadOptionLabel;
+  // content.js 에 있어 타입을 끌어올 수 없다. 쓰는 형태만 적는다.
+  buildSlackReservationContext: () => Record<string, unknown>;
+  buildSlackReservationMessage: (context: unknown) => string;
+  rememberSlackChannelMention: (channel: string) => void;
+  forgetSlackChannelMention: (channel: string) => void;
 };
 
 /** 클립보드 API 로 복사. 권한이 없거나 막히면 false. */
