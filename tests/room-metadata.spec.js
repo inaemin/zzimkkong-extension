@@ -1,8 +1,12 @@
 import { expect, test } from "@playwright/test";
 
 import {
+  compareRoomsForRadar,
+  filterRoomsBySpaceTab,
+  getRoomKind,
   getRoomTags,
   getTargetRoomMetadata,
+  inferRoomKindFromName,
   resolveMapCalendarRoomFloor,
 } from "../src/features/radar/room-metadata.ts";
 
@@ -80,5 +84,77 @@ test.describe("getTargetRoomMetadata", () => {
 
   test("방 객체와 이름 문자열을 모두 받는다", () => {
     expect(getTargetRoomMetadata("보이저")).toEqual(getTargetRoomMetadata({ name: "보이저" }));
+  });
+});
+
+// 레이더 표시 순서·탭 분류. content.ts 의 renderMapCalendarOverlay 안에
+// 인라인으로 있던 것을 뺐다. 순서가 어긋나면 층 구분선이 엉뚱한 데 그려진다.
+
+test.describe("compareRoomsForRadar", () => {
+  test("층이 낮은 방이 먼저 온다", () => {
+    // 11층 금성 < 12층 보이저
+    expect(compareRoomsForRadar({ name: "금성" }, { name: "보이저" })).toBeLessThan(0);
+    expect(compareRoomsForRadar({ name: "보이저" }, { name: "금성" })).toBeGreaterThan(0);
+  });
+
+  test("같은 층이면 표에 적힌 순서를 따른다", () => {
+    // 둘 다 11층. 표에서 금성이 지구보다 앞이다.
+    expect(compareRoomsForRadar({ name: "금성" }, { name: "지구" })).toBeLessThan(0);
+  });
+
+  test("서버가 층을 내려주면 그걸 먼저 본다", () => {
+    // 표만 보면 금성(11층)이 보이저(12층)보다 앞이다. 서버가 보이저를 10층이라
+    // 하면 순서가 뒤집혀야 한다 — 표를 보고 있으면 이 단정이 깨진다.
+    const moved = { name: "보이저", floorLabel: "10층" };
+    expect(compareRoomsForRadar(moved, { name: "금성" })).toBeLessThan(0);
+    expect(compareRoomsForRadar({ name: "금성" }, moved)).toBeGreaterThan(0);
+  });
+
+  test("모르는 방은 맨 뒤로 간다", () => {
+    expect(compareRoomsForRadar({ name: "금성" }, { name: "없는방" })).toBeLessThan(0);
+  });
+
+  test("정렬에 넣으면 층 순서대로 늘어선다", () => {
+    const sorted = [{ name: "보이저" }, { name: "금성" }, { name: "지구" }]
+      .sort(compareRoomsForRadar)
+      .map((room) => room.name);
+    expect(sorted).toEqual(["금성", "지구", "보이저"]);
+  });
+});
+
+test.describe("getRoomKind / inferRoomKindFromName", () => {
+  test("표에 있으면 표의 분류를 쓴다", () => {
+    expect(getRoomKind({ name: "금성" })).toBe("meeting");
+    expect(getRoomKind({ name: "페어룸 01" })).toBe("pair");
+  });
+
+  test("표에 없는 '페' 이름만 추론으로 pair 가 된다", () => {
+    // 지금 표에 있는 방은 이름 추론과 분류가 모두 일치한다. 그래서 둘 중
+    // 무엇이 이기는지는 표에 없는 이름으로만 구분된다 — 추론이 담당하는
+    // 범위가 '표에 없는 방'뿐이라는 것을 고정한다.
+    expect(getRoomKind({ name: "페어룸 99" })).toBe("pair");
+    expect(getRoomKind({ name: "새로운방" })).toBe("meeting");
+  });
+
+  test("표에 없으면 이름으로 추론한다", () => {
+    // '페' 로 시작하면 페어룸으로 본다.
+    expect(inferRoomKindFromName("페어룸 99")).toBe("pair");
+    expect(inferRoomKindFromName("새회의실")).toBe("meeting");
+  });
+});
+
+test.describe("filterRoomsBySpaceTab", () => {
+  const rooms = [{ name: "금성" }, { name: "페어룸 01" }, { name: "보이저" }];
+
+  test("고른 탭에 속한 방만 남긴다", () => {
+    expect(filterRoomsBySpaceTab(rooms, "meeting").map((room) => room.name)).toEqual([
+      "금성",
+      "보이저",
+    ]);
+    expect(filterRoomsBySpaceTab(rooms, "pair").map((room) => room.name)).toEqual(["페어룸 01"]);
+  });
+
+  test("배열이 아니면 빈 배열이다", () => {
+    expect(filterRoomsBySpaceTab(null, "meeting")).toEqual([]);
   });
 });

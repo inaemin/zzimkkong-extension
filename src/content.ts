@@ -102,9 +102,6 @@ import {
   CALENDAR_SIDE_MARGIN,
   NAV_SAFE_Z_INDEX,
   RADAR_LAUNCHER_Z_INDEX,
-  TARGET_ROOM_METADATA_BY_NORMALIZED_NAME,
-  TARGET_ROOM_ORDER,
-  normalizeTargetRoomName,
   normalizeMapCalendarSpaceTab,
 } from "./constants/runtime.js";
 import {
@@ -141,7 +138,12 @@ import {
   writeAvailabilityCache,
   writeScheduleCache,
 } from "./features/radar/schedule-cache.js";
-import { getRoomTags, resolveMapCalendarRoomFloor } from "./features/radar/room-metadata.js";
+import {
+  compareRoomsForRadar,
+  filterRoomsBySpaceTab,
+  getRoomTags,
+  resolveMapCalendarRoomFloor,
+} from "./features/radar/room-metadata.js";
 import {
   buildMapCalendarTimelineGridLayout,
   computeMapCalendarCurrentTimeScrollLeft,
@@ -1108,28 +1110,9 @@ declare global {
       scheduleData?.roomType || state.mapCalendarSpaceTab,
     );
     const tabLabel = getMapCalendarSpaceTabLabel(renderedTab);
-    const rooms = getRoomsForMapCalendarSpaceTab(scheduleData.rooms, renderedTab)
+    const rooms = filterRoomsBySpaceTab(scheduleData.rooms, renderedTab)
       .slice()
-      .sort((roomA: RoomSchedule, roomB: RoomSchedule) => {
-        const floorA = resolveMapCalendarRoomFloor(roomA).floorLabel;
-        const floorB = resolveMapCalendarRoomFloor(roomB).floorLabel;
-        const floorOrderA = parseInt(floorA, 10);
-        const floorOrderB = parseInt(floorB, 10);
-
-        if (
-          Number.isFinite(floorOrderA) &&
-          Number.isFinite(floorOrderB) &&
-          floorOrderA !== floorOrderB
-        ) {
-          return floorOrderA - floorOrderB;
-        }
-
-        const orderA =
-          TARGET_ROOM_ORDER.get(normalizeTargetRoomName(roomA?.name)) ?? Number.MAX_SAFE_INTEGER;
-        const orderB =
-          TARGET_ROOM_ORDER.get(normalizeTargetRoomName(roomB?.name)) ?? Number.MAX_SAFE_INTEGER;
-        return orderA - orderB;
-      });
+      .sort(compareRoomsForRadar);
     const selectionDate = scheduleData.date || "";
     const previousRenderedScheduleDate = state.lastRenderedScheduleDate;
     state.lastRenderedScheduleDate = isDateString(selectionDate) ? selectionDate : null;
@@ -3941,28 +3924,6 @@ declare global {
 
   function getMapCalendarSpaceTabLabel(tab = state.mapCalendarSpaceTab) {
     return normalizeMapCalendarSpaceTab(tab) === MAP_CALENDAR_SPACE_TAB_PAIR ? "페어룸" : "회의실";
-  }
-
-  function getRoomsForMapCalendarSpaceTab(
-    rooms: RoomSchedule[],
-    tab: unknown = state.mapCalendarSpaceTab,
-  ): RoomSchedule[] {
-    const normalizedTab = normalizeMapCalendarSpaceTab(tab);
-    return Array.isArray(rooms)
-      ? rooms.filter((room) => {
-          const normalizedName = normalizeTargetRoomName(room?.name);
-          const metadata = TARGET_ROOM_METADATA_BY_NORMALIZED_NAME.get(normalizedName);
-          const roomKind = metadata?.kind || inferRoomKindFromName(room?.name);
-          return roomKind === normalizedTab;
-        })
-      : [];
-  }
-
-  function inferRoomKindFromName(roomName: unknown) {
-    const normalizedName = normalizeTargetRoomName(roomName);
-    return normalizedName.startsWith("페")
-      ? MAP_CALENDAR_SPACE_TAB_PAIR
-      : MAP_CALENDAR_SPACE_TAB_MEETING;
   }
 
   // 테스트 훅: 테스트 호스트(example.com), 테스트가 미리 심어둔 플래그, 또는 DEBUG 모드에서만
