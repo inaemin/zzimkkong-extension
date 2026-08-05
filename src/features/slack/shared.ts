@@ -28,19 +28,16 @@ export function normalizeSlackChannelToken(
     return "";
   }
 
-  if (normalized.startsWith("<#") && normalized.endsWith(">")) {
+  // 이미 채널 형식(<#C123> 또는 #general)이면 그대로 둔다.
+  const isChannelForm =
+    (normalized.startsWith("<#") && normalized.endsWith(">")) || normalized.startsWith("#");
+  if (isChannelForm) {
     return normalized;
   }
 
-  if (normalized.startsWith("#")) {
-    return normalized;
-  }
-
-  if (!allowBare) {
-    return "";
-  }
-
-  if (normalized.startsWith("@") || normalized.startsWith("<@")) {
+  // 사람 멘션(@user, <@U123>)은 채널이 아니다.
+  const isUserMention = normalized.startsWith("@") || normalized.startsWith("<@");
+  if (!allowBare || isUserMention) {
     return "";
   }
 

@@ -40,11 +40,8 @@ export function createSlackSuccessFlow(deps: Deps) {
     // 현재 lms+ 지원 범위는 예약 "생성"(POST)만이다. 수정(PUT/PATCH) 성공은
     // 아직 Slack 모달 대상이 아니므로 여기서 걸러낸다(추후 확장 시 이 가드를 넓힌다).
     const method = normalizeReservationMutationMethod(payload.method);
-    if (method !== "POST") {
-      return;
-    }
     const responseBody = payload.responseBody;
-    if (!responseBody || typeof responseBody !== "object") {
+    if (method !== "POST" || !responseBody || typeof responseBody !== "object") {
       return;
     }
 
@@ -71,20 +68,24 @@ export function createSlackSuccessFlow(deps: Deps) {
     showSlackCopyModal(context);
   }
 
+  /** 우리 MAIN world 훅이 보낸 예약 이벤트인지. */
+  function isReservationHookMessage(event) {
+    const data = event.data;
+    return (
+      event.source === window &&
+      Boolean(data) &&
+      typeof data === "object" &&
+      data.source === "zzk-page-reservation-hook" &&
+      data.type === PAGE_RESERVATION_EVENT_TYPE
+    );
+  }
+
   function handleReservationNetworkMessage(event) {
-    if (event.source !== window) {
+    if (!isReservationHookMessage(event)) {
       return;
     }
 
     const data = event.data;
-    if (
-      !data ||
-      typeof data !== "object" ||
-      data.source !== "zzk-page-reservation-hook" ||
-      data.type !== PAGE_RESERVATION_EVENT_TYPE
-    ) {
-      return;
-    }
 
     // 예약 생성 응답 body 로 바로 Slack 모달을 띄운다.
     if (!isTrustedReservationNetworkMessage(event, data.payload)) {

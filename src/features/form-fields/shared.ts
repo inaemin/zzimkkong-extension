@@ -152,18 +152,26 @@ export function getControlAssociatedLabelText(control: Element | null): string {
   ].join(" ");
 }
 
+/** name 속성이 없으면 폼 요소의 name 프로퍼티로 대신한다. */
+function readControlName(control: HTMLElement): string {
+  const attribute = control.getAttribute("name");
+  if (attribute) {
+    return attribute;
+  }
+  const isFormField =
+    control instanceof HTMLInputElement ||
+    control instanceof HTMLTextAreaElement ||
+    control instanceof HTMLSelectElement;
+  return isFormField ? control.name : "";
+}
+
 export function buildHostFieldDescriptor(control: Element | null): string {
   if (!(control instanceof HTMLElement)) {
     return "";
   }
 
   return [
-    control.getAttribute("name") ||
-      (control instanceof HTMLInputElement ||
-      control instanceof HTMLTextAreaElement ||
-      control instanceof HTMLSelectElement
-        ? control.name
-        : ""),
+    readControlName(control),
     control.id,
     control.getAttribute("aria-label") || "",
     control.getAttribute("placeholder") || "",

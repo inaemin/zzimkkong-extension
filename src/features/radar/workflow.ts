@@ -84,6 +84,18 @@ export function createRadarWorkflow(deps: Deps) {
     return trigger;
   }
 
+  /** 호스트 탭 버튼의 생김새를 그대로 빌린다(우리 버튼이 튀지 않게). */
+  function copyTabButtonStyle(trigger, styleSource) {
+    if (!(styleSource instanceof HTMLButtonElement)) {
+      return;
+    }
+    trigger.className = styleSource.className;
+    trigger.style.font = styleSource.style.font;
+    trigger.style.fontFamily = styleSource.style.fontFamily;
+    trigger.style.fontSize = styleSource.style.fontSize;
+    trigger.style.fontWeight = styleSource.style.fontWeight;
+  }
+
   function ensureSlackModalTrigger() {
     const existing = document.getElementById(SLACK_MODAL_TRIGGER_ID);
     const actionContainer = shouldShowSlackModalTrigger()
@@ -102,14 +114,7 @@ export function createRadarWorkflow(deps: Deps) {
       actionContainer.appendChild(trigger);
     }
 
-    const styleSourceButton = findGuestReservationTabStyleSource();
-    if (styleSourceButton instanceof HTMLButtonElement) {
-      trigger.className = styleSourceButton.className;
-      trigger.style.font = styleSourceButton.style.font;
-      trigger.style.fontFamily = styleSourceButton.style.fontFamily;
-      trigger.style.fontSize = styleSourceButton.style.fontSize;
-      trigger.style.fontWeight = styleSourceButton.style.fontWeight;
-    }
+    copyTabButtonStyle(trigger, findGuestReservationTabStyleSource());
 
     trigger.style.cursor = "pointer";
     trigger.style.pointerEvents = "auto";
