@@ -67,13 +67,20 @@ export function createSlackWorkflow(deps: Deps) {
 
     openSlackCopyModal({
       buildMessage: ({ channelMention, reminderLeadMinutes }) =>
-        buildSlackReservationMessage({
-          ...baseContext,
-          channelMention,
-          reminderLeadMinutes,
-        }),
+        buildSlackReservationMessage({ ...baseContext, channelMention, reminderLeadMinutes }),
       copyText: (message) => copyTextToClipboard(message, null),
+      ...buildChannelOptions(baseContext),
+      ...buildReminderOptions(),
+      onClose: () => {
+        state.slackModalVisible = false;
+        setMapCalendarSuppressedBySlack(false);
+      },
+    });
+  }
 
+  /** 채널 입력 관련 옵션. 고른 채널은 저장소와 최근 목록에 남는다. */
+  function buildChannelOptions(baseContext) {
+    return {
       initialChannel: normalizeSlackChannelToken(baseContext.channelMention, { allowBare: true }),
       channelHistory: Array.isArray(state.slackChannelHistory)
         ? [...state.slackChannelHistory]
@@ -88,7 +95,12 @@ export function createSlackWorkflow(deps: Deps) {
       onChannelRemovedFromHistory: (channel) => {
         forgetSlackChannelMention(channel);
       },
+    };
+  }
 
+  /** 리마인더 시간 관련 옵션. */
+  function buildReminderOptions() {
+    return {
       initialReminderLeadMinutes: normalizeSlackReminderLeadMinutes(state.slackReminderLeadMinutes),
       reminderLeadOptions: [...SLACK_REMINDER_LEAD_TIME_OPTIONS],
       formatReminderLeadLabel: formatSlackReminderLeadOptionLabel,
@@ -96,12 +108,7 @@ export function createSlackWorkflow(deps: Deps) {
         state.slackReminderLeadMinutes = minutes;
         writeStoredText(SLACK_REMINDER_LEAD_TIME_STORAGE_KEY, String(minutes));
       },
-
-      onClose: () => {
-        state.slackModalVisible = false;
-        setMapCalendarSuppressedBySlack(false);
-      },
-    });
+    };
   }
 
   function closeSlackCopyModal(options: { restoreMapCalendar?: boolean } = {}) {

@@ -211,35 +211,28 @@ export function createRadarFormSync(deps: Deps) {
 
     renderCachedOverlayForDate(normalizedDate);
 
-    const syncPayload = {
+    await syncHostFormAndReport(selection, requestId, {
       date: normalizedDate,
       startTime,
       endTime,
-      roomId: selection.room.id,
-      roomName: selection.room.name,
-    };
+    });
+  }
 
-    const hostSynced = await syncLmsReservationForm(syncPayload, requestId);
+  /** 호스트 예약 폼에 반영하고 결과를 기록한다. */
+  async function syncHostFormAndReport(selection, requestId, window) {
+    const hostSynced = await syncLmsReservationForm(
+      { ...window, roomId: selection.room.id, roomName: selection.room.name },
+      requestId,
+    );
 
+    // 그 사이 다른 선택이 들어왔으면 이 결과는 버린다.
     if (!isLatestTimelineSelectionRequest(requestId)) {
       return;
     }
 
-    const outcome = {
-      requestId,
-      date: normalizedDate,
-      roomId: selection.room.id,
-      roomName: selection.room.name,
-      startTime,
-      endTime,
-    };
-
+    const outcome = { requestId, ...describeSelection(selection), ...window };
     if (!hostSynced) {
       pushDebugEvent("radar-form-sync", "sync-failed", outcome);
-      return;
-    }
-
-    if (!isLatestTimelineSelectionRequest(requestId)) {
       return;
     }
 

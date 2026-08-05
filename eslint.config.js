@@ -187,10 +187,9 @@ export default defineConfig([
       "src/page-network-hook.ts",
     ],
     rules: {
-      // TODO(5단계 잔여): 목표는 20. 남은 위반 62건은 21~48줄이라 실제로 쪼갤
-      // 값어치가 있지만 양이 많아 나눠 진행한다. 지금은 통과하는 선에 걸어두고
-      // 파일을 정리할 때마다 내린다.
-      "max-lines-per-function": ["error", { max: 50, skipBlankLines: true, skipComments: true }],
+      // TODO(5단계 잔여): 목표는 20. 남은 38건은 21~44줄이고 각각 쪼갤 자리가
+      // 다르다. 한 번에 몰아 바꾸면 회귀 시 범위를 못 좁히므로 나눠 진행한다.
+      "max-lines-per-function": ["error", { max: 45, skipBlankLines: true, skipComments: true }],
     },
   },
   {

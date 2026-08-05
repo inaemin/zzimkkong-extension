@@ -488,6 +488,46 @@ export function finalizeReservationRequestContext(
   return hasValue ? normalized : null;
 }
 
+/**
+ * 항목 하나가 예약 문맥에 더할 조각. 해당 없으면 null 이라 병합하지 않는다.
+ *
+ * lms+ 가 요청마다 다른 키를 써서 별칭 판정(isXxxFieldKey)이 여럿이다.
+ */
+function patchForEntry(rawKey: string, rawValue: unknown) {
+  const normalizedKey = normalizeFieldKey(rawKey);
+  if (!normalizedKey) {
+    return null;
+  }
+
+  const stringValue = typeof rawValue === "string" ? rawValue : toDisplayString(rawValue);
+  if (!normalizeText(stringValue)) {
+    return null;
+  }
+
+  if (isStartDateTimeFieldKey(normalizedKey)) {
+    const parts = extractDateTimeParts(stringValue);
+    return { date: parts.date, startTime: parts.time };
+  }
+  if (isEndDateTimeFieldKey(normalizedKey)) {
+    const parts = extractDateTimeParts(stringValue);
+    return { date: parts.date, endTime: parts.time };
+  }
+  if (isDateFieldKey(normalizedKey)) {
+    return { date: normalizeDateCandidate(stringValue) };
+  }
+  if (isDescriptionFieldKey(normalizedKey)) {
+    return { description: normalizeDescriptionCandidate(stringValue) };
+  }
+  if (isRoomIdFieldKey(normalizedKey)) {
+    const roomId = parseReservationRoomIdCandidate(rawValue);
+    return Number.isInteger(roomId) ? { roomId } : null;
+  }
+  if (isRoomNameFieldKey(normalizedKey)) {
+    return { roomName: normalizeText(stringValue) };
+  }
+  return null;
+}
+
 export function extractReservationRequestContextFromEntries(
   entries: Array<[string, unknown]>,
   initialContext: ReservationRequestContext | null = null,
@@ -495,42 +535,6 @@ export function extractReservationRequestContextFromEntries(
   if (!Array.isArray(entries) || entries.length === 0) {
     return finalizeReservationRequestContext(initialContext);
   }
-
-  // 항목 하나가 문맥에 더할 조각. 해당 없으면 null 이라 병합하지 않는다.
-  const patchForEntry = (rawKey, rawValue) => {
-    const normalizedKey = normalizeFieldKey(rawKey);
-    if (!normalizedKey) {
-      return null;
-    }
-
-    const stringValue = typeof rawValue === "string" ? rawValue : toDisplayString(rawValue);
-    if (!normalizeText(stringValue)) {
-      return null;
-    }
-
-    if (isStartDateTimeFieldKey(normalizedKey)) {
-      const parts = extractDateTimeParts(stringValue);
-      return { date: parts.date, startTime: parts.time };
-    }
-    if (isEndDateTimeFieldKey(normalizedKey)) {
-      const parts = extractDateTimeParts(stringValue);
-      return { date: parts.date, endTime: parts.time };
-    }
-    if (isDateFieldKey(normalizedKey)) {
-      return { date: normalizeDateCandidate(stringValue) };
-    }
-    if (isDescriptionFieldKey(normalizedKey)) {
-      return { description: normalizeDescriptionCandidate(stringValue) };
-    }
-    if (isRoomIdFieldKey(normalizedKey)) {
-      const roomId = parseReservationRoomIdCandidate(rawValue);
-      return Number.isInteger(roomId) ? { roomId } : null;
-    }
-    if (isRoomNameFieldKey(normalizedKey)) {
-      return { roomName: normalizeText(stringValue) };
-    }
-    return null;
-  };
 
   const context = entries.reduce(
     (acc, [rawKey, rawValue]) => {

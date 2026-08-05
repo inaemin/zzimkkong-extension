@@ -185,25 +185,29 @@ export function createRadarWorkflow(deps: Deps) {
     }
 
     state.lastAutoOpenPath = currentPath;
-    window.setTimeout(() => {
-      if (!isRadarSupportedPage() || location.pathname !== currentPath) {
-        return;
-      }
+    // 라우팅 직후엔 런처가 아직 다시 그려지는 중일 수 있어 잠깐 뒤 누른다.
+    window.setTimeout(() => clickLauncherIfStillClosed(currentPath), 80);
+  }
 
-      const activeLauncher = document.getElementById(MAP_CALENDAR_LAUNCHER_ID);
-      if (!(activeLauncher instanceof HTMLButtonElement)) {
-        return;
-      }
+  /** 지금도 같은 화면이고 아직 닫혀 있으면 런처를 누른다. */
+  function clickLauncherIfStillClosed(expectedPath) {
+    if (!isRadarSupportedPage() || location.pathname !== expectedPath) {
+      return;
+    }
 
-      const alreadyOpen =
-        activeLauncher.dataset.zzkToggleState === "open" ||
-        Boolean(document.getElementById(MAP_CALENDAR_OVERLAY_ID));
-      if (alreadyOpen) {
-        return;
-      }
+    const activeLauncher = document.getElementById(MAP_CALENDAR_LAUNCHER_ID);
+    if (!(activeLauncher instanceof HTMLButtonElement)) {
+      return;
+    }
 
-      activeLauncher.click();
-    }, 80);
+    const alreadyOpen =
+      activeLauncher.dataset.zzkToggleState === "open" ||
+      Boolean(document.getElementById(MAP_CALENDAR_OVERLAY_ID));
+    if (alreadyOpen) {
+      return;
+    }
+
+    activeLauncher.click();
   }
 
   function removeMapCalendarLauncher() {
