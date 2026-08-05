@@ -22,20 +22,14 @@ import {
   isDateString,
   parseHourMinute,
   minuteToHourMinute,
-  parseLocalizedHourMinute,
-  extractHourMinute,
   normalizeHourMinute,
   normalizeToTenMinute,
   isTenMinuteAligned,
-  formatDate,
   getTodayDateInKST,
   getCurrentMinuteOfDayInKST,
-  sanitizeDateForApi,
-  sanitizeTimeForApi,
   getNextHourRange,
   getEarliestSelectableMinuteForDate,
   addDaysToDateString,
-  formatKSTWeekday,
   formatDateSelectorText,
 } from "./utils/date-time.js";
 import {
@@ -51,21 +45,14 @@ import {
   computeSlackReminderDateTime,
 } from "./features/slack/shared.js";
 import {
-  getInputAssociatedLabelText,
   buildHostInputDescriptor,
   normalizeHostReservationOwnerCandidate,
   normalizeHostRoomCandidate,
   extractKnownRoomName,
-  getControlAssociatedLabelText,
   buildHostFieldDescriptor,
   readHostFieldDisplayValue,
 } from "./features/form-fields/shared.js";
-import {
-  buildSlotStates,
-  buildSlotTitle,
-  groupRoomsByFloor,
-  resolveSelectionEndIndex,
-} from "./features/radar/slot-model.js";
+import { buildSlotStates, groupRoomsByFloor } from "./features/radar/slot-model.js";
 import { closeFloorMapZoom, openFloorMapZoom } from "./ui/floor-map-zoom-modal.js";
 import { RadarShell } from "./ui/components/radar-shell.js";
 import {
@@ -108,39 +95,24 @@ import {
   MAP_CALENDAR_SPACE_TAB_PAIR,
   RUNTIME_MESSAGE_TIMEOUT_MS,
   RESERVATION_SCHEDULE_STALE_MS,
-  SEOUL_TIMEZONE,
-  KST_DATE_PARTS_FORMATTER,
-  KST_TIME_PARTS_FORMATTER,
-  KST_WEEKDAY_FORMATTER,
   DEFAULT_SLACK_REMINDER_LEAD_TIME_MINUTES,
   SLACK_REMINDER_LEAD_TIME_OPTIONS,
-  TIME_STEP_MINUTES,
   LMS_DEFAULT_RESERVATION_MINUTES,
-  CALENDAR_SLOT_MIN_WIDTH,
   LMS_CALENDAR_SLOT_MIN_WIDTH,
   CALENDAR_SLOT_GAP,
   CALENDAR_HOUR_BOUNDARY_LINE_WIDTH,
   CALENDAR_HOUR_BOUNDARY_SIDE_GAP,
-  MAX_RESERVATION_BLOCKS,
-  CALENDAR_FLOOR_COL_WIDTH,
-  CALENDAR_ROOM_COL_WIDTH,
-  CALENDAR_ROW_GAP,
   CALENDAR_SIDE_MARGIN,
   DRAG_SAFE_TOP,
   NAV_SAFE_Z_INDEX,
   RADAR_LAUNCHER_Z_INDEX,
-  ROOM_TAG_METADATA,
   ROOM_TAG_METADATA_BY_KEY,
-  TARGET_ROOM_METADATA,
   TARGET_ROOM_METADATA_BY_NORMALIZED_NAME,
   MAP_CALENDAR_ROOM_FLOOR_BY_NAME,
-  TARGET_ROOM_NAMES,
-  TARGET_ROOM_SET,
   TARGET_ROOM_ORDER,
   normalizeRoomTagKey,
   normalizeTargetRoomName,
   normalizeMapCalendarSpaceTab,
-  normalizeFetchRoomType,
 } from "./constants/runtime.js";
 import {
   clearReservationCache as clearLmsReservationCache,
@@ -1621,32 +1593,14 @@ import { createSlackSuccessFlow } from "./features/slack/success-flow.js";
     };
   }
 
-  function getMapRootElement() {
-    const mapSvg = Array.from(document.querySelectorAll("svg")).find(
-      (svg) => svg.querySelectorAll("g[data-testid]").length > 0,
-    );
-    if (!(mapSvg instanceof SVGElement)) {
-      return null;
-    }
-
-    const parent = mapSvg.parentElement;
-    if (!(parent instanceof HTMLElement)) {
-      return null;
-    }
-
-    return parent;
-  }
-
   function isMapCalendarModalOpenRequested() {
     return Boolean(state.mapCalendarVisible);
   }
 
   const {
     ensureSlackModalTrigger,
-    ensureMapCalendarLoadingOverlay,
     syncMapCalendarBodyLoadingState,
     ensureMapCalendarLauncher,
-    scheduleAutoOpenMapCalendarLauncher,
     removeMapCalendarLauncher,
     updateMapCalendarLauncherState,
     openMapCalendarModal,
@@ -2234,24 +2188,12 @@ import { createSlackSuccessFlow } from "./features/slack/success-flow.js";
     return radarFormSync.handleHostDateChange(event);
   }
 
-  function isHandlingInternalHostDateSync() {
-    return radarFormSync.isHandlingInternalHostDateSync();
-  }
-
-  function createTimelineSelectionRequestId() {
-    return radarFormSync.createTimelineSelectionRequestId();
-  }
-
   function isLatestTimelineSelectionRequest(requestId) {
     return radarFormSync.isLatestTimelineSelectionRequest(requestId);
   }
 
   function queueTimelineSelectionApply(selection) {
     return radarFormSync.queueTimelineSelectionApply(selection);
-  }
-
-  function withInternalHostDateSync(task) {
-    return radarFormSync.withInternalHostDateSync(task);
   }
 
   function resetTimelineSelectionState() {
