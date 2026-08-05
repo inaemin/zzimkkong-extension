@@ -53,6 +53,7 @@ import {
   readHostFieldDisplayValue,
 } from "./features/form-fields/shared.js";
 import { buildSlotStates, groupRoomsByFloor } from "./features/radar/slot-model.js";
+import type { RoomSchedule } from "./services/lms-data/types.js";
 import { closeFloorMapZoom, openFloorMapZoom } from "./ui/floor-map-zoom-modal.js";
 import { RadarShell } from "./ui/components/radar-shell.js";
 import {
@@ -101,11 +102,9 @@ import {
   DRAG_SAFE_TOP,
   NAV_SAFE_Z_INDEX,
   RADAR_LAUNCHER_Z_INDEX,
-  ROOM_TAG_METADATA_BY_KEY,
   TARGET_ROOM_METADATA_BY_NORMALIZED_NAME,
   MAP_CALENDAR_ROOM_FLOOR_BY_NAME,
   TARGET_ROOM_ORDER,
-  normalizeRoomTagKey,
   normalizeTargetRoomName,
   normalizeMapCalendarSpaceTab,
 } from "./constants/runtime.js";
@@ -121,6 +120,7 @@ import {
   findGuestReservationTabContainer as radarFindGuestReservationTabContainer,
   findGuestReservationTabStyleSource as radarFindGuestReservationTabStyleSource,
 } from "./features/radar/shared.js";
+import { getRoomTags, resolveMapCalendarRoomFloor } from "./features/radar/room-metadata.js";
 import {
   buildMapCalendarTimelineGridLayout,
   computeMapCalendarCurrentTimeScrollLeft,
@@ -1387,30 +1387,31 @@ declare global {
     //  - 두 pane 의 각 행은 동일한 고정 높이(--zzk-cal-row-h)로 렌더해 세로 정렬을 맞춘다.
     // 그리드는 React 가 그린다. 슬롯 상태·층 그룹은 순수 함수로 미리 계산해
     // 넘기고, 컴포넌트는 그리기만 한다.
-    const gridRoomsByFloor = groupRoomsByFloor(rooms, resolveMapCalendarRoomFloor).map(
-      (floorGroup) => ({
-        ...floorGroup,
-        rooms: floorGroup.rooms.map((room) => {
-          const applied =
-            state.appliedSelection &&
-            state.appliedSelection.date === selectionDate &&
-            state.appliedSelection.roomId === room.id &&
-            Number.isInteger(state.appliedSelection.startMinute) &&
-            Number.isInteger(state.appliedSelection.endMinute) &&
-            state.appliedSelection.startMinute < state.appliedSelection.endMinute
-              ? state.appliedSelection
-              : null;
+    const gridRoomsByFloor = groupRoomsByFloor<RoomSchedule>(
+      rooms,
+      resolveMapCalendarRoomFloor,
+    ).map((floorGroup) => ({
+      ...floorGroup,
+      rooms: floorGroup.rooms.map((room) => {
+        const applied =
+          state.appliedSelection &&
+          state.appliedSelection.date === selectionDate &&
+          state.appliedSelection.roomId === room.id &&
+          Number.isInteger(state.appliedSelection.startMinute) &&
+          Number.isInteger(state.appliedSelection.endMinute) &&
+          state.appliedSelection.startMinute < state.appliedSelection.endMinute
+            ? state.appliedSelection
+            : null;
 
-          return {
-            room,
-            slotStates: buildSlotStates(room, timeline, earliestSelectableMinute),
-            appliedRange: applied
-              ? { startMinute: applied.startMinute, endMinute: applied.endMinute }
-              : null,
-          };
-        }),
+        return {
+          room,
+          slotStates: buildSlotStates(room, timeline, earliestSelectableMinute),
+          appliedRange: applied
+            ? { startMinute: applied.startMinute, endMinute: applied.endMinute }
+            : null,
+        };
       }),
-    );
+    }));
 
     flushSync(() => {
       renderRadarGrid(body, {
@@ -2155,55 +2156,6 @@ declare global {
       setScheduleLoadingDate(requestedDate, false, requestedTab);
       updateMapCalendarLauncherState();
     });
-  }
-
-  function resolveMapCalendarRoomFloor(room) {
-    const roomName = typeof room?.name === "string" ? room.name.trim() : "";
-    // 개편 서비스는 서버가 floor를 내려주므로 그걸 우선 쓰고,
-    // 하드코딩된 회의실 메타데이터 표에서 층을 찾는다.
-    const serverFloor =
-      typeof room?.floorLabel === "string" && room.floorLabel.trim() !== ""
-        ? room.floorLabel.trim()
-        : "";
-    const mappedFloor =
-      serverFloor || MAP_CALENDAR_ROOM_FLOOR_BY_NAME.get(normalizeTargetRoomName(roomName)) || "";
-    const floorLabel = mappedFloor || "";
-    const fallbackRoomKey =
-      Number.isInteger(room?.id) || Number.isFinite(Number(room?.id))
-        ? String(room.id)
-        : roomName || "unknown-room";
-
-    return {
-      floorLabel,
-      floorKey: mappedFloor || `unknown-${fallbackRoomKey}`,
-    };
-  }
-
-  function getTargetRoomMetadata(roomOrName) {
-    // 방 객체와 방 이름 문자열을 모두 받는다.
-    const nameFromRoom = typeof roomOrName?.name === "string" ? roomOrName.name : "";
-    const roomName = typeof roomOrName === "string" ? roomOrName : nameFromRoom;
-    const normalizedName = normalizeTargetRoomName(roomName);
-    return TARGET_ROOM_METADATA_BY_NORMALIZED_NAME.get(normalizedName) || null;
-  }
-
-  function getRoomTags(roomOrName) {
-    const metadata = getTargetRoomMetadata(roomOrName);
-    if (!metadata || !Array.isArray(metadata.tags)) {
-      return [];
-    }
-
-    const seenKeys = new Set();
-    return metadata.tags.reduce((acc, tagKey) => {
-      const normalizedKey = normalizeRoomTagKey(tagKey);
-      const tagMetadata = ROOM_TAG_METADATA_BY_KEY.get(normalizedKey);
-      if (!tagMetadata || seenKeys.has(tagMetadata.key)) {
-        return acc;
-      }
-      seenKeys.add(tagMetadata.key);
-      acc.push(tagMetadata);
-      return acc;
-    }, []);
   }
 
   function formatPlainRoomLabel(roomName) {
