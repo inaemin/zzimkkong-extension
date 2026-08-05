@@ -655,16 +655,44 @@ test("지난 예약 칸은 더 진하고 예약 내용을 알려준다", async (
   const tooltipText = await tooltip.textContent();
   expect(tooltipText).toContain("\n");
 
-  // 비어 있는 칸은 툴팁을 띄우지 않는다. "예약 없음"은 칸 색으로 이미 보이고,
-  // 대부분의 칸이 여기 해당해서 지나갈 때마다 뜨면 방해가 된다.
-  const freeSlot = page
-    .locator(
-      `#${MAP_CALENDAR_OVERLAY_ID} .zzk-map-calendar-slot.free:not(.past-blocked):not(.past-reserved)`,
-    )
-    .first();
-  const freeBox = await freeSlot.boundingBox();
-  await page.mouse.move(freeBox.x + freeBox.width / 2, freeBox.y + freeBox.height / 2);
-  await expect(tooltip).toHaveCount(0);
+  // 예약이 없는 칸은 툴팁을 띄우지 않는다. "예약 없음"도 "선택 불가(현재 시간
+  // 이전)"도 칸 색으로 이미 드러나고, 둘을 합치면 대부분의 칸이라 지나갈 때마다
+  // 뜨면 방해가 된다.
+  for (const selector of [
+    ".zzk-map-calendar-slot.free:not(.past-blocked)",
+    // 지나갔지만 예약은 없었던 칸.
+    ".zzk-map-calendar-slot.past-blocked:not(.past-reserved)",
+  ]) {
+    const quietSlot = page.locator(`#${MAP_CALENDAR_OVERLAY_ID} ${selector}`).first();
+    const quietBox = await quietSlot.boundingBox();
+    await page.mouse.move(quietBox.x + quietBox.width / 2, quietBox.y + quietBox.height / 2);
+    await expect(tooltip, `${selector} 에 툴팁이 뜨면 안 된다`).toHaveCount(0);
+  }
+});
+
+// 정보 버튼 팝오버는 카드 바깥 층에 뜬다.
+//
+// 카드 안(헤더)에 렌더하면 카드가 position: relative + overflow: hidden 이라
+// 팝오버 높이만큼 scrollHeight 가 늘어 레이아웃이 밀린다(155 → 218px).
+test("범례 팝오버가 카드 크기를 바꾸지 않는다", async ({ page }) => {
+  await mountServicePage(page);
+  await page.waitForSelector(`#${MAP_CALENDAR_OVERLAY_ID} .zzk-map-calendar-slot`, {
+    timeout: 4000,
+  });
+
+  const measure = () =>
+    page.evaluate(() => {
+      const card = window.__zzkQuery('[data-testid="radar-card"]');
+      return { scrollHeight: card.scrollHeight, scrollWidth: card.scrollWidth };
+    });
+
+  const before = await measure();
+
+  const trigger = page.locator(`#${MAP_CALENDAR_OVERLAY_ID} button[aria-label="타임블록 색 설명"]`);
+  await trigger.hover();
+  await expect(page.locator('[data-slot="popover-content"]')).toBeVisible();
+
+  expect(await measure()).toEqual(before);
 });
 
 // 에러 화면과 정상 오버레이는 같은 엘리먼트에 그려진다(React 루트 공유).

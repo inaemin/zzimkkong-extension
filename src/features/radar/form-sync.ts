@@ -138,6 +138,23 @@ export function createRadarFormSync(deps: Deps) {
     createTimelineSelectionRequestId();
   }
 
+  /** 로그에 남길 선택 요약. */
+  function describeSelection(selection) {
+    return {
+      date: selection?.date,
+      roomId: selection?.room?.id,
+      roomName: selection?.room?.name,
+    };
+  }
+
+  /** 패널 입력이 준비됐는지 보장한다. 못 만들면 false. */
+  function ensurePanelElements() {
+    if (!state.elements) {
+      ensurePanel();
+    }
+    return Boolean(state.elements);
+  }
+
   /** 고른 구간을 패널 입력에 적어 넣고, 정규화된 값을 돌려준다. */
   function writeSelectionToPanel(selection) {
     const normalizedDate = clampDateToMin(selection.date, getTodayDateInKST());
@@ -180,14 +197,9 @@ export function createRadarFormSync(deps: Deps) {
     }
     debugLog("radar-form-sync", "applyTimelineReservationSelection:start", {
       requestId,
-      date: selection?.date,
-      roomId: selection?.room?.id,
-      roomName: selection?.room?.name,
+      ...describeSelection(selection),
     });
-    if (!state.elements) {
-      ensurePanel();
-    }
-    if (!state.elements) {
+    if (!ensurePanelElements()) {
       return;
     }
 
