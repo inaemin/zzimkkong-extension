@@ -51,7 +51,6 @@ export interface RadarGridProps {
   /** 회의실 이름 옆 배지. 아직 명령형이라 붙일 자리만 내준다. */
   renderRoomLabel: (container: HTMLElement | null, room: RoomSchedule) => void;
   /** 타임라인 pane. 가로 스크롤 위치를 바깥에서 읽고 되돌린다. */
-  timelinePaneRef?: React.Ref<HTMLDivElement>;
   minTrackWidth: number;
   /** 타임라인 아래 평면도. 같은 트리에 있어야 본문 소유권이 하나로 정리된다. */
   floorMaps: RadarFloorMapsProps;
@@ -66,7 +65,6 @@ export function RadarGrid({
   onSlotClick,
   defaultReservationMinutes,
   renderRoomLabel,
-  timelinePaneRef,
   minTrackWidth,
   floorMaps,
 }: RadarGridProps) {
@@ -135,11 +133,7 @@ export function RadarGrid({
           </div>
         </div>
 
-        <div
-          className="zzk-map-calendar-timeline-pane"
-          data-testid="radar-timeline-pane"
-          ref={timelinePaneRef}
-        >
+        <div className="zzk-map-calendar-timeline-pane" data-testid="radar-timeline-pane">
           <div
             className="zzk-map-calendar-timeline-track"
             style={{ minWidth: `${minTrackWidth}px` }}

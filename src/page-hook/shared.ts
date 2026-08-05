@@ -41,8 +41,8 @@ function toDisplayString(value: unknown): string {
   return "";
 }
 
-export const MESSAGE_SOURCE = "zzk-page-reservation-hook";
-export const MESSAGE_TYPE = "ZZK_RESERVATION_NETWORK_EVENT";
+const MESSAGE_SOURCE = "zzk-page-reservation-hook";
+const MESSAGE_TYPE = "ZZK_RESERVATION_NETWORK_EVENT";
 
 export function normalizeMethod(methodValue: unknown): string {
   if (typeof methodValue !== "string" || methodValue.trim() === "") {
@@ -66,7 +66,7 @@ export function parseUrl(urlValue: unknown): URL | null {
   }
 }
 
-export function normalizeText(value: unknown): string {
+function normalizeText(value: unknown): string {
   if (typeof value !== "string") {
     return "";
   }
@@ -98,7 +98,7 @@ const IGNORED_OWNER_VALUES = new Set([
   "입력",
 ]);
 
-export function normalizeOwnerCandidate(value: unknown): string {
+function normalizeOwnerCandidate(value: unknown): string {
   const normalized = normalizeText(toDisplayString(value));
   if (!normalized) {
     return "";
@@ -149,7 +149,7 @@ const OWNER_CONTEXT_TOKENS = [
 /** 같은 자리에서 공간을 가리키면 예약자 필드가 아니다. */
 const ROOM_CONTEXT_TOKENS = ["room", "space", "map", "resource", "회의실", "공간", "장소"];
 
-export function isOwnerFieldKey(key: unknown): boolean {
+function isOwnerFieldKey(key: unknown): boolean {
   const normalized = normalizeText(toDisplayString(key)).replace(/\s+/g, "").toLowerCase();
   if (!normalized) {
     return false;
@@ -319,17 +319,17 @@ export async function extractOwnerCandidateFromFetchRequest(
   return firstNonEmpty(bodies, (body) => extractOwnerCandidateFromBody(body));
 }
 
-export function normalizeFieldKey(value: unknown): string {
+function normalizeFieldKey(value: unknown): string {
   return normalizeText(toDisplayString(value)).replace(/\s+/g, "").toLowerCase();
 }
 
-export function normalizeDateCandidate(value: unknown): string {
+function normalizeDateCandidate(value: unknown): string {
   const normalized = normalizeText(toDisplayString(value));
   const match = normalized.match(/(\d{4}-\d{2}-\d{2})/);
   return match ? match[1] : "";
 }
 
-export function normalizeTimeCandidate(value: unknown): string {
+function normalizeTimeCandidate(value: unknown): string {
   const normalized = normalizeText(toDisplayString(value));
   const match = normalized.match(/(\d{1,2}):(\d{2})/);
   if (!match) {
@@ -344,14 +344,14 @@ export function normalizeTimeCandidate(value: unknown): string {
   return `${hour}:${minute}`;
 }
 
-export function extractDateTimeParts(value: unknown): { date: string; time: string } {
+function extractDateTimeParts(value: unknown): { date: string; time: string } {
   return {
     date: normalizeDateCandidate(value),
     time: normalizeTimeCandidate(value),
   };
 }
 
-export function normalizeDescriptionCandidate(value: unknown): string {
+function normalizeDescriptionCandidate(value: unknown): string {
   const normalized = normalizeText(toDisplayString(value));
   if (!normalized) {
     return "";
@@ -366,7 +366,7 @@ export function normalizeDescriptionCandidate(value: unknown): string {
   return normalized;
 }
 
-export function isStartDateTimeFieldKey(normalizedKey: string): boolean {
+function isStartDateTimeFieldKey(normalizedKey: string): boolean {
   return (
     normalizedKey.includes("startdatetime") ||
     normalizedKey.includes("starttime") ||
@@ -375,7 +375,7 @@ export function isStartDateTimeFieldKey(normalizedKey: string): boolean {
   );
 }
 
-export function isEndDateTimeFieldKey(normalizedKey: string): boolean {
+function isEndDateTimeFieldKey(normalizedKey: string): boolean {
   return (
     normalizedKey.includes("enddatetime") ||
     normalizedKey.includes("endtime") ||
@@ -384,7 +384,7 @@ export function isEndDateTimeFieldKey(normalizedKey: string): boolean {
   );
 }
 
-export function isDateFieldKey(normalizedKey: string): boolean {
+function isDateFieldKey(normalizedKey: string): boolean {
   return (
     normalizedKey === "date" ||
     normalizedKey.endsWith("date") ||
@@ -393,7 +393,7 @@ export function isDateFieldKey(normalizedKey: string): boolean {
   );
 }
 
-export function isDescriptionFieldKey(normalizedKey: string): boolean {
+function isDescriptionFieldKey(normalizedKey: string): boolean {
   return (
     normalizedKey.includes("description") ||
     normalizedKey.includes("purpose") ||
@@ -404,7 +404,7 @@ export function isDescriptionFieldKey(normalizedKey: string): boolean {
   );
 }
 
-export function isRoomNameFieldKey(normalizedKey: string): boolean {
+function isRoomNameFieldKey(normalizedKey: string): boolean {
   return (
     normalizedKey.includes("roomname") ||
     normalizedKey.includes("spacename") ||
@@ -413,7 +413,7 @@ export function isRoomNameFieldKey(normalizedKey: string): boolean {
   );
 }
 
-export function isRoomIdFieldKey(normalizedKey: string): boolean {
+function isRoomIdFieldKey(normalizedKey: string): boolean {
   return (
     normalizedKey === "roomid" ||
     normalizedKey === "spaceid" ||
@@ -424,7 +424,7 @@ export function isRoomIdFieldKey(normalizedKey: string): boolean {
   );
 }
 
-export function parseReservationRoomIdCandidate(value: unknown): number | null {
+function parseReservationRoomIdCandidate(value: unknown): number | null {
   if (typeof value === "number" && Number.isInteger(value)) {
     return value;
   }
@@ -450,7 +450,7 @@ function mergeTextFields(
   }, next);
 }
 
-export function mergeReservationRequestContext(
+function mergeReservationRequestContext(
   baseContext: ReservationRequestContext | null,
   patchContext: ReservationRequestContext | null,
 ): ReservationRequestContext {
@@ -658,9 +658,7 @@ export function extractReservationRequestContextFromBody(
   return null;
 }
 
-export function extractReservationContextFromUrl(
-  urlValue: unknown,
-): ReservationRequestContext | null {
+function extractReservationContextFromUrl(urlValue: unknown): ReservationRequestContext | null {
   const parsed = parseUrl(urlValue);
   if (!parsed) {
     return null;
@@ -681,7 +679,7 @@ export function extractReservationContextFromUrl(
   return { roomId };
 }
 
-export function resolveReservationRequestContextForEmit(
+function resolveReservationRequestContextForEmit(
   urlValue: unknown,
   bodyContext: ReservationRequestContext | null,
 ): ReservationRequestContext | null {
