@@ -1,4 +1,5 @@
 import type { SpaceTab } from "../../constants/runtime.js";
+import type { DailyScheduleResult } from "../../services/lms-data/types.js";
 import type { RadarState } from "../state.js";
 
 // content.js 가 주입하는 의존성 묶음.
@@ -26,7 +27,7 @@ type Deps = {
   readStoredBoolean: typeof import("../../utils/storage.js").readStoredBoolean;
   isDateString: typeof import("../../utils/date-time.js").isDateString;
   // content.js 에 있어 타입을 끌어올 수 없다. 쓰는 형태만 적는다.
-  normalizeDateInput: (input: unknown) => string;
+  normalizeDateInput: (inputElement: Element | null) => string;
   formatDateSelectorText: typeof import("../../utils/date-time.js").formatDateSelectorText;
   isRadarSupportedPage: typeof import("../../utils/routes.js").isRadarSupportedPage;
   normalizeMapCalendarSpaceTab: typeof import("../../constants/runtime.js").normalizeMapCalendarSpaceTab;
@@ -35,10 +36,13 @@ type Deps = {
   isMapCalendarModalOpenRequested: () => boolean;
   refreshDailySchedule: (date: string) => Promise<unknown>;
   setScheduleLoadingDate: (date: string, isLoading: boolean, tab?: SpaceTab) => void;
-  getFreshScheduleCacheForTab: (date: string, tab?: SpaceTab, sharingMapId?: unknown) => unknown;
-  renderMapCalendarOverlay: (schedule: unknown) => void;
+  getFreshScheduleCacheForTab: (date: string, tab?: SpaceTab, sharingMapId?: string) => unknown;
+  renderMapCalendarOverlay: (scheduleData: DailyScheduleResult) => void;
+  // 캐시는 형태를 보장하지 않아 unknown 으로 받는다.
   refreshAvailability: () => void | Promise<void>;
-  buildSlackReservationContext: (rootOverride?: unknown) => unknown;
+  buildSlackReservationContext: (
+    rootOverride?: Document | HTMLElement | null,
+  ) => Record<string, unknown>;
   showSlackCopyModal: (context: unknown) => void;
   findGuestReservationTabContainer: () => HTMLElement | null;
   findGuestReservationTabStyleSource: () => HTMLButtonElement | null;
@@ -376,7 +380,11 @@ export function createRadarWorkflow(deps: Deps) {
   }
 
   /** 캐시가 살아 있으면 서버를 기다리지 않고 바로 그린다. */
-  function renderCachedSchedule(targetDate: string, activeTab: SpaceTab, cachedSchedule: unknown) {
+  function renderCachedSchedule(
+    targetDate: string,
+    activeTab: SpaceTab,
+    cachedSchedule: DailyScheduleResult,
+  ) {
     state.activeScheduleDate = targetDate;
     state.activeScheduleTab = activeTab;
     setScheduleLoadingDate(targetDate, false, activeTab);
@@ -385,7 +393,7 @@ export function createRadarWorkflow(deps: Deps) {
 
   /** 캐시가 있으면 바로 그리고, 없으면 받아온다. */
   function showScheduleForDate(targetDate: string, activeTab: SpaceTab) {
-    const cached = getFreshScheduleCacheForTab(targetDate, activeTab);
+    const cached = getFreshScheduleCacheForTab(targetDate, activeTab) as DailyScheduleResult | null;
     if (cached) {
       renderCachedSchedule(targetDate, activeTab, cached);
       return;

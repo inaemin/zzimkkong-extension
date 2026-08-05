@@ -16,6 +16,7 @@
     "strict": false,
     // strict 의 하위 플래그를 하나씩 켠다. 아래 셋은 지금 에러 0건이라 바로 켰다.
     // 남은 것: strictNullChecks(31건), noImplicitAny(73건), strictBindCallApply(3건).
+    "noImplicitAny": true,
     "strictFunctionTypes": true,
     "noImplicitThis": true,
     "alwaysStrict": true,

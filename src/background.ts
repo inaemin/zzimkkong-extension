@@ -115,7 +115,7 @@ interface SpaceContext {
         return undefined;
       }
 
-      return source[key];
+      return (source as Record<string, unknown>)[key];
     }
 
     function loadAvailability(payload: FetchPayload): Promise<AvailabilityResult> {

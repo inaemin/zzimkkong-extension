@@ -8,6 +8,11 @@
 // no-unsafe-member-access 로 잡힌다(실측 약 200건).
 
 import type { SpaceTab } from "../constants/runtime.js";
+import type {
+  DailyScheduleResult,
+  RoomSchedule,
+  TimelineSlot,
+} from "../services/lms-data/types.js";
 
 /** 패널 입력 요소들. 화면에 붙지 않고 값 보관용으로만 쓴다. */
 export interface PanelElements {
@@ -27,12 +32,12 @@ export interface RadarState {
   availabilityCacheFetchedAt: Map<string, number>;
   availabilityInflightByToken: Map<string, Promise<unknown>>;
   pendingAvailabilityRefresh: boolean;
-  latestRooms: unknown[];
+  latestRooms: RoomSchedule[];
   latestRoomsBySpaceTab: Map<string, unknown>;
 
   // 일별 스케줄(타임블록) 캐시.
   scheduleOverlayEnabled: boolean;
-  scheduleCache: Map<string, unknown>;
+  scheduleCache: Map<string, DailyScheduleResult>;
   scheduleCacheFetchedAtByDate: Map<string, number>;
   scheduleInflightByDate: Map<string, Promise<unknown>>;
   lastRenderedScheduleDate: string | null;
@@ -53,7 +58,13 @@ export interface RadarState {
   mapCalendarSuppressedBySlack: boolean;
 
   // 타임블록 선택 → 호스트 폼 반영.
-  appliedSelection: unknown;
+  /** 폼에 반영이 끝난 선택. 그리드가 파란 칸으로 표시한다. */
+  appliedSelection: {
+    date: string;
+    roomId: number;
+    startMinute: number;
+    endMinute: number;
+  } | null;
   timelineSelectionRequestId: number;
   timelineSelectionApplyTimer: number | null;
   currentSharingMapId: string | null;
@@ -103,6 +114,6 @@ export interface RadarState {
 
   lastLauncherRemountAt: number;
   /** 스크롤 위치 계산에 쓰는 마지막 타임라인. */
-  mapCalendarTimelineSnapshot: unknown[];
+  mapCalendarTimelineSnapshot: TimelineSlot[];
   elements: PanelElements | null;
 }

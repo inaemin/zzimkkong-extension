@@ -1,4 +1,5 @@
 import type { SpaceTab } from "../../constants/runtime.js";
+import type { DailyScheduleResult } from "../../services/lms-data/types.js";
 import type { RadarState } from "../state.js";
 import { debugLog, pushDebugEvent } from "../../utils/shared.js";
 
@@ -79,7 +80,7 @@ export function createRadarFormSync(deps: Deps) {
     return state.timelineSelectionRequestId;
   }
 
-  function isLatestTimelineSelectionRequest(requestId) {
+  function isLatestTimelineSelectionRequest(requestId: number) {
     if (!Number.isInteger(requestId)) {
       return true;
     }
@@ -191,12 +192,12 @@ export function createRadarFormSync(deps: Deps) {
     }
     state.activeScheduleDate = normalizedDate;
     setScheduleLoadingDate(normalizedDate, false);
-    renderMapCalendarOverlay(cached);
+    renderMapCalendarOverlay(cached as DailyScheduleResult);
   }
 
   async function applyTimelineReservationSelection(
-    selection,
-    requestId = state.timelineSelectionRequestId,
+    selection: TimelineSelection,
+    requestId: number = state.timelineSelectionRequestId,
   ) {
     debugLog("radar-form-sync", "apply:start", { requestId, ...describeSelection(selection) });
     if (!isLatestTimelineSelectionRequest(requestId) || !ensurePanelElements()) {
@@ -273,8 +274,8 @@ type Deps = {
   minuteToHourMinute: typeof import("../../utils/date-time.js").minuteToHourMinute;
   getTodayDateInKST: typeof import("../../utils/date-time.js").getTodayDateInKST;
   // content.js 에 있어 타입을 끌어올 수 없다. 쓰는 형태만 적는다.
-  normalizeDateInput: (input: unknown) => string;
-  normalizeTimeInput: (input: unknown) => string;
+  normalizeDateInput: (inputElement: Element | null) => string;
+  normalizeTimeInput: (inputElement: Element | null) => string;
   clampDateToMin: (value: unknown, minimum: unknown) => string;
   // content.js 에 있어 타입을 끌어올 수 없다. 쓰는 형태만 적는다.
   ensurePanel: () => void;
@@ -282,7 +283,10 @@ type Deps = {
   getMinimumSelectableDateForCurrentContext: (value?: unknown) => string;
   getFreshScheduleCache: (date: string) => unknown;
   setScheduleLoadingDate: (date: string, isLoading: boolean, tab?: SpaceTab) => void;
-  renderMapCalendarOverlay: (schedule: unknown) => void;
+  renderMapCalendarOverlay: (scheduleData: DailyScheduleResult) => void;
   refreshAvailability: () => void | Promise<void>;
-  syncLmsReservationForm: (payload: unknown, requestId: number) => Promise<boolean>;
+  syncLmsReservationForm: (
+    payload: Record<string, unknown>,
+    requestId?: number,
+  ) => Promise<boolean>;
 };

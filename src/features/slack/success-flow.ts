@@ -1,5 +1,5 @@
 import type { RadarState } from "../state.js";
-import { pushDebugEvent } from "../../utils/shared.js";
+import { pushDebugEvent, toDisplayString } from "../../utils/shared.js";
 
 /** sessionStorage 에 넣어두는 대기 모달 상태. */
 interface PersistedSlackModalState {
@@ -76,7 +76,7 @@ export function createSlackSuccessFlow(deps: Deps) {
     payload: unknown,
     responseBody: Record<string, unknown>,
   ) {
-    const fingerprint = createSlackMessageFingerprint(context, payload);
+    const fingerprint = createSlackMessageFingerprint(context, payload as Record<string, unknown>);
     if (shouldSkipSlackCopyModal(fingerprint)) {
       pushDebugEvent("slack-success", "lms-deduped-success", { fingerprint });
       return;
@@ -276,11 +276,11 @@ export function createSlackSuccessFlow(deps: Deps) {
     });
   }
 
-  function getStorageErrorMessage(error) {
+  function getStorageErrorMessage(error: unknown) {
     if (error instanceof Error && error.message) {
       return error.message;
     }
-    return String(error || "unknown storage error");
+    return toDisplayString(error) || "unknown storage error";
   }
 
   // lms+ 에는 예약 수정 페이지가 없어 "수정 제출 후 복귀" 흐름 자체가 존재하지 않는다.
@@ -308,7 +308,7 @@ export function createSlackSuccessFlow(deps: Deps) {
     return isAllowedReservationRequestOrigin(parsedUrl.origin);
   }
 
-  function isAllowedReservationRequestOrigin(origin) {
+  function isAllowedReservationRequestOrigin(origin: unknown) {
     if (origin === location.origin) {
       return true;
     }
@@ -316,7 +316,7 @@ export function createSlackSuccessFlow(deps: Deps) {
     return origin === "https://techcourse-lms-plus-api.woowahan.com";
   }
 
-  function parseUrlSafely(urlValue) {
+  function parseUrlSafely(urlValue: unknown) {
     if (typeof urlValue !== "string" || urlValue.trim() === "") {
       return null;
     }
@@ -357,7 +357,12 @@ type Deps = {
   onReservationMutated?: () => void;
   // content.js 에 있어 타입을 끌어올 수 없다. 쓰는 형태만 적는다.
   normalizeReservationMutationMethod: (value: unknown) => string;
-  createSlackMessageFingerprint: (context: unknown, payload: unknown) => string;
+  createSlackMessageFingerprint: (
+    context: Record<string, unknown>,
+    payload: Record<string, unknown>,
+  ) => string;
   shouldSkipSlackCopyModal: (fingerprint: string) => boolean;
-  buildLmsSlackReservationContext: (body: unknown) => Record<string, unknown> | null;
+  buildLmsSlackReservationContext: (
+    body: Record<string, unknown> | null,
+  ) => Record<string, unknown> | null;
 };

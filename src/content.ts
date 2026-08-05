@@ -2,6 +2,7 @@ import { createElement } from "react";
 import { flushSync } from "react-dom";
 
 import {
+  toDisplayString,
   normalizeTextForMatch,
   getErrorMessage,
   pushDebugEvent,
@@ -54,7 +55,8 @@ import {
   readHostFieldDisplayValue,
 } from "./features/form-fields/shared.js";
 import { buildSlotStates, groupRoomsByFloor } from "./features/radar/slot-model.js";
-import type { RoomSchedule } from "./services/lms-data/types.js";
+import type { PanelElements, RadarState } from "./features/state.js";
+import type { DailyScheduleResult, RoomSchedule } from "./services/lms-data/types.js";
 import { closeFloorMapZoom, openFloorMapZoom } from "./ui/floor-map-zoom-modal.js";
 import { RadarShell } from "./ui/components/radar-shell.js";
 import {
@@ -167,14 +169,14 @@ declare global {
     return readStoredBoolean(MAP_CALENDAR_FLOORMAP_OPEN_STORAGE_KEY, false);
   }
 
-  function persistFloorMapSectionOpen(open) {
+  function persistFloorMapSectionOpen(open: boolean) {
     writeStoredBoolean(MAP_CALENDAR_FLOORMAP_OPEN_STORAGE_KEY, open);
   }
 
   // 타임라인 아래에 층별 평면도(SVG)를 접이식으로 붙인다. lms+ 에는 지도가 없어
   // 공간의 물리적 위치를 알 수 없으므로, 평면도로 페어룸 등의 위치를 확인하게 한다.
 
-  const state = {
+  const state: RadarState = {
     mounted: false,
     loading: false,
     availabilityInflightToken: null,
@@ -320,7 +322,7 @@ declare global {
     });
   }
 
-  function scheduleGuestUiMutationSync(records) {
+  function scheduleGuestUiMutationSync(records: MutationRecord[]) {
     if (!hasRelevantGuestUiMutation(records)) {
       return;
     }
@@ -335,7 +337,7 @@ declare global {
     }, 120);
   }
 
-  function hasRelevantGuestUiMutation(records) {
+  function hasRelevantGuestUiMutation(records: MutationRecord[]) {
     if (!Array.isArray(records) || records.length === 0) {
       return true;
     }
@@ -365,7 +367,7 @@ declare global {
     });
   }
 
-  function isExtensionOwnedMutationNode(node) {
+  function isExtensionOwnedMutationNode(node: Node | null) {
     if (!(node instanceof Element)) {
       return false;
     }
@@ -373,7 +375,7 @@ declare global {
     return isInsideExtensionSurface(node) || node.id === "zzk-availability-lens-root";
   }
 
-  function runGuestUiMutationSync(reason) {
+  function runGuestUiMutationSync(reason: unknown) {
     pushDebugEvent("guest-ui", "mutation-sync", { reason });
     if (!(document.body instanceof HTMLBodyElement)) {
       return;
@@ -755,7 +757,7 @@ declare global {
     }
   }
 
-  function setMapCalendarSpaceTab(tab, { persist = true } = {}) {
+  function setMapCalendarSpaceTab(tab: unknown, { persist = true } = {}) {
     const normalizedTab = normalizeMapCalendarSpaceTab(tab);
     if (state.mapCalendarSpaceTab === normalizedTab) {
       syncMapCalendarSpaceTabButtons();
@@ -774,7 +776,7 @@ declare global {
 
   // 예약 현황(availability)은 회의실 수만큼 요청을 보낸다. 타임블록을 연속으로
   // 누르면 그때마다 전량 재조회되므로, 스케줄 캐시와 같은 TTL 로 재사용한다.
-  function getFreshAvailabilityCache(token) {
+  function getFreshAvailabilityCache(token: string) {
     const fetchedAt = state.availabilityCacheFetchedAt.get(token);
     if (!Number.isFinite(fetchedAt)) {
       return null;
@@ -789,7 +791,7 @@ declare global {
     return state.availabilityCache.get(token) || null;
   }
 
-  function cacheAvailability(token, data) {
+  function cacheAvailability(token: string, data: unknown) {
     state.availabilityCache.set(token, data);
     state.availabilityCacheFetchedAt.set(token, Date.now());
   }
@@ -817,17 +819,19 @@ declare global {
 
   // 새로 받은 응답이든 캐시된 응답이든 화면 반영은 같은 경로를 쓴다.
   function applyAvailabilityData(
-    data,
-    { roomType, date: _date, startTime: _startTime, endTime: _endTime },
+    data: unknown,
+    { roomType }: { roomType: unknown; date?: unknown; startTime?: unknown; endTime?: unknown },
   ) {
-    const rooms = Array.isArray(data?.rooms) ? data.rooms : [];
+    const payload = (data ?? {}) as Record<string, unknown>;
+    const rooms = Array.isArray(payload.rooms) ? payload.rooms : [];
 
     state.latestRooms = rooms;
-    state.latestRoomsBySpaceTab.set(roomType, rooms);
-    state.latestMapName = typeof data?.mapName === "string" ? data.mapName : state.latestMapName;
+    state.latestRoomsBySpaceTab.set(toDisplayString(roomType), rooms);
+    state.latestMapName =
+      typeof payload.mapName === "string" ? payload.mapName : state.latestMapName;
   }
 
-  function isScheduleCacheStale(date) {
+  function isScheduleCacheStale(date: string) {
     const fetchedAt = state.scheduleCacheFetchedAtByDate.get(date);
     if (!Number.isFinite(fetchedAt)) {
       return false;
@@ -836,12 +840,12 @@ declare global {
     return Date.now() - fetchedAt >= RESERVATION_SCHEDULE_STALE_MS;
   }
 
-  function getFreshScheduleCache(date) {
+  function getFreshScheduleCache(date: string): DailyScheduleResult | null {
     return getFreshScheduleCacheForTab(date, state.mapCalendarSpaceTab);
   }
 
   function buildScheduleScopeKey(
-    date,
+    date: string,
     tab = state.mapCalendarSpaceTab,
     sharingMapId = state.currentSharingMapId || getSharingMapId(),
   ) {
@@ -859,7 +863,7 @@ declare global {
   }
 
   function getFreshScheduleCacheForTab(
-    date,
+    date: string,
     tab = state.mapCalendarSpaceTab,
     sharingMapId = state.currentSharingMapId || getSharingMapId(),
   ) {
@@ -888,8 +892,8 @@ declare global {
   }
 
   function cacheScheduleForDate(
-    date,
-    scheduleData,
+    date: string,
+    scheduleData: DailyScheduleResult | null,
     tab = state.mapCalendarSpaceTab,
     sharingMapId = state.currentSharingMapId || getSharingMapId(),
   ) {
@@ -907,7 +911,7 @@ declare global {
     state.scheduleCacheFetchedAtByDate.set(scopeKey, Date.now());
   }
 
-  function isScheduleOverlayRenderedForDate(date, tab = state.mapCalendarSpaceTab) {
+  function isScheduleOverlayRenderedForDate(date: string, tab = state.mapCalendarSpaceTab) {
     if (!isDateString(date) || !isMapCalendarModalOpenRequested()) {
       return false;
     }
@@ -920,7 +924,11 @@ declare global {
     );
   }
 
-  function setScheduleLoadingDate(date, isLoading, tab = state.mapCalendarSpaceTab) {
+  function setScheduleLoadingDate(
+    date: string,
+    isLoading: boolean,
+    tab = state.mapCalendarSpaceTab,
+  ) {
     const normalizedDate = normalizeDateString(typeof date === "string" ? date : "");
     const normalizedTab = normalizeMapCalendarSpaceTab(tab);
 
@@ -946,7 +954,7 @@ declare global {
     syncMapCalendarBodyLoadingState();
   }
 
-  async function refreshDailySchedule(date) {
+  async function refreshDailySchedule(date: string) {
     if (!isRadarSupportedPage() || !state.scheduleOverlayEnabled || !date) {
       return;
     }
@@ -1021,7 +1029,12 @@ declare global {
       if (getSharingMapId() !== sharingMapId) {
         return response.data;
       }
-      cacheScheduleForDate(normalizedDate, response.data, activeTab, sharingMapId);
+      cacheScheduleForDate(
+        normalizedDate,
+        response.data as DailyScheduleResult,
+        activeTab,
+        sharingMapId,
+      );
       return response.data;
     })();
 
@@ -1036,7 +1049,7 @@ declare global {
       ) {
         return;
       }
-      renderMapCalendarOverlay(scheduleData);
+      renderMapCalendarOverlay(scheduleData as DailyScheduleResult);
     } catch (error) {
       // 현황을 못 불러와도 모달은 떠 있어야 하므로, 조용히 삼키지 말고 에러 껍데기를 그린다.
       if (
@@ -1058,7 +1071,7 @@ declare global {
 
   // 예약 현황을 못 불러와도(예: 인증 실패로 API가 403) 모달 껍데기는 떠야 한다.
   // 데이터 대신 에러 메시지와 다시 시도 버튼을 담은 최소 모달을 그린다.
-  function renderMapCalendarErrorOverlay(errorMessage) {
+  function renderMapCalendarErrorOverlay(errorMessage: string) {
     if (!state.scheduleOverlayEnabled || !isMapCalendarModalOpenRequested()) {
       return;
     }
@@ -1072,7 +1085,7 @@ declare global {
     }
 
     const errorRefs: { header?: HTMLElement | null } = {};
-    let overlay;
+    let overlay: HTMLElement | null;
     flushSync(() => {
       overlay = renderRadarError({
         message: errorMessage || "예약 현황을 불러오지 못했습니다.",
@@ -1098,7 +1111,7 @@ declare global {
         header: errorRefs.header,
         element: overlay,
         getOffset: () => state.mapCalendarOffset,
-        setOffset: (nextOffset) => {
+        setOffset: (nextOffset: { x: number; y: number }) => {
           state.mapCalendarOffset = nextOffset;
           persistMapCalendarOffset(nextOffset);
         },
@@ -1109,7 +1122,7 @@ declare global {
     }
   }
 
-  function renderMapCalendarOverlay(scheduleData) {
+  function renderMapCalendarOverlay(scheduleData: DailyScheduleResult | null) {
     if (!state.scheduleOverlayEnabled) {
       removeMapCalendarOverlay();
       updateMapCalendarLauncherState();
@@ -1171,7 +1184,7 @@ declare global {
     const tabLabel = getMapCalendarSpaceTabLabel(renderedTab);
     const rooms = getRoomsForMapCalendarSpaceTab(scheduleData.rooms, renderedTab)
       .slice()
-      .sort((roomA, roomB) => {
+      .sort((roomA: RoomSchedule, roomB: RoomSchedule) => {
         const floorA = resolveMapCalendarRoomFloor(roomA).floorLabel;
         const floorB = resolveMapCalendarRoomFloor(roomB).floorLabel;
         const floorOrderA = parseInt(floorA, 10);
@@ -1209,7 +1222,7 @@ declare global {
     }
     if (
       state.appliedSelection &&
-      !rooms.some((room) => room.id === state.appliedSelection?.roomId)
+      !rooms.some((room: RoomSchedule) => room.id === state.appliedSelection?.roomId)
     ) {
       state.appliedSelection = null;
     }
@@ -1262,7 +1275,7 @@ declare global {
       header,
       element: overlay,
       getOffset: () => state.mapCalendarOffset,
-      setOffset: (nextOffset) => {
+      setOffset: (nextOffset: { x: number; y: number }) => {
         state.mapCalendarOffset = nextOffset;
         persistMapCalendarOffset(nextOffset);
       },
@@ -1486,7 +1499,7 @@ declare global {
     state.editReservationBaselinePathKey = "";
   }
 
-  function syncMapCalendarBodyScrollState(bodyElement) {
+  function syncMapCalendarBodyScrollState(bodyElement: Element | null) {
     if (!(bodyElement instanceof HTMLElement)) {
       return;
     }
@@ -1546,7 +1559,8 @@ declare global {
     RADAR_LAUNCHER_Z_INDEX,
     findGuestReservationTabContainer,
     findGuestReservationTabStyleSource,
-    buildSlackReservationContext: (rootOverride) => buildSlackReservationContext(rootOverride),
+    buildSlackReservationContext: (rootOverride?: Document | HTMLElement | null) =>
+      buildSlackReservationContext(rootOverride),
     showSlackCopyModal: (context) => showSlackCopyModal(context),
     isRadarSupportedPage,
     shouldDelayGuestMapCalendarUi,
@@ -1580,7 +1594,7 @@ declare global {
     syncLmsReservationForm,
   });
 
-  function setMapCalendarSuppressedBySlack(shouldSuppress) {
+  function setMapCalendarSuppressedBySlack(shouldSuppress: boolean) {
     const nextSuppressed = shouldSuppress === true;
     if (state.mapCalendarSuppressedBySlack === nextSuppressed) {
       return;
@@ -1607,7 +1621,7 @@ declare global {
     openMapCalendarModal();
   }
 
-  function bindMapCalendarResizeHandle(handle, card) {
+  function bindMapCalendarResizeHandle(handle: HTMLElement | null, card: HTMLElement | null) {
     if (!(handle instanceof HTMLElement) || !(card instanceof HTMLElement)) {
       return;
     }
@@ -1635,7 +1649,7 @@ declare global {
         // 포인터 캡처 실패는 드래그 자체를 막지 않는다.
       }
 
-      const handleMove = (moveEvent) => {
+      const handleMove = (moveEvent: PointerEvent) => {
         // 모달이 오른쪽에 고정되어 있어 핸들을 오른쪽으로 끌면 너비가 줄어든다.
         const nextWidth = clampMapCalendarWidth(startWidth - (moveEvent.clientX - startX));
         if (nextWidth === null) {
@@ -1683,7 +1697,7 @@ declare global {
     return { min: MAP_CALENDAR_MIN_WIDTH, max };
   }
 
-  function clampMapCalendarWidth(value) {
+  function clampMapCalendarWidth(value: unknown) {
     const numericValue = typeof value === "string" ? Number(value) : value;
     if (typeof numericValue !== "number" || !Number.isFinite(numericValue)) {
       return null;
@@ -1713,7 +1727,7 @@ declare global {
     card.style.width = `${width}px`;
   }
 
-  function persistMapCalendarWidth(width) {
+  function persistMapCalendarWidth(width: number) {
     const clamped = clampMapCalendarWidth(width);
     if (clamped === null) {
       return;
@@ -1798,7 +1812,7 @@ declare global {
     body.scrollLeft = scrollLeft;
   }
 
-  function measureMapCalendarTrackMetrics(overlay) {
+  function measureMapCalendarTrackMetrics(overlay: HTMLElement | null) {
     // 찜꽁 화면 구조 변경에 대비해 값을 하드코딩하지 않고 실제 DOM에서 측정한다.
     const slotCells = queryAllRadarOverlay(
       ".zzk-map-calendar-axis-row .zzk-map-calendar-slots .zzk-map-calendar-hour-label",
@@ -1816,7 +1830,8 @@ declare global {
 
     // scrollEl 콘텐츠 좌표 = 뷰포트 좌표 - scrollEl 왼쪽 + 현재 scrollLeft.
     const scrollRectLeft = scrollEl.getBoundingClientRect().left;
-    const toContentX = (viewportLeft) => viewportLeft - scrollRectLeft + scrollEl.scrollLeft;
+    const toContentX = (viewportLeft: number) =>
+      viewportLeft - scrollRectLeft + scrollEl.scrollLeft;
 
     const firstLeft = toContentX(slotCells[0].getBoundingClientRect().left);
     const secondLeft = toContentX(slotCells[1].getBoundingClientRect().left);
@@ -1860,7 +1875,7 @@ declare global {
     }
   }
 
-  function normalizeElementOffset(element, offset) {
+  function normalizeElementOffset(element: Element | null, offset: { x: number; y: number }) {
     if (!(element instanceof HTMLElement)) {
       return {
         x: Number.isFinite(offset?.x) ? offset.x : 0,
@@ -1887,7 +1902,19 @@ declare global {
     });
   }
 
-  function bindDraggableHeader({ header, element, getOffset, setOffset, applyOffset }) {
+  function bindDraggableHeader({
+    header,
+    element,
+    getOffset,
+    setOffset,
+    applyOffset,
+  }: {
+    header: HTMLElement | null;
+    element: HTMLElement | null;
+    getOffset: () => { x: number; y: number };
+    setOffset: (offset: { x: number; y: number }) => void;
+    applyOffset: () => void;
+  }) {
     if (!(header instanceof HTMLElement) || !(element instanceof HTMLElement)) {
       return;
     }
@@ -1911,7 +1938,7 @@ declare global {
     });
   }
 
-  function isValidDragStartTarget(target) {
+  function isValidDragStartTarget(target: unknown) {
     if (!(target instanceof Element)) {
       return false;
     }
@@ -1921,7 +1948,20 @@ declare global {
     );
   }
 
-  function startElementDrag(event, { element, getOffset, setOffset, applyOffset }) {
+  function startElementDrag(
+    event: Event,
+    {
+      element,
+      getOffset,
+      setOffset,
+      applyOffset,
+    }: {
+      element: HTMLElement | null;
+      getOffset: () => { x: number; y: number };
+      setOffset: (offset: { x: number; y: number }) => void;
+      applyOffset: () => void;
+    },
+  ) {
     if (!(event instanceof PointerEvent)) {
       return;
     }
@@ -1944,7 +1984,7 @@ declare global {
 
     document.body.style.userSelect = "none";
 
-    const handlePointerMove = (moveEvent) => {
+    const handlePointerMove = (moveEvent: PointerEvent) => {
       const deltaX = moveEvent.clientX - startX;
       const deltaY = moveEvent.clientY - startY;
       const nextOffset = clampOffsetWithinViewport({
@@ -1973,7 +2013,7 @@ declare global {
     event.preventDefault();
   }
 
-  function initializeDefaults(elements) {
+  function initializeDefaults(elements: PanelElements) {
     const todayDate = getTodayDateInKST();
 
     const hostDateInput = document.querySelector("input[name='date']");
@@ -1999,7 +2039,7 @@ declare global {
     state.scheduleOverlayEnabled = true;
   }
 
-  function applyPanelDateChange(nextDate) {
+  function applyPanelDateChange(nextDate: unknown) {
     if (!state.elements) {
       return false;
     }
@@ -2025,7 +2065,7 @@ declare global {
     return true;
   }
 
-  function shiftPanelDateBy(dayOffset) {
+  function shiftPanelDateBy(dayOffset: number) {
     if (!state.elements || !Number.isInteger(dayOffset) || dayOffset === 0) {
       return;
     }
@@ -2038,15 +2078,17 @@ declare global {
     }
   }
 
-  function handleHostDateChange(event) {
+  function handleHostDateChange(event: Event) {
     return radarFormSync.handleHostDateChange(event);
   }
 
-  function isLatestTimelineSelectionRequest(requestId) {
+  function isLatestTimelineSelectionRequest(requestId: number) {
     return radarFormSync.isLatestTimelineSelectionRequest(requestId);
   }
 
-  function queueTimelineSelectionApply(selection) {
+  function queueTimelineSelectionApply(
+    selection: Parameters<typeof radarFormSync.queueTimelineSelectionApply>[0],
+  ) {
     return radarFormSync.queueTimelineSelectionApply(selection);
   }
 
@@ -2054,7 +2096,7 @@ declare global {
     return radarFormSync.resetTimelineSelectionState();
   }
 
-  function syncScheduleOverlayToDate(date) {
+  function syncScheduleOverlayToDate(date: string) {
     if (!state.scheduleOverlayEnabled || !date) {
       return;
     }
@@ -2115,13 +2157,13 @@ declare global {
     });
   }
 
-  function formatPlainRoomLabel(roomName) {
+  function formatPlainRoomLabel(roomName: unknown) {
     return typeof roomName === "string" ? roomName.trim() : "";
   }
 
   function renderRoomLabel(
-    container,
-    room,
+    container: HTMLElement | null,
+    room: RoomSchedule,
     { formatter = formatPlainRoomLabel, titleMode = "default" } = {},
   ) {
     if (!(container instanceof HTMLElement)) {
@@ -2148,7 +2190,7 @@ declare global {
     });
   }
 
-  function renderRoomTagLegend(container) {
+  function renderRoomTagLegend(container: HTMLElement | null) {
     if (!(container instanceof HTMLElement)) {
       return;
     }
@@ -2158,7 +2200,7 @@ declare global {
     container.hidden = true;
   }
 
-  function formatMapCalendarRoomLabel(roomName) {
+  function formatMapCalendarRoomLabel(roomName: unknown) {
     if (typeof roomName !== "string") {
       return "";
     }
@@ -2234,7 +2276,7 @@ declare global {
     return bestRoot;
   }
 
-  function queryHostDateInput(root = document) {
+  function queryHostDateInput(root: Document | HTMLElement = document): HTMLInputElement | null {
     const candidates = getScopedHostInputs(root).filter(isHostScannableInput);
 
     let bestInput = null;
@@ -2262,7 +2304,7 @@ declare global {
     return bestScore >= 8 ? bestInput : null;
   }
 
-  function isInsideExtensionSurface(target) {
+  function isInsideExtensionSurface(target: unknown) {
     if (!(target instanceof Element)) {
       return false;
     }
@@ -2274,12 +2316,12 @@ declare global {
     );
   }
 
-  function findHostRoomDropdownButton(root = document) {
-    const pickBestButton = (buttons) => {
+  function findHostRoomDropdownButton(root: Document | HTMLElement = document) {
+    const pickBestButton = (buttons: Element[]): Element | null => {
       let bestButton = null;
       let bestScore = Number.NEGATIVE_INFINITY;
 
-      buttons.forEach((candidate) => {
+      buttons.forEach((candidate: Element) => {
         if (!(candidate instanceof HTMLButtonElement)) {
           return;
         }
@@ -2346,7 +2388,7 @@ declare global {
   //  - 시작 시간: <select>, option value 가 "HH:MM"
   //  - 이용 시간: <select>, option value 가 30분 단위 개수 ("1"=30분, "2"=60분)
   // 타임블록 클릭 결과(방/시작/종료)를 이 세 컨트롤에 반영한다.
-  function findLmsRoomButton(roomName) {
+  function findLmsRoomButton(roomName: unknown) {
     const target = normalizeTextForMatch(extractKnownRoomName(roomName || "") || roomName || "");
     if (!target) {
       return null;
@@ -2373,7 +2415,7 @@ declare global {
     return fallbackCandidates.length === 1 ? fallbackCandidates[0] : null;
   }
 
-  function isLmsRoomButtonSelected(button) {
+  function isLmsRoomButtonSelected(button: Element | null) {
     if (!(button instanceof HTMLElement)) {
       return false;
     }
@@ -2382,7 +2424,7 @@ declare global {
   }
 
   // 시작 시간 select 는 "HH:MM" 옵션들을, 이용 시간 select 는 "1"/"2" 옵션을 갖는다.
-  function findLmsStartTimeSelect(startTime) {
+  function findLmsStartTimeSelect(startTime: unknown) {
     const selects = Array.from(document.querySelectorAll("select"));
     for (const select of selects) {
       const hasHourMinuteOptions = Array.from(select.options).some((option) =>
@@ -2415,7 +2457,10 @@ declare global {
     return null;
   }
 
-  async function syncLmsReservationForm(payload, requestId = null) {
+  async function syncLmsReservationForm(
+    payload: Record<string, unknown>,
+    requestId: number = null,
+  ) {
     // 타임블록 연속 클릭 시 이전 sync 가 나중 선택을 덮어쓰지 않도록
     // 각 await 뒤에서 최신 요청인지 확인한다.
     const isStaleRequest = () => requestId != null && !isLatestTimelineSelectionRequest(requestId);
@@ -2438,7 +2483,7 @@ declare global {
         setFormElementValue(dateInput, targetDate);
         dateSynced = normalizeDateString(dateInput.value) === targetDate;
         // React 가 날짜 변경으로 예약 목록/폼을 다시 그릴 수 있어 한 틱 기다린다.
-        await new Promise((resolve) => setTimeout(resolve, 60));
+        await new Promise((resolve) => window.setTimeout(resolve, 60));
         if (isStaleRequest()) {
           return false;
         }
@@ -2454,7 +2499,7 @@ declare global {
       if (!isLmsRoomButtonSelected(roomButton)) {
         roomButton.click();
         // React 리렌더로 select 들이 새로 붙을 수 있어 한 틱 기다린다.
-        await new Promise((resolve) => setTimeout(resolve, 60));
+        await new Promise((resolve) => window.setTimeout(resolve, 60));
         if (isStaleRequest()) {
           return false;
         }
@@ -2506,7 +2551,7 @@ declare global {
     return dateSynced && roomSynced && startSynced && durationSynced;
   }
 
-  function readHostReservationTimeValues(root = document) {
+  function readHostReservationTimeValues(root: Document | HTMLElement = document) {
     const startInput = queryHostTimeInput(
       ["start", "starttime", "start_date", "begin", "시작"],
       root,
@@ -2514,7 +2559,7 @@ declare global {
     const endInput = queryHostTimeInput(
       ["end", "endtime", "end_date", "finish", "종료"],
       root,
-      startInput,
+      startInput as Element,
     );
 
     let startValue =
@@ -2562,7 +2607,7 @@ declare global {
     };
   }
 
-  function readTimeValueFromElement(element) {
+  function readTimeValueFromElement(element: Element | null) {
     if (!(element instanceof HTMLElement)) {
       return null;
     }
@@ -2577,7 +2622,7 @@ declare global {
     return normalizeHourMinute(snapshot);
   }
 
-  function getScopedHostInputs(root) {
+  function getScopedHostInputs(root: Document | HTMLElement) {
     const scoped = Array.from(root.querySelectorAll("input")).filter(
       (candidate) => candidate instanceof HTMLInputElement,
     );
@@ -2590,7 +2635,7 @@ declare global {
     );
   }
 
-  function isHostInputCandidate(input) {
+  function isHostInputCandidate(input: Element | null) {
     if (!(input instanceof HTMLInputElement)) {
       return false;
     }
@@ -2607,7 +2652,7 @@ declare global {
     return true;
   }
 
-  function isHostScannableInput(input) {
+  function isHostScannableInput(input: Element | null) {
     if (!(input instanceof HTMLInputElement)) {
       return false;
     }
@@ -2621,9 +2666,9 @@ declare global {
     return true;
   }
 
-  function scoreHostTimeInput(input, keywords) {
+  function scoreHostTimeInput(input: HTMLInputElement, keywords: string[]) {
     const descriptor = buildHostInputDescriptor(input);
-    const hasKeyword = keywords.some((keyword) => descriptor.includes(keyword));
+    const hasKeyword = keywords.some((keyword: string) => descriptor.includes(keyword));
     if (!hasKeyword) {
       return Number.NEGATIVE_INFINITY;
     }
@@ -2646,11 +2691,11 @@ declare global {
     const normalizedId = normalizeTextForMatch(input.id || "");
     const exactKeys = [normalizedName, normalizedId];
     const isStartQuery = keywords.some(
-      (keyword) =>
+      (keyword: string) =>
         keyword === "start" || keyword === "starttime" || keyword === "begin" || keyword === "시작",
     );
     const isEndQuery = keywords.some(
-      (keyword) =>
+      (keyword: string) =>
         keyword === "end" || keyword === "endtime" || keyword === "finish" || keyword === "종료",
     );
     if (
@@ -2685,8 +2730,12 @@ declare global {
     return score;
   }
 
-  function queryHostTimeInput(nameKeywords, root = document, excludedInput = null) {
-    const keywords = nameKeywords.map((keyword) => keyword.toLowerCase());
+  function queryHostTimeInput(
+    nameKeywords: string[],
+    root: Document | HTMLElement = document,
+    excludedInput: Element | null = null,
+  ): unknown {
+    const keywords = nameKeywords.map((keyword: string) => keyword.toLowerCase());
     const candidates = getScopedHostInputs(root).filter(
       (input) => isHostInputCandidate(input) && input !== excludedInput,
     );
@@ -2705,7 +2754,7 @@ declare global {
     return Number.isFinite(bestScore) && bestScore > 0 ? bestInput : null;
   }
 
-  function queryFallbackHostTimeInputs(root = document) {
+  function queryFallbackHostTimeInputs(root: Document | HTMLElement = document) {
     const candidates = getScopedHostInputs(root).filter((input) => {
       if (!isHostInputCandidate(input)) {
         return false;
@@ -2735,7 +2784,7 @@ declare global {
     const endInput = queryHostTimeInput(
       ["end", "endtime", "end_date", "finish", "종료"],
       root,
-      startInput,
+      startInput as Element,
     );
 
     if (startInput instanceof HTMLInputElement && endInput instanceof HTMLInputElement) {
@@ -2756,12 +2805,12 @@ declare global {
     return null;
   }
 
-  function setFormElementValue(element, value) {
+  function setFormElementValue(element: Element | null, value: unknown) {
     if (!(element instanceof HTMLInputElement || element instanceof HTMLSelectElement)) {
       return;
     }
 
-    const normalizedValue = value == null ? "" : String(value);
+    const normalizedValue = toDisplayString(value);
     if (element.value === normalizedValue) {
       return;
     }
@@ -2770,12 +2819,12 @@ declare global {
     dispatchFormElementEvents(element);
   }
 
-  function setFormElementValueSilently(element, value) {
+  function setFormElementValueSilently(element: Element | null, value: unknown) {
     if (!(element instanceof HTMLInputElement || element instanceof HTMLSelectElement)) {
       return;
     }
 
-    const normalizedValue = value == null ? "" : String(value);
+    const normalizedValue = toDisplayString(value);
     if (element.value === normalizedValue) {
       return;
     }
@@ -2789,7 +2838,7 @@ declare global {
     }
   }
 
-  function dispatchFormElementEvents(element) {
+  function dispatchFormElementEvents(element: Element | null) {
     if (!(element instanceof HTMLInputElement || element instanceof HTMLSelectElement)) {
       return;
     }
@@ -2798,13 +2847,13 @@ declare global {
     element.dispatchEvent(new Event("change", { bubbles: true }));
   }
 
-  function findHostTimePickerButton(buttonLabel, root = document) {
+  function findHostTimePickerButton(buttonLabel: string, root: Document | HTMLElement = document) {
     const normalizedLabel = normalizeTextForMatch(buttonLabel);
-    const pickBestButton = (buttons) => {
+    const pickBestButton = (buttons: Element[]): Element | null => {
       let bestButton = null;
       let bestScore = Number.NEGATIVE_INFINITY;
 
-      buttons.forEach((candidate) => {
+      buttons.forEach((candidate: Element) => {
         if (!(candidate instanceof HTMLButtonElement)) {
           return;
         }
@@ -2856,14 +2905,14 @@ declare global {
     return null;
   }
 
-  function isElementVisible(element) {
+  function isElementVisible(element: Element | null) {
     const rect = element.getBoundingClientRect();
     return rect.width > 0 && rect.height > 0;
   }
 
   function scheduleInputRefresh(delay = 220) {
     clearTimeout(state.inputRefreshTimer);
-    state.inputRefreshTimer = setTimeout(() => {
+    state.inputRefreshTimer = window.setTimeout(() => {
       if (state.loading) {
         scheduleInputRefresh(180);
         return;
@@ -2875,7 +2924,7 @@ declare global {
 
   function scheduleCalendarOverlayRefresh() {
     clearTimeout(state.autoScheduleRefreshTimer);
-    state.autoScheduleRefreshTimer = setTimeout(() => {
+    state.autoScheduleRefreshTimer = window.setTimeout(() => {
       if (
         !state.scheduleOverlayEnabled ||
         !isMapCalendarModalOpenRequested() ||
@@ -3065,7 +3114,7 @@ declare global {
     state.hostTimePickerInteractionWatcherInstalled = true;
   }
 
-  function handleHostTimePickerManualInteraction(event) {
+  function handleHostTimePickerManualInteraction(event: Event) {
     if (event.isTrusted !== true) {
       return;
     }
@@ -3087,7 +3136,7 @@ declare global {
     state.lastHostTimePickerManualInteractionAt = Date.now();
   }
 
-  function isHostTimeControlElement(control) {
+  function isHostTimeControlElement(control: Element | null) {
     if (!(control instanceof HTMLElement)) {
       return false;
     }
@@ -3127,7 +3176,7 @@ declare global {
     );
   }
 
-  function handleReservationOwnerInputEvent(event) {
+  function handleReservationOwnerInputEvent(event: Event) {
     if (!isRadarSupportedPage()) {
       return;
     }
@@ -3153,7 +3202,7 @@ declare global {
     rememberReservationOwnerName(readHostFieldDisplayValue(target));
   }
 
-  function handleReservationIntentClick(event) {
+  function handleReservationIntentClick(event: Event) {
     if (!isRadarSupportedPage()) {
       return;
     }
@@ -3182,7 +3231,7 @@ declare global {
     markReservationActionIntent({ root: rootCandidate });
   }
 
-  function handleReservationIntentSubmit(event) {
+  function handleReservationIntentSubmit(event: Event) {
     if (!isRadarSupportedPage()) {
       return;
     }
@@ -3207,7 +3256,7 @@ declare global {
     markReservationActionIntent({ root: form });
   }
 
-  function isReservationIntentActionLabel(normalizedLabel) {
+  function isReservationIntentActionLabel(normalizedLabel: string) {
     if (!normalizedLabel) {
       return false;
     }
@@ -3219,7 +3268,7 @@ declare global {
     return false;
   }
 
-  function markReservationActionIntent(options: { root?: unknown } = {}) {
+  function markReservationActionIntent(options: { root?: Document | HTMLElement } = {}) {
     state.lastReservationActionAt = Date.now();
 
     const rootCandidate = options?.root;
@@ -3237,9 +3286,11 @@ declare global {
       typeof contextSnapshot === "object" &&
       previousContext &&
       !isMeaningfulSlackContextValue(contextSnapshot.ownerName) &&
-      isMeaningfulSlackContextValue(previousContext.ownerName)
+      isMeaningfulSlackContextValue((previousContext as Record<string, unknown>).ownerName)
     ) {
-      contextSnapshot.ownerName = previousContext.ownerName;
+      contextSnapshot.ownerName = toDisplayString(
+        (previousContext as Record<string, unknown>).ownerName,
+      );
     }
     if (
       contextSnapshot &&
@@ -3288,7 +3339,7 @@ declare global {
     const now = Date.now();
     const maxAgeMs = 120000;
     for (const [attemptId, attempt] of state.pendingReservationAttempts.entries()) {
-      const attemptAt = Number(attempt?.at || 0);
+      const attemptAt = Number((attempt as { at?: unknown })?.at || 0);
       if (!Number.isFinite(attemptAt) || now - attemptAt > maxAgeMs) {
         deletePendingReservationAttempt(attemptId);
       }
@@ -3300,7 +3351,8 @@ declare global {
 
     const attemptsByAge = Array.from(state.pendingReservationAttempts.entries()).sort(
       ([, leftAttempt], [, rightAttempt]) =>
-        Number(leftAttempt?.at || 0) - Number(rightAttempt?.at || 0),
+        Number((leftAttempt as { at?: unknown })?.at || 0) -
+        Number((rightAttempt as { at?: unknown })?.at || 0),
     );
     for (const [attemptId] of attemptsByAge) {
       if (state.pendingReservationAttempts.size <= 10) {
@@ -3310,7 +3362,7 @@ declare global {
     }
   }
 
-  function deletePendingReservationAttempt(attemptId) {
+  function deletePendingReservationAttempt(attemptId: unknown) {
     if (typeof attemptId !== "string" || attemptId === "") {
       return false;
     }
@@ -3338,7 +3390,7 @@ declare global {
     delete document.documentElement.dataset.zzkReservationAttemptAt;
   }
 
-  function readActionTargetText(actionTarget) {
+  function readActionTargetText(actionTarget: Element | null) {
     if (!(actionTarget instanceof HTMLElement)) {
       return "";
     }
@@ -3362,8 +3414,8 @@ declare global {
       .trim();
   }
 
-  function handleReservationNetworkMessage(event) {
-    return slackSuccessFlow.handleReservationNetworkMessage(event);
+  function handleReservationNetworkMessage(event: Event) {
+    return slackSuccessFlow.handleReservationNetworkMessage(event as MessageEvent<any>);
   }
 
   function restorePendingSlackModalState() {
@@ -3383,14 +3435,14 @@ declare global {
     return slackSuccessFlow.queueSlackModalFromPersistedEditSubmitIfNeeded();
   }
 
-  function normalizeReservationMutationMethod(methodValue) {
-    const method = String(methodValue || "").toUpperCase();
+  function normalizeReservationMutationMethod(methodValue: unknown) {
+    const method = toDisplayString(methodValue).toUpperCase();
     return method === "POST" || method === "PUT" || method === "PATCH" || method === "DELETE"
       ? method
       : "";
   }
 
-  function parseUrlSafely(urlValue) {
+  function parseUrlSafely(urlValue: unknown) {
     if (typeof urlValue !== "string" || urlValue.trim() === "") {
       return null;
     }
@@ -3402,15 +3454,18 @@ declare global {
     }
   }
 
-  function createSlackMessageFingerprint(context, payload) {
+  function createSlackMessageFingerprint(
+    context: Record<string, unknown>,
+    payload: Record<string, unknown>,
+  ) {
     const requestUrl = parseUrlSafely(typeof payload?.url === "string" ? payload.url : "");
     return [
-      context.date,
-      context.startTime,
-      context.endTime,
-      context.roomName,
-      context.ownerName,
-      context.description,
+      toDisplayString(context.date),
+      toDisplayString(context.startTime),
+      toDisplayString(context.endTime),
+      toDisplayString(context.roomName),
+      toDisplayString(context.ownerName),
+      toDisplayString(context.description),
       requestUrl ? requestUrl.pathname : "",
       location.pathname,
     ]
@@ -3418,12 +3473,12 @@ declare global {
       .toLowerCase();
   }
 
-  function isMeaningfulSlackContextValue(value) {
+  function isMeaningfulSlackContextValue(value: unknown) {
     const normalized = normalizeSlackFieldText(typeof value === "string" ? value : "");
     return normalized !== "" && normalized !== "-";
   }
 
-  function shouldSkipSlackCopyModal(fingerprint) {
+  function shouldSkipSlackCopyModal(fingerprint: string) {
     if (typeof fingerprint !== "string" || fingerprint === "") {
       return false;
     }
@@ -3438,7 +3493,7 @@ declare global {
     return isDuplicate;
   }
 
-  function buildSlackReservationContext(rootOverride = null) {
+  function buildSlackReservationContext(rootOverride: Document | HTMLElement | null = null) {
     const root =
       rootOverride instanceof HTMLElement || rootOverride === document
         ? rootOverride
@@ -3498,7 +3553,7 @@ declare global {
     };
   }
 
-  function readHostRoomName(root = document) {
+  function readHostRoomName(root: Document | HTMLElement = document) {
     const scopedSelect = root.querySelector("select[name='spaceId'], select[name='roomId']");
     const roomSelect =
       scopedSelect instanceof HTMLSelectElement
@@ -3535,7 +3590,7 @@ declare global {
     return "";
   }
 
-  function readHostReservationOwnerName(root = document) {
+  function readHostReservationOwnerName(root: Document | HTMLElement = document) {
     const ownerSpecificKeywords = [
       "예약자명",
       "예약자",
@@ -3591,7 +3646,7 @@ declare global {
     return "";
   }
 
-  function isPotentialReservationOwnerElement(control) {
+  function isPotentialReservationOwnerElement(control: Element | null) {
     if (!(control instanceof HTMLElement)) {
       return false;
     }
@@ -3606,7 +3661,7 @@ declare global {
     );
   }
 
-  function rememberReservationOwnerName(value) {
+  function rememberReservationOwnerName(value: unknown) {
     const normalizedOwnerName = normalizeHostReservationOwnerCandidate(value);
     if (!normalizedOwnerName) {
       return "";
@@ -3616,7 +3671,7 @@ declare global {
     return normalizedOwnerName;
   }
 
-  function readHostReservationOwnerFromNameInputs(root = document) {
+  function readHostReservationOwnerFromNameInputs(root: Document | HTMLElement = document) {
     if (!(root instanceof HTMLElement || root === document)) {
       return "";
     }
@@ -3670,7 +3725,7 @@ declare global {
   }
 
   /** input/textarea 의 값만 읽는다(확장 컨트롤을 포함하지 않을 때). */
-  function readPlainControlValue(control) {
+  function readPlainControlValue(control: Element | null) {
     const isTextField =
       control instanceof HTMLInputElement || control instanceof HTMLTextAreaElement;
     return isTextField ? normalizeSlackFieldText(control.value || "") : "";
@@ -3776,7 +3831,7 @@ declare global {
     return bestValue;
   }
 
-  function buildSlackReservationMessage(context) {
+  function buildSlackReservationMessage(context: Record<string, unknown>) {
     const safeContext = context && typeof context === "object" ? context : {};
     const channelMention = normalizeSlackChannelToken(
       typeof safeContext.channelMention === "string"
@@ -3822,7 +3877,7 @@ declare global {
 
   // 개편 서비스(lms+) 예약 생성 응답 body → Slack 모달 context.
   // 응답 예: {date,startTime,endTime,spaceName,floor,purpose,reserverName,mine,id,spaceId}
-  function buildLmsSlackReservationContext(responseBody) {
+  function buildLmsSlackReservationContext(responseBody: Record<string, unknown> | null) {
     if (!responseBody || typeof responseBody !== "object") {
       return null;
     }
@@ -3884,7 +3939,7 @@ declare global {
     state.slackChannelHistory = readStoredChannelTokens(SLACK_CHANNEL_HISTORY_STORAGE_KEY);
   }
 
-  function rememberSlackChannelMention(channelMention) {
+  function rememberSlackChannelMention(channelMention: unknown) {
     const normalizedChannel = normalizeSlackChannelToken(channelMention, {
       allowBare: false,
     });
@@ -3901,7 +3956,7 @@ declare global {
     return nextHistory;
   }
 
-  function forgetSlackChannelMention(channelMention) {
+  function forgetSlackChannelMention(channelMention: unknown) {
     const normalizedChannel = normalizeSlackChannelToken(channelMention, {
       allowBare: false,
     });
@@ -3924,7 +3979,7 @@ declare global {
     );
   }
 
-  function readStoredChannelTokens(storageKey) {
+  function readStoredChannelTokens(storageKey: string) {
     const rawValue = readStoredText(storageKey, "");
     if (!rawValue) {
       return [];
@@ -3938,7 +3993,7 @@ declare global {
     return Array.from(new Set(normalizedTokens));
   }
 
-  function writeStoredChannelTokens(storageKey, channelTokens) {
+  function writeStoredChannelTokens(storageKey: string, channelTokens: unknown) {
     if (!Array.isArray(channelTokens) || channelTokens.length === 0) {
       writeStoredText(storageKey, "");
       return;
@@ -3961,7 +4016,10 @@ declare global {
     data?: unknown;
   }
 
-  function sendMessage(message: { type?: string; payload?: unknown }): Promise<TransportResponse> {
+  function sendMessage(message: {
+    type?: string;
+    payload?: Record<string, unknown>;
+  }): Promise<TransportResponse> {
     pushDebugEvent("transport", "send-message", {
       type: message?.type,
       fallbackCandidate: shouldUseDirectApiFallback(message),
@@ -3990,7 +4048,7 @@ declare global {
     });
   }
 
-  function sendMessageViaRuntime(message) {
+  function sendMessageViaRuntime(message: { type?: string; payload?: Record<string, unknown> }) {
     return new Promise((resolve, reject) => {
       if (
         typeof chrome === "undefined" ||
@@ -4067,13 +4125,14 @@ declare global {
     return error;
   }
 
-  function isRuntimeMessageTimeoutError(error) {
-    return Boolean(
-      error && typeof error === "object" && error.name === "ZzkRuntimeMessageTimeoutError",
-    );
+  function isRuntimeMessageTimeoutError(error: unknown) {
+    return Boolean(error instanceof Error && error.name === "ZzkRuntimeMessageTimeoutError");
   }
 
-  function shouldUseDirectApiFallback(message) {
+  function shouldUseDirectApiFallback(message: {
+    type?: string;
+    payload?: Record<string, unknown>;
+  }) {
     if (!message || typeof message !== "object") {
       return false;
     }
@@ -4081,7 +4140,7 @@ declare global {
     return typeof getDirectApiFallbackHandler(message.type) === "function";
   }
 
-  function getDirectApiFallbackHandler(messageType) {
+  function getDirectApiFallbackHandler(messageType: unknown) {
     if (messageType === "ZZK_FETCH_AVAILABILITY") {
       return fetchLmsAvailability;
     }
@@ -4093,7 +4152,10 @@ declare global {
     return null;
   }
 
-  async function sendMessageDirectFallback(message) {
+  async function sendMessageDirectFallback(message: {
+    type?: string;
+    payload?: Record<string, unknown>;
+  }) {
     pushDebugEvent("transport", "direct-fallback-start", {
       type: message?.type,
     });
@@ -4113,7 +4175,7 @@ declare global {
     }
   }
 
-  function normalizeDateInput(inputElement) {
+  function normalizeDateInput(inputElement: Element | null) {
     if (!(inputElement instanceof HTMLInputElement)) {
       return "";
     }
@@ -4137,7 +4199,7 @@ declare global {
     return false;
   }
 
-  function setDateInputMinimum(inputElement, minimumDate) {
+  function setDateInputMinimum(inputElement: Element | null, minimumDate: unknown) {
     if (!(inputElement instanceof HTMLInputElement)) {
       return;
     }
@@ -4148,7 +4210,7 @@ declare global {
     inputElement.removeAttribute("min");
   }
 
-  function normalizeTimeInput(inputElement) {
+  function normalizeTimeInput(inputElement: Element | null) {
     if (!(inputElement instanceof HTMLInputElement)) {
       return "";
     }
@@ -4161,7 +4223,7 @@ declare global {
     return inputElement.value;
   }
 
-  function validateTenMinuteField(inputElement) {
+  function validateTenMinuteField(inputElement: Element | null) {
     if (!(inputElement instanceof HTMLInputElement)) {
       return false;
     }
@@ -4206,7 +4268,10 @@ declare global {
     return normalizeMapCalendarSpaceTab(tab) === MAP_CALENDAR_SPACE_TAB_PAIR ? "페어룸" : "회의실";
   }
 
-  function getRoomsForMapCalendarSpaceTab(rooms, tab = state.mapCalendarSpaceTab) {
+  function getRoomsForMapCalendarSpaceTab(
+    rooms: RoomSchedule[],
+    tab: unknown = state.mapCalendarSpaceTab,
+  ): RoomSchedule[] {
     const normalizedTab = normalizeMapCalendarSpaceTab(tab);
     return Array.isArray(rooms)
       ? rooms.filter((room) => {
@@ -4218,7 +4283,7 @@ declare global {
       : [];
   }
 
-  function inferRoomKindFromName(roomName) {
+  function inferRoomKindFromName(roomName: unknown) {
     const normalizedName = normalizeTargetRoomName(roomName);
     return normalizedName.startsWith("페")
       ? MAP_CALENDAR_SPACE_TAB_PAIR
@@ -4227,14 +4292,18 @@ declare global {
 
   // 테스트 훅: 테스트 호스트(example.com), 테스트가 미리 심어둔 플래그, 또는 DEBUG 모드에서만
   // 노출한다. lms+ 실제 호스트에서는 플래그가 없으므로 그대로 감춰진다.
-  if (location.hostname === "example.com" || globalThis.__ZZK_TEST_HOOKS__ === true || DEBUG_MODE) {
-    globalThis.__zzkTestApi = {
+  if (
+    location.hostname === "example.com" ||
+    (globalThis as { __ZZK_TEST_HOOKS__?: boolean }).__ZZK_TEST_HOOKS__ === true ||
+    DEBUG_MODE
+  ) {
+    (globalThis as { __zzkTestApi?: unknown }).__zzkTestApi = {
       clampMapCalendarWidth,
       getMapCalendarWidthBounds,
       computeMapCalendarCurrentTimeScrollLeft,
       getCurrentMinuteOfDayInKST,
       // lms+ 예약 폼 반영 로직을 슬롯 클릭 없이 직접 검증할 때 쓴다.
-      syncLmsReservationForm(payload) {
+      syncLmsReservationForm(payload: Record<string, unknown>) {
         return syncLmsReservationForm(payload);
       },
       syncGuestUi() {
@@ -4297,7 +4366,7 @@ declare global {
         return true;
       },
       // 테스트에서 특정 날짜의 스케줄을 직접 렌더할 때 쓴다.
-      async renderScheduleForDate(date) {
+      async renderScheduleForDate(date: string) {
         if (!isRadarSupportedPage()) {
           return false;
         }
@@ -4369,7 +4438,7 @@ declare global {
     };
   }
 
-  function persistMapCalendarSpaceTab(tab) {
+  function persistMapCalendarSpaceTab(tab: unknown) {
     const normalizedTab = normalizeMapCalendarSpaceTab(tab);
     writeStoredText(MAP_CALENDAR_SPACE_TAB_STORAGE_KEY, normalizedTab);
   }

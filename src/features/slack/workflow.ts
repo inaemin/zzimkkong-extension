@@ -28,8 +28,10 @@ type Deps = {
   setMapCalendarSuppressedBySlack: (suppressed: boolean) => void;
   formatSlackReminderLeadOptionLabel: typeof import("./shared.js").formatSlackReminderLeadOptionLabel;
   // content.js 에 있어 타입을 끌어올 수 없다. 쓰는 형태만 적는다.
-  buildSlackReservationContext: () => Record<string, unknown>;
-  buildSlackReservationMessage: (context: unknown) => string;
+  buildSlackReservationContext: (
+    rootOverride?: Document | HTMLElement | null,
+  ) => Record<string, unknown>;
+  buildSlackReservationMessage: (context: Record<string, unknown>) => string;
   rememberSlackChannelMention: (channel: string) => void;
   forgetSlackChannelMention: (channel: string) => void;
 };
@@ -83,7 +85,7 @@ export function createSlackWorkflow(deps: Deps) {
       : { ...base, channelMention: state.slackChannelMention || "" };
   }
 
-  function showSlackCopyModal(context) {
+  function showSlackCopyModal(context: unknown) {
     if (!(document.body instanceof HTMLBodyElement)) {
       return;
     }
@@ -158,7 +160,7 @@ export function createSlackWorkflow(deps: Deps) {
     }
   }
 
-  async function copyTextToClipboard(textValue, textAreaElement) {
+  async function copyTextToClipboard(textValue: string, textAreaElement: HTMLElement | null) {
     if (typeof textValue !== "string" || textValue === "") {
       return false;
     }

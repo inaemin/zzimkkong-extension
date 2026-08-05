@@ -108,7 +108,7 @@ declare global {
     return cloned
       .text()
       .then(parseJsonObject)
-      .catch(() => null);
+      .catch((): Record<string, unknown> | null => null);
   }
 
   /** JSON 객체면 그대로, 아니면 null. */
@@ -283,7 +283,7 @@ declare global {
       const requestContextPromise = extractReservationRequestContextFromFetchRequest(
         input,
         init,
-      ).catch(() => null);
+      ).catch((): ReservationRequestContext | null => null);
 
       const { url, method } = readFetchTarget(input, init);
 

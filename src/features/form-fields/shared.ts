@@ -3,7 +3,7 @@ import { normalizeTextForMatch } from "../../utils/shared.js";
 import { normalizeSlackFieldText } from "../slack/shared.js";
 
 export function getInputAssociatedLabelText(input: HTMLInputElement): string {
-  const labels = [];
+  const labels: string[] = [];
   if (input.labels && input.labels.length > 0) {
     Array.from(input.labels).forEach((label) => {
       labels.push(label.textContent || "");
