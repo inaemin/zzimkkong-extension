@@ -253,7 +253,6 @@ declare global {
     latestMapName: "",
     lastReservationActionAt: 0,
     lastReservationContext: null,
-    lastReservationAttemptId: "",
     pendingReservationAttempts: new Map(),
     lastKnownReservationOwnerName: "",
     lastSlackModalFingerprint: "",
@@ -299,30 +298,21 @@ declare global {
     installHostTimePickerInteractionWatcher();
 
     if (isRadarSupportedPage()) {
-      if (!isGuestUiReadyForActivation()) {
-        removeMapCalendarLauncher();
-        removeMapCalendarOverlay();
-        state.mapCalendarVisible = false;
-        state.lastAutoOpenPath = null;
-      } else {
-        queueSlackModalFromPersistedEditSubmitIfNeeded("boot-ready");
-        if (state.mapCalendarAlwaysOpen) {
-          state.scheduleOverlayEnabled = true;
-          state.mapCalendarVisible = true;
-        }
-        ensureTopNavigationClickability();
-        installTopNavigationClickBypass();
-        ensurePanel();
-        ensureSlackModalTrigger();
-        ensureMapCalendarLauncher();
-        const openedPendingSlackModal = tryOpenPendingSlackCopyModal();
-        if (isMapCalendarModalOpenRequested()) {
-          if (!openedPendingSlackModal) {
-            openMapCalendarModal();
-          }
-        }
-        void refreshAvailability();
+      queueSlackModalFromPersistedEditSubmitIfNeeded("boot-ready");
+      if (state.mapCalendarAlwaysOpen) {
+        state.scheduleOverlayEnabled = true;
+        state.mapCalendarVisible = true;
       }
+      ensureTopNavigationClickability();
+      installTopNavigationClickBypass();
+      ensurePanel();
+      ensureSlackModalTrigger();
+      ensureMapCalendarLauncher();
+      const openedPendingSlackModal = tryOpenPendingSlackCopyModal();
+      if (isMapCalendarModalOpenRequested() && !openedPendingSlackModal) {
+        openMapCalendarModal();
+      }
+      void refreshAvailability();
     }
 
     const observer = new MutationObserver((records) => {
@@ -400,13 +390,6 @@ declare global {
       return;
     }
     queueSlackModalFromPersistedEditSubmitIfNeeded("mutation-observer");
-    if (!isGuestUiReadyForActivation()) {
-      removeMapCalendarLauncher();
-      removeMapCalendarOverlay();
-      state.mapCalendarVisible = false;
-      state.lastAutoOpenPath = null;
-      return;
-    }
     ensureTopNavigationClickability();
     installTopNavigationClickBypass();
     ensurePanel();
@@ -945,7 +928,6 @@ declare global {
           sharingMapId,
           date: normalizedDate,
           roomType: activeTab,
-          allowPastDate: shouldAllowPastReservationDate(),
         },
       });
 
@@ -1120,9 +1102,7 @@ declare global {
       state.mapCalendarCurrentTimeScrollDate = null;
     }
     state.lastRenderedScheduleTab = renderedTab;
-    const earliestSelectableMinute = shouldAllowPastReservationDate()
-      ? 0
-      : getEarliestSelectableMinuteForDate(selectionDate);
+    const earliestSelectableMinute = getEarliestSelectableMinuteForDate(selectionDate);
 
     if (state.appliedSelection && state.appliedSelection.date !== selectionDate) {
       state.appliedSelection = null;
@@ -1465,7 +1445,6 @@ declare global {
       buildSlackReservationContext(rootOverride),
     showSlackCopyModal: (context) => showSlackCopyModal(context),
     isRadarSupportedPage,
-    shouldDelayGuestMapCalendarUi,
     isMapCalendarModalOpenRequested,
     readStoredBoolean,
     normalizeMapCalendarSpaceTab,
@@ -2649,13 +2628,6 @@ declare global {
     state.lastGuestRouteChangeAt = Date.now();
 
     syncMapCalendarAlwaysOpenPreference();
-    if (!isGuestUiReadyForActivation()) {
-      removeMapCalendarLauncher();
-      removeMapCalendarOverlay();
-      state.mapCalendarVisible = false;
-      state.lastAutoOpenPath = null;
-      return;
-    }
     queueSlackModalFromPersistedEditSubmitIfNeeded("location-change");
     ensurePanel();
     ensureMapCalendarLauncher();
@@ -2955,7 +2927,6 @@ declare global {
     state.lastReservationContext =
       contextSnapshot && typeof contextSnapshot === "object" ? contextSnapshot : null;
     const reservationAttemptId = createReservationAttemptId();
-    state.lastReservationAttemptId = reservationAttemptId;
     state.pendingReservationAttempts.set(reservationAttemptId, {
       id: reservationAttemptId,
       at: state.lastReservationActionAt,
@@ -3510,7 +3481,6 @@ declare global {
     state,
     PAGE_RESERVATION_EVENT_TYPE,
     PENDING_SLACK_MODAL_STORAGE_KEY,
-    isGuestUiReadyForActivation,
     normalizeReservationMutationMethod,
     createSlackMessageFingerprint,
     shouldSkipSlackCopyModal,
@@ -3563,13 +3533,6 @@ declare global {
   }
 
   // lms+ 예약 페이지에는 지연 마운트 조건이 없어 레이더 UI 를 바로 띄울 수 있다.
-  function shouldDelayGuestMapCalendarUi() {
-    return false;
-  }
-
-  function isGuestUiReadyForActivation() {
-    return true;
-  }
 
   function syncMapCalendarAlwaysOpenPreference() {
     state.mapCalendarAlwaysOpen = readStoredBoolean(MAP_CALENDAR_ALWAYS_OPEN_STORAGE_KEY, true);
@@ -3835,13 +3798,10 @@ declare global {
   }
 
   function getMinimumSelectableDateForCurrentContext(_value?: unknown) {
-    return shouldAllowPastReservationDate() ? "" : getTodayDateInKST();
+    return getTodayDateInKST();
   }
 
   // lms+ 에는 과거 날짜를 허용하는 수정 페이지가 없다.
-  function shouldAllowPastReservationDate() {
-    return false;
-  }
 
   function setDateInputMinimum(inputElement: Element | null, minimumDate: unknown) {
     if (!(inputElement instanceof HTMLInputElement)) {
@@ -3923,7 +3883,6 @@ declare global {
       clampMapCalendarWidth,
       getMapCalendarWidthBounds,
       computeMapCalendarCurrentTimeScrollLeft,
-      getCurrentMinuteOfDayInKST,
       // 호스트 폼 스캔. 실제 lms+ 마크업 없이 점수 규칙만 검증할 때 쓴다.
       queryHostDateInput: (root: Document | HTMLElement = document) =>
         queryHostDateInput(root, isInsideExtensionSurface),
@@ -4018,7 +3977,6 @@ declare global {
           slackChannelMention: state.slackChannelMention,
           lastReservationActionAt: state.lastReservationActionAt,
           lastReservationContext: state.lastReservationContext,
-          lastReservationAttemptId: state.lastReservationAttemptId,
           pendingReservationAttemptCount: state.pendingReservationAttempts.size,
           pendingReservationAttemptIds: Array.from(state.pendingReservationAttempts.keys()),
           lastKnownReservationOwnerName: state.lastKnownReservationOwnerName,
@@ -4028,7 +3986,6 @@ declare global {
           slackModalVisible: state.slackModalVisible,
           lastSlackModalFingerprint: state.lastSlackModalFingerprint,
           lastSlackModalShownAt: state.lastSlackModalShownAt,
-          isGuestUiReadyForActivation: isGuestUiReadyForActivation(),
           debugMode: DEBUG_MODE,
         };
       },

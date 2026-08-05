@@ -32,7 +32,6 @@ type Deps = {
   isRadarSupportedPage: typeof import("../../utils/routes.js").isRadarSupportedPage;
   normalizeMapCalendarSpaceTab: typeof import("../../constants/runtime.js").normalizeMapCalendarSpaceTab;
   // 아래는 content.js 에 있어 타입을 끌어올 수 없다. 쓰는 형태만 적는다.
-  shouldDelayGuestMapCalendarUi: () => boolean;
   isMapCalendarModalOpenRequested: () => boolean;
   refreshDailySchedule: (date: string) => Promise<unknown>;
   setScheduleLoadingDate: (date: string, isLoading: boolean, tab?: SpaceTab) => void;
@@ -67,7 +66,6 @@ export function createRadarWorkflow(deps: Deps) {
     buildSlackReservationContext,
     showSlackCopyModal,
     isRadarSupportedPage,
-    shouldDelayGuestMapCalendarUi,
     isMapCalendarModalOpenRequested,
     readStoredBoolean,
     normalizeMapCalendarSpaceTab,
@@ -169,14 +167,6 @@ export function createRadarWorkflow(deps: Deps) {
       return;
     }
 
-    if (shouldDelayGuestMapCalendarUi()) {
-      removeMapCalendarLauncher();
-      state.mapCalendarVisible = false;
-      removeMapCalendarOverlay();
-      state.lastAutoOpenPath = null;
-      return;
-    }
-
     const isOpen =
       !state.mapCalendarSuppressedBySlack &&
       isMapCalendarModalOpenRequested() &&
@@ -190,11 +180,6 @@ export function createRadarWorkflow(deps: Deps) {
   /** 자동 열기를 시도할 상황인지. 아니면 상태를 정리하고 false. */
   function shouldConsiderAutoOpen() {
     if (state.mapCalendarSuppressedBySlack) {
-      state.lastAutoOpenPath = null;
-      return false;
-    }
-    if (shouldDelayGuestMapCalendarUi()) {
-      state.mapCalendarVisible = false;
       state.lastAutoOpenPath = null;
       return false;
     }
@@ -360,13 +345,6 @@ export function createRadarWorkflow(deps: Deps) {
   function canOpenMapCalendarModal() {
     if (!isRadarSupportedPage() || !state.scheduleOverlayEnabled) {
       updateMapCalendarLauncherState();
-      return false;
-    }
-
-    if (shouldDelayGuestMapCalendarUi()) {
-      state.mapCalendarVisible = false;
-      state.lastAutoOpenPath = null;
-      removeMapCalendarOverlay();
       return false;
     }
 

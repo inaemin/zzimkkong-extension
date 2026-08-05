@@ -23,7 +23,6 @@ export function createSlackSuccessFlow(deps: Deps) {
     state,
     PAGE_RESERVATION_EVENT_TYPE,
     PENDING_SLACK_MODAL_STORAGE_KEY,
-    isGuestUiReadyForActivation,
     normalizeReservationMutationMethod,
     createSlackMessageFingerprint,
     shouldSkipSlackCopyModal,
@@ -229,11 +228,7 @@ export function createSlackSuccessFlow(deps: Deps) {
    */
   function openPendingModalIfStillReady() {
     state.pendingSlackModalTimer = null;
-    if (
-      !state.pendingSlackModalContext ||
-      state.slackModalVisible ||
-      !isGuestUiReadyForActivation()
-    ) {
+    if (!state.pendingSlackModalContext || state.slackModalVisible) {
       return;
     }
 
@@ -249,11 +244,7 @@ export function createSlackSuccessFlow(deps: Deps) {
   }
 
   function tryOpenPendingSlackCopyModal() {
-    if (
-      !state.pendingSlackModalContext ||
-      state.slackModalVisible ||
-      !isGuestUiReadyForActivation()
-    ) {
+    if (!state.pendingSlackModalContext || state.slackModalVisible) {
       return false;
     }
 
@@ -356,7 +347,6 @@ type Deps = {
   state: RadarState;
   PAGE_RESERVATION_EVENT_TYPE: string;
   PENDING_SLACK_MODAL_STORAGE_KEY: string;
-  isGuestUiReadyForActivation: () => boolean;
   showSlackCopyModal: (context: unknown) => void;
   onReservationMutated?: () => void;
   // content.js 에 있어 타입을 끌어올 수 없다. 쓰는 형태만 적는다.

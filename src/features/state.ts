@@ -82,7 +82,6 @@ export interface RadarState {
   // 예약 감지(MAIN world 훅 → content script).
   lastReservationActionAt: number;
   lastReservationContext: unknown;
-  lastReservationAttemptId: string;
   pendingReservationAttempts: Map<string, unknown>;
   lastKnownReservationOwnerName: string;
 
