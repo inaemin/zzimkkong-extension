@@ -302,7 +302,7 @@ export function createSlackSuccessFlow(deps: Deps) {
 
     try {
       return new URL(urlValue, location.origin);
-    } catch (error) {
+    } catch {
       return null;
     }
   }

@@ -59,7 +59,7 @@ export function createRadarWorkflow(deps: Deps) {
     const manualVerificationEnabled = (() => {
       try {
         return window.localStorage.getItem("zzk-manual-slack-modal-trigger-v1") === "1";
-      } catch (error) {
+      } catch {
         return false;
       }
     })();

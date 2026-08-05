@@ -126,8 +126,8 @@ export default defineConfig([
         "cb",
       ],
 
-      // 전역 해체가 끝날 때까지는 경고. 끝나면 error 로 올린다.
-      "no-unused-vars": ["warn", { argsIgnorePattern: "^_", caughtErrors: "none" }],
+      // 전역 해체가 끝나 이제 error 다. content.js 만 예외로 둔다(아래 블록).
+      "no-unused-vars": ["error", { argsIgnorePattern: "^_", caughtErrors: "none" }],
     },
   },
 
@@ -160,6 +160,8 @@ export default defineConfig([
       "no-restricted-syntax": "off",
       "max-params": "off",
       "max-depth": "off",
+      // 56건. 3단계에서 React 로 옮기다 만 잔여라 해체와 함께 정리한다.
+      "no-unused-vars": "warn",
     },
   },
 
@@ -247,7 +249,7 @@ export default defineConfig([
       },
     },
     rules: {
-      "no-unused-vars": ["warn", { argsIgnorePattern: "^_", caughtErrors: "none" }],
+      "no-unused-vars": ["error", { argsIgnorePattern: "^_", caughtErrors: "none" }],
       "preserve-caught-error": "off",
     },
   },
@@ -292,7 +294,7 @@ export default defineConfig([
     // TS 전환 초기(2.5-B)에는 느슨하게. 조이는 건 5단계.
     rules: {
       "@typescript-eslint/no-explicit-any": "warn",
-      "@typescript-eslint/no-unused-vars": ["warn", { argsIgnorePattern: "^_" }],
+      "@typescript-eslint/no-unused-vars": ["error", { argsIgnorePattern: "^_" }],
       // JS 규칙과 중복되므로 TS 버전만 남긴다.
       "no-unused-vars": "off",
 

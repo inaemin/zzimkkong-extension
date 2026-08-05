@@ -1,6 +1,5 @@
 import fs from "node:fs";
 import path from "node:path";
-import process from "node:process";
 import { fileURLToPath } from "node:url";
 
 // 루트의 floor_map_<N>F.svg 들을 data-URI 로 인라인한

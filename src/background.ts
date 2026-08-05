@@ -297,7 +297,7 @@ interface SpaceContext {
       }
       try {
         return JSON.parse(text);
-      } catch (error) {
+      } catch {
         return {};
       }
     }
