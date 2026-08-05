@@ -47,7 +47,6 @@ import {
   formatSlackReminderLeadOptionLabel,
 } from "./features/slack/shared.js";
 import {
-  buildHostInputDescriptor,
   normalizeHostReservationOwnerCandidate,
   normalizeHostRoomCandidate,
   extractKnownRoomName,
@@ -126,6 +125,14 @@ import {
   pointInRect,
   readStoredMapCalendarOffset,
 } from "./features/radar/overlay-position.js";
+import {
+  isElementVisible,
+  isHostScannableInput,
+  isHostTimeControlElement,
+  queryFallbackHostTimeInputs,
+  queryHostDateInput,
+  queryHostTimeInput,
+} from "./features/form-fields/host-scan.js";
 import { getRoomTags, resolveMapCalendarRoomFloor } from "./features/radar/room-metadata.js";
 import {
   buildMapCalendarTimelineGridLayout,
@@ -2212,7 +2219,9 @@ declare global {
     const dateInputs = Array.from(
       document.querySelectorAll("input[name='date'], input[type='date']"),
     ).filter(
-      (candidate) => candidate instanceof HTMLInputElement && isHostScannableInput(candidate),
+      (candidate) =>
+        candidate instanceof HTMLInputElement &&
+        isHostScannableInput(candidate, isInsideExtensionSurface),
     );
 
     if (dateInputs.length === 0) {
@@ -2274,34 +2283,6 @@ declare global {
     });
 
     return bestRoot;
-  }
-
-  function queryHostDateInput(root: Document | HTMLElement = document): HTMLInputElement | null {
-    const candidates = getScopedHostInputs(root).filter(isHostScannableInput);
-
-    let bestInput = null;
-    let bestScore = Number.NEGATIVE_INFINITY;
-
-    candidates.forEach((input) => {
-      const descriptor = buildHostInputDescriptor(input);
-      let score = 0;
-
-      if (input.name === "date") {
-        score += 16;
-      }
-      if (input.type === "date") {
-        score += 12;
-      }
-      if (descriptor.includes("date") || descriptor.includes("날짜")) {
-        score += 6;
-      }
-      if (score > bestScore) {
-        bestScore = score;
-        bestInput = input;
-      }
-    });
-
-    return bestScore >= 8 ? bestInput : null;
   }
 
   function isInsideExtensionSurface(target: unknown) {
@@ -2478,7 +2459,7 @@ declare global {
     let dateSynced = true;
     const targetDate = normalizeDateString(payload.date);
     if (targetDate) {
-      const dateInput = queryHostDateInput(document);
+      const dateInput = queryHostDateInput(document, isInsideExtensionSurface);
       if (dateInput instanceof HTMLInputElement) {
         setFormElementValue(dateInput, targetDate);
         dateSynced = normalizeDateString(dateInput.value) === targetDate;
@@ -2552,15 +2533,15 @@ declare global {
   }
 
   function readHostReservationTimeValues(root: Document | HTMLElement = document) {
-    const startInput = queryHostTimeInput(
-      ["start", "starttime", "start_date", "begin", "시작"],
+    const startInput = queryHostTimeInput(["start", "starttime", "start_date", "begin", "시작"], {
       root,
-    );
-    const endInput = queryHostTimeInput(
-      ["end", "endtime", "end_date", "finish", "종료"],
+      isInsideExtensionSurface,
+    });
+    const endInput = queryHostTimeInput(["end", "endtime", "end_date", "finish", "종료"], {
       root,
-      startInput as Element,
-    );
+      excludedInput: startInput,
+      isInsideExtensionSurface,
+    });
 
     let startValue =
       startInput instanceof HTMLInputElement ? normalizeHourMinute(startInput.value) : null;
@@ -2620,189 +2601,6 @@ declare global {
     ].join(" ");
 
     return normalizeHourMinute(snapshot);
-  }
-
-  function getScopedHostInputs(root: Document | HTMLElement) {
-    const scoped = Array.from(root.querySelectorAll("input")).filter(
-      (candidate) => candidate instanceof HTMLInputElement,
-    );
-    if (scoped.length > 0) {
-      return scoped;
-    }
-
-    return Array.from(document.querySelectorAll("input")).filter(
-      (candidate) => candidate instanceof HTMLInputElement,
-    );
-  }
-
-  function isHostInputCandidate(input: Element | null) {
-    if (!(input instanceof HTMLInputElement)) {
-      return false;
-    }
-    if (input.disabled || input.readOnly) {
-      return false;
-    }
-    if (input.type === "hidden") {
-      return false;
-    }
-    if (isInsideExtensionSurface(input)) {
-      return false;
-    }
-
-    return true;
-  }
-
-  function isHostScannableInput(input: Element | null) {
-    if (!(input instanceof HTMLInputElement)) {
-      return false;
-    }
-    if (input.type === "hidden") {
-      return false;
-    }
-    if (isInsideExtensionSurface(input)) {
-      return false;
-    }
-
-    return true;
-  }
-
-  function scoreHostTimeInput(input: HTMLInputElement, keywords: string[]) {
-    const descriptor = buildHostInputDescriptor(input);
-    const hasKeyword = keywords.some((keyword: string) => descriptor.includes(keyword));
-    if (!hasKeyword) {
-      return Number.NEGATIVE_INFINITY;
-    }
-
-    const isTimeLikeInput =
-      input.type === "time" ||
-      descriptor.includes("time") ||
-      descriptor.includes("시간") ||
-      /^\d{1,2}:\d{2}$/.test((input.value || "").trim()) ||
-      /^\d{1,2}:\d{2}$/.test((input.getAttribute("placeholder") || "").trim());
-
-    if (!isTimeLikeInput) {
-      return Number.NEGATIVE_INFINITY;
-    }
-
-    let score = 0;
-    score += 14;
-
-    const normalizedName = normalizeTextForMatch(input.name || "");
-    const normalizedId = normalizeTextForMatch(input.id || "");
-    const exactKeys = [normalizedName, normalizedId];
-    const isStartQuery = keywords.some(
-      (keyword: string) =>
-        keyword === "start" || keyword === "starttime" || keyword === "begin" || keyword === "시작",
-    );
-    const isEndQuery = keywords.some(
-      (keyword: string) =>
-        keyword === "end" || keyword === "endtime" || keyword === "finish" || keyword === "종료",
-    );
-    if (
-      isStartQuery &&
-      exactKeys.some((key) => key === "starttime" || key === "start" || key === "startdate")
-    ) {
-      score += 30;
-    }
-    if (
-      isEndQuery &&
-      exactKeys.some((key) => key === "endtime" || key === "end" || key === "enddate")
-    ) {
-      score += 30;
-    }
-
-    if (input.type === "time") {
-      score += 12;
-    }
-
-    if (descriptor.includes("time") || descriptor.includes("시간")) {
-      score += 4;
-    }
-
-    if (/^\d{1,2}:\d{2}$/.test((input.value || "").trim())) {
-      score += 2;
-    }
-
-    if (!isElementVisible(input)) {
-      score -= 8;
-    }
-
-    return score;
-  }
-
-  function queryHostTimeInput(
-    nameKeywords: string[],
-    root: Document | HTMLElement = document,
-    excludedInput: Element | null = null,
-  ): unknown {
-    const keywords = nameKeywords.map((keyword: string) => keyword.toLowerCase());
-    const candidates = getScopedHostInputs(root).filter(
-      (input) => isHostInputCandidate(input) && input !== excludedInput,
-    );
-
-    let bestInput = null;
-    let bestScore = Number.NEGATIVE_INFINITY;
-
-    candidates.forEach((input) => {
-      const score = scoreHostTimeInput(input, keywords);
-      if (score > bestScore) {
-        bestScore = score;
-        bestInput = input;
-      }
-    });
-
-    return Number.isFinite(bestScore) && bestScore > 0 ? bestInput : null;
-  }
-
-  function queryFallbackHostTimeInputs(root: Document | HTMLElement = document) {
-    const candidates = getScopedHostInputs(root).filter((input) => {
-      if (!isHostInputCandidate(input)) {
-        return false;
-      }
-
-      const descriptor = buildHostInputDescriptor(input);
-      const value = (input.value || "").trim();
-      const placeholder = (input.getAttribute("placeholder") || "").trim();
-
-      return (
-        input.type === "time" ||
-        descriptor.includes("time") ||
-        descriptor.includes("시간") ||
-        /^\d{1,2}:\d{2}$/.test(value) ||
-        /^\d{1,2}:\d{2}$/.test(placeholder)
-      );
-    });
-
-    if (candidates.length < 2) {
-      return null;
-    }
-
-    const startInput = queryHostTimeInput(
-      ["start", "starttime", "start_date", "begin", "시작"],
-      root,
-    );
-    const endInput = queryHostTimeInput(
-      ["end", "endtime", "end_date", "finish", "종료"],
-      root,
-      startInput as Element,
-    );
-
-    if (startInput instanceof HTMLInputElement && endInput instanceof HTMLInputElement) {
-      return {
-        startInput,
-        endInput,
-      };
-    }
-
-    const timeTypeCandidates = candidates.filter((input) => input.type === "time");
-    if (timeTypeCandidates.length >= 2) {
-      return {
-        startInput: timeTypeCandidates[0],
-        endInput: timeTypeCandidates[1],
-      };
-    }
-
-    return null;
   }
 
   function setFormElementValue(element: Element | null, value: unknown) {
@@ -2903,11 +2701,6 @@ declare global {
     }
 
     return null;
-  }
-
-  function isElementVisible(element: Element | null) {
-    const rect = element.getBoundingClientRect();
-    return rect.width > 0 && rect.height > 0;
   }
 
   function scheduleInputRefresh(delay = 220) {
@@ -3134,46 +2927,6 @@ declare global {
     }
 
     state.lastHostTimePickerManualInteractionAt = Date.now();
-  }
-
-  function isHostTimeControlElement(control: Element | null) {
-    if (!(control instanceof HTMLElement)) {
-      return false;
-    }
-
-    if (control instanceof HTMLInputElement) {
-      if (control.type === "time") {
-        return true;
-      }
-
-      const descriptor = buildHostInputDescriptor(control);
-      return (
-        descriptor.includes("start") ||
-        descriptor.includes("end") ||
-        descriptor.includes("time") ||
-        descriptor.includes("시작") ||
-        descriptor.includes("종료") ||
-        descriptor.includes("시간")
-      );
-    }
-
-    const descriptor = normalizeTextForMatch(
-      `${control.textContent || ""} ${control.getAttribute("aria-label") || ""} ${
-        control.getAttribute("title") || ""
-      }`,
-    );
-    if (!descriptor) {
-      return false;
-    }
-
-    return (
-      descriptor.includes("시작") ||
-      descriptor.includes("종료") ||
-      descriptor.includes("시간") ||
-      descriptor.includes("start") ||
-      descriptor.includes("end") ||
-      descriptor.includes("time")
-    );
   }
 
   function handleReservationOwnerInputEvent(event: Event) {
@@ -3498,7 +3251,7 @@ declare global {
       rootOverride instanceof HTMLElement || rootOverride === document
         ? rootOverride
         : getHostReservationRoot();
-    const hostDateInput = queryHostDateInput(root);
+    const hostDateInput = queryHostDateInput(root, isInsideExtensionSurface);
     const panelDateInput = state.elements?.dateInput;
     const observedTimes = readHostReservationTimeValues(root);
     const panelStartInput = state.elements?.startInput;
@@ -4302,6 +4055,11 @@ declare global {
       getMapCalendarWidthBounds,
       computeMapCalendarCurrentTimeScrollLeft,
       getCurrentMinuteOfDayInKST,
+      // 호스트 폼 스캔. 실제 lms+ 마크업 없이 점수 규칙만 검증할 때 쓴다.
+      queryHostDateInput: (root: Document | HTMLElement = document) =>
+        queryHostDateInput(root, isInsideExtensionSurface),
+      queryHostTimeInput: (nameKeywords: string[], root: Document | HTMLElement = document) =>
+        queryHostTimeInput(nameKeywords, { root, isInsideExtensionSurface }),
       // lms+ 예약 폼 반영 로직을 슬롯 클릭 없이 직접 검증할 때 쓴다.
       syncLmsReservationForm(payload: Record<string, unknown>) {
         return syncLmsReservationForm(payload);
@@ -4323,7 +4081,7 @@ declare global {
         if (!isRadarSupportedPage()) {
           return false;
         }
-        const hostDateInput = queryHostDateInput(document);
+        const hostDateInput = queryHostDateInput(document, isInsideExtensionSurface);
         if (
           state.elements?.dateInput instanceof HTMLInputElement &&
           hostDateInput instanceof HTMLInputElement &&
@@ -4343,7 +4101,7 @@ declare global {
         if (!isRadarSupportedPage()) {
           return false;
         }
-        const hostDateInput = queryHostDateInput(document);
+        const hostDateInput = queryHostDateInput(document, isInsideExtensionSurface);
         if (
           state.elements?.dateInput instanceof HTMLInputElement &&
           hostDateInput instanceof HTMLInputElement &&
