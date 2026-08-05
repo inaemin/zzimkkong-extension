@@ -17,6 +17,7 @@ type Deps = {
   MAP_CALENDAR_LAUNCHER_ID: string;
   SLACK_MODAL_TRIGGER_ID: string;
   MAP_CALENDAR_ALWAYS_OPEN_STORAGE_KEY: string;
+  RADAR_LAUNCHER_Z_INDEX: number;
   DEBUG_MODE: boolean;
   queryRadarOverlay: typeof import("../../ui/radar-overlay-mount.js").queryRadarOverlay;
   renderRadarLauncher: typeof import("../../ui/radar-launcher-mount.js").renderRadarLauncher;
@@ -33,11 +34,11 @@ type Deps = {
   shouldDelayGuestMapCalendarUi: () => boolean;
   isMapCalendarModalOpenRequested: () => boolean;
   refreshDailySchedule: (date: string) => Promise<unknown>;
-  setScheduleLoadingDate: (date: string, loading: boolean, tab?: string) => void;
-  getFreshScheduleCacheForTab: (date: string, tab: string) => unknown;
+  setScheduleLoadingDate: (date: string, isLoading: boolean, tab?: SpaceTab) => void;
+  getFreshScheduleCacheForTab: (date: string, tab?: SpaceTab, sharingMapId?: unknown) => unknown;
   renderMapCalendarOverlay: (schedule: unknown) => void;
-  refreshAvailability: () => void;
-  buildSlackReservationContext: () => unknown;
+  refreshAvailability: () => void | Promise<void>;
+  buildSlackReservationContext: (rootOverride?: unknown) => unknown;
   showSlackCopyModal: (context: unknown) => void;
   findGuestReservationTabContainer: () => HTMLElement | null;
   findGuestReservationTabStyleSource: () => HTMLButtonElement | null;
@@ -407,7 +408,7 @@ export function createRadarWorkflow(deps: Deps) {
       return;
     }
 
-    refreshAvailability();
+    void refreshAvailability();
     updateMapCalendarLauncherState();
   }
 

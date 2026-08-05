@@ -17,6 +17,9 @@ import {
 type Deps = {
   state: RadarState;
   SLACK_CHANNEL_MENTION_STORAGE_KEY: string;
+  SLACK_CHANNEL_HISTORY_STORAGE_KEY: string;
+  X_ICON_SVG: string;
+  normalizeSlackFieldText: typeof import("./shared.js").normalizeSlackFieldText;
   SLACK_REMINDER_LEAD_TIME_STORAGE_KEY: string;
   SLACK_REMINDER_LEAD_TIME_OPTIONS: readonly number[];
   writeStoredText: typeof import("../../utils/storage.js").writeStoredText;

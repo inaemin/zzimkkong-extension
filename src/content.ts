@@ -131,6 +131,13 @@ import { createRadarFormSync } from "./features/radar/form-sync.js";
 import { createSlackWorkflow } from "./features/slack/workflow.js";
 import { createSlackSuccessFlow } from "./features/slack/success-flow.js";
 
+// 같은 페이지에 두 번 주입되는 걸 막는 표식.
+declare global {
+  interface Window {
+    __zzkAvailabilityLensLoaded?: boolean;
+  }
+}
+
 // 이 파일은 3단계에서 React 컴포넌트로 다시 쓴다. 지금은 전역 소비만 import 로 옮긴다.
 (() => {
   if (window.__zzkAvailabilityLensLoaded) {
@@ -164,7 +171,7 @@ import { createSlackSuccessFlow } from "./features/slack/success-flow.js";
       if (Number.isFinite(x) && Number.isFinite(y)) {
         return { x, y };
       }
-    } catch (error) {
+    } catch {
       // 파싱 실패 시 기본 위치를 쓴다.
     }
     return fallback;
@@ -273,6 +280,8 @@ import { createSlackSuccessFlow } from "./features/slack/success-flow.js";
       ),
     ),
     lastLauncherRemountAt: 0,
+    // 스크롤 위치 계산에 쓰는 마지막 타임라인.
+    mapCalendarTimelineSnapshot: [],
     elements: null,
   };
 
@@ -319,7 +328,7 @@ import { createSlackSuccessFlow } from "./features/slack/success-flow.js";
             openMapCalendarModal();
           }
         }
-        refreshAvailability();
+        void refreshAvailability();
       }
     }
 
@@ -428,7 +437,7 @@ import { createSlackSuccessFlow } from "./features/slack/success-flow.js";
       if (state.loading) {
         scheduleInputRefresh(120);
       } else {
-        refreshAvailability();
+        void refreshAvailability();
       }
     }
     if (
@@ -728,7 +737,7 @@ import { createSlackSuccessFlow } from "./features/slack/success-flow.js";
       // (같은 조건 반복은 위의 inflight/TTL 에서 이미 걸러진다)
       if (state.pendingAvailabilityRefresh) {
         state.pendingAvailabilityRefresh = false;
-        refreshAvailability();
+        void refreshAvailability();
       }
     }
   }
@@ -758,11 +767,10 @@ import { createSlackSuccessFlow } from "./features/slack/success-flow.js";
 
   function rerenderMapCalendarViews() {
     const activeTab = normalizeMapCalendarSpaceTab(state.mapCalendarSpaceTab);
-    const visibleRooms = getLatestRoomsForSpaceTab(activeTab);
 
     const activeDate = normalizeDateInput(state.elements?.dateInput) || state.activeScheduleDate;
     const isModalOpen = isMapCalendarModalOpenRequested();
-    const cachedSchedule = activeDate ? getFreshScheduleCache(activeDate, activeTab) : null;
+    const cachedSchedule = activeDate ? getFreshScheduleCacheForTab(activeDate, activeTab) : null;
     if (cachedSchedule && isModalOpen) {
       renderMapCalendarOverlay(cachedSchedule);
       return;
@@ -789,7 +797,7 @@ import { createSlackSuccessFlow } from "./features/slack/success-flow.js";
       persistMapCalendarSpaceTab(normalizedTab);
     }
     rerenderMapCalendarViews();
-    refreshAvailability();
+    void refreshAvailability();
   }
 
   // 예약 현황(availability)은 회의실 수만큼 요청을 보낸다. 타임블록을 연속으로
@@ -836,7 +844,10 @@ import { createSlackSuccessFlow } from "./features/slack/success-flow.js";
   }
 
   // 새로 받은 응답이든 캐시된 응답이든 화면 반영은 같은 경로를 쓴다.
-  function applyAvailabilityData(data, { roomType, date, startTime, endTime }) {
+  function applyAvailabilityData(
+    data,
+    { roomType, date: _date, startTime: _startTime, endTime: _endTime },
+  ) {
     const rooms = Array.isArray(data?.rooms) ? data.rooms : [];
 
     state.latestRooms = rooms;
@@ -1027,7 +1038,7 @@ import { createSlackSuccessFlow } from "./features/slack/success-flow.js";
           sharingMapId,
           date: normalizedDate,
           roomType: activeTab,
-          allowPastDate: shouldAllowPastReservationDate(normalizedDate),
+          allowPastDate: shouldAllowPastReservationDate(),
         },
       });
 
@@ -1088,7 +1099,7 @@ import { createSlackSuccessFlow } from "./features/slack/success-flow.js";
       return;
     }
 
-    const errorRefs = {};
+    const errorRefs: { header?: HTMLElement | null } = {};
     let overlay;
     flushSync(() => {
       overlay = renderRadarError({
@@ -1217,7 +1228,7 @@ import { createSlackSuccessFlow } from "./features/slack/success-flow.js";
       state.mapCalendarCurrentTimeScrollDate = null;
     }
     state.lastRenderedScheduleTab = renderedTab;
-    const earliestSelectableMinute = shouldAllowPastReservationDate(selectionDate)
+    const earliestSelectableMinute = shouldAllowPastReservationDate()
       ? 0
       : getEarliestSelectableMinuteForDate(selectionDate);
 
@@ -1233,7 +1244,12 @@ import { createSlackSuccessFlow } from "./features/slack/success-flow.js";
 
     // 껍데기(탭/카드/헤더 자리/리사이즈 손잡이)는 React 가 그린다. 아직 명령형인
     // 헤더 컨트롤과 본문은 React 가 내준 자리(ref)에 그대로 붙인다.
-    const shellRefs = {};
+    const shellRefs: {
+      card?: HTMLElement | null;
+      header?: HTMLElement | null;
+      resizeHandle?: HTMLElement | null;
+      body?: HTMLElement | null;
+    } = {};
     // ref 가 채워진 상태로 아래 명령형 코드가 이어져야 하므로 이번 렌더를 동기로
     // 밀어낸다. flushSync(() => {}) 처럼 빈 콜백을 주면 대기 중인 렌더는 밀려나지
     // 않는다 — render 호출 자체가 안에 들어가야 한다.
@@ -1285,7 +1301,7 @@ import { createSlackSuccessFlow } from "./features/slack/success-flow.js";
 
     // 헤더는 React 가 그린다. 날짜 선택은 손으로 만든 팝오버 대신 shadcn DatePicker
     // 를 쓰므로, 달력 그리기·위치 계산·바깥 클릭 감지 코드가 전부 빠졌다.
-    const headerRefs = {};
+    const headerRefs: { tagLegend?: HTMLElement | null; body?: HTMLElement | null } = {};
     const headerDateInput = state.elements?.dateInput;
     const headerDate =
       (headerDateInput instanceof HTMLInputElement ? headerDateInput.value : "") ||
@@ -1641,6 +1657,7 @@ import { createSlackSuccessFlow } from "./features/slack/success-flow.js";
   const radarFormSync = createRadarFormSync({
     state,
     ensurePanel,
+    applyPanelDateChange,
     clampDateToMin,
     getMinimumSelectableDateForCurrentContext,
     getTodayDateInKST,
@@ -1705,7 +1722,7 @@ import { createSlackSuccessFlow } from "./features/slack/success-flow.js";
 
       try {
         handle.setPointerCapture(event.pointerId);
-      } catch (error) {
+      } catch {
         // 포인터 캡처 실패는 드래그 자체를 막지 않는다.
       }
 
@@ -1728,7 +1745,7 @@ import { createSlackSuccessFlow } from "./features/slack/success-flow.js";
 
         try {
           handle.releasePointerCapture(event.pointerId);
-        } catch (error) {
+        } catch {
           // 이미 해제되었을 수 있다.
         }
 
@@ -1801,7 +1818,7 @@ import { createSlackSuccessFlow } from "./features/slack/success-flow.js";
     timeline,
     trackStartOffset,
     slotStride,
-    viewportWidth,
+    viewportWidth: _viewportWidth,
     maxScrollLeft,
     isToday,
     currentMinute,
@@ -2255,7 +2272,7 @@ import { createSlackSuccessFlow } from "./features/slack/success-flow.js";
       return;
     }
 
-    refreshDailySchedule(requestedDate).catch((error) => {
+    refreshDailySchedule(requestedDate).catch(() => {
       setScheduleLoadingDate(requestedDate, false, requestedTab);
       updateMapCalendarLauncherState();
     });
@@ -2361,13 +2378,6 @@ import { createSlackSuccessFlow } from "./features/slack/success-flow.js";
     return roomName.trim();
   }
 
-  async function applyTimelineReservationSelection(
-    selection,
-    requestId = state.timelineSelectionRequestId,
-  ) {
-    return radarFormSync.applyTimelineReservationSelection(selection, requestId);
-  }
-
   function getHostReservationRoot() {
     const dateInputs = Array.from(
       document.querySelectorAll("input[name='date'], input[type='date']"),
@@ -2379,7 +2389,7 @@ import { createSlackSuccessFlow } from "./features/slack/success-flow.js";
       return document;
     }
 
-    let bestRoot = document;
+    let bestRoot: Document | HTMLElement = document;
     let bestScore = Number.NEGATIVE_INFINITY;
 
     dateInputs.forEach((input) => {
@@ -2544,42 +2554,6 @@ import { createSlackSuccessFlow } from "./features/slack/success-flow.js";
     return null;
   }
 
-  function isHostRoomSelectionSynced(roomId, roomName, root = document) {
-    const scopedRoomSelect = root.querySelector("select[name='spaceId'], select[name='roomId']");
-    const roomSelect =
-      scopedRoomSelect instanceof HTMLSelectElement
-        ? scopedRoomSelect
-        : document.querySelector("select[name='spaceId'], select[name='roomId']");
-
-    if (roomSelect instanceof HTMLSelectElement) {
-      const selectedOption =
-        roomSelect.selectedIndex >= 0 ? roomSelect.options[roomSelect.selectedIndex] : null;
-      if (!(selectedOption instanceof HTMLOptionElement)) {
-        return false;
-      }
-
-      const selectedValue = (selectedOption.value || "").trim();
-      const selectedName = normalizeTextForMatch(selectedOption.textContent || "");
-      const expectedName = normalizeTextForMatch(roomName || "");
-      return (
-        selectedValue === String(roomId) ||
-        (selectedName !== "" && expectedName !== "" && selectedName.includes(expectedName))
-      );
-    }
-
-    const roomDropdownButton = findHostRoomDropdownButton(root);
-    if (roomDropdownButton instanceof HTMLButtonElement) {
-      const selectedName = normalizeTextForMatch(roomDropdownButton.textContent || "");
-      const expectedName = normalizeTextForMatch(roomName || "");
-      if (selectedName && expectedName) {
-        return selectedName.includes(expectedName);
-      }
-      return false;
-    }
-
-    return false;
-  }
-
   //  - 회의실: 이름이 적힌 <button> (선택 시 bg-primary 클래스)
   //  - 시작 시간: <select>, option value 가 "HH:MM"
   //  - 이용 시간: <select>, option value 가 30분 단위 개수 ("1"=30분, "2"=60분)
@@ -2617,17 +2591,6 @@ import { createSlackSuccessFlow } from "./features/slack/success-flow.js";
     }
     // 선택된 방 버튼은 primary 배경 클래스를 가진다.
     return button.className.includes("bg-primary");
-  }
-
-  function findLmsSelectByOptionValue(candidateValues) {
-    const selects = Array.from(document.querySelectorAll("select"));
-    for (const select of selects) {
-      const optionValues = Array.from(select.options).map((option) => option.value);
-      if (candidateValues.every((value) => optionValues.includes(value))) {
-        return select;
-      }
-    }
-    return null;
   }
 
   // 시작 시간 select 는 "HH:MM" 옵션들을, 이용 시간 select 는 "1"/"2" 옵션을 갖는다.
@@ -2755,23 +2718,6 @@ import { createSlackSuccessFlow } from "./features/slack/success-flow.js";
     return dateSynced && roomSynced && startSynced && durationSynced;
   }
 
-  function isHostReservationFormSynced(payload, root = document) {
-    const observedTimes = readHostReservationTimeValues(root);
-    if (!observedTimes.hasAnyControl) {
-      return false;
-    }
-
-    const dateInput = queryHostDateInput(root);
-    const dateSynced =
-      !(dateInput instanceof HTMLInputElement) ||
-      normalizeDateString(dateInput.value) === payload.date;
-
-    const startSynced = observedTimes.startTime === payload.startTime;
-    const endSynced = observedTimes.endTime === payload.endTime;
-
-    return dateSynced && startSynced && endSynced;
-  }
-
   function readHostReservationTimeValues(root = document) {
     const startInput = queryHostTimeInput(
       ["start", "starttime", "start_date", "begin", "시작"],
@@ -2828,38 +2774,6 @@ import { createSlackSuccessFlow } from "./features/slack/success-flow.js";
     };
   }
 
-  function isHostReservationRootReady(root = document, options = {}) {
-    const requireTimeControls = options?.requireTimeControls === true;
-    const observed = readHostReservationTimeValues(root);
-    if (observed.hasAnyControl) {
-      return true;
-    }
-
-    if (requireTimeControls) {
-      return false;
-    }
-
-    const dateInput = queryHostDateInput(root);
-    return dateInput instanceof HTMLInputElement;
-  }
-
-  async function waitForHostReservationReady(timeoutMs = 1200, requireTimeControls = false) {
-    const resolved = await waitForElement(
-      () => {
-        const root = getHostReservationRoot();
-        if (isHostReservationRootReady(root, { requireTimeControls })) {
-          return root;
-        }
-
-        return null;
-      },
-      timeoutMs,
-      80,
-    );
-
-    return resolved instanceof HTMLElement || resolved === document ? resolved : null;
-  }
-
   function readTimeValueFromElement(element) {
     if (!(element instanceof HTMLElement)) {
       return null;
@@ -2873,12 +2787,6 @@ import { createSlackSuccessFlow } from "./features/slack/success-flow.js";
     ].join(" ");
 
     return normalizeHourMinute(snapshot);
-  }
-
-  function waitForTimeout(ms) {
-    return new Promise((resolve) => {
-      setTimeout(resolve, ms);
-    });
   }
 
   function getScopedHostInputs(root) {
@@ -3102,41 +3010,6 @@ import { createSlackSuccessFlow } from "./features/slack/success-flow.js";
     element.dispatchEvent(new Event("change", { bubbles: true }));
   }
 
-  function formatSegmentedPickerLabels(timeValue) {
-    const normalizedTime = normalizeHourMinute(timeValue);
-    if (!normalizedTime) {
-      return null;
-    }
-
-    const minuteOfDay = parseHourMinute(normalizedTime);
-    if (!Number.isInteger(minuteOfDay)) {
-      return null;
-    }
-
-    const hour24 = Math.floor(minuteOfDay / 60);
-    const minute = minuteOfDay % 60;
-    const meridiemLabel = hour24 >= 12 ? "오후" : "오전";
-    let hour12 = hour24 % 12;
-    if (hour12 === 0) {
-      hour12 = 12;
-    }
-
-    return {
-      normalizedTime,
-      meridiemLabel,
-      hourLabel: `${String(hour12).padStart(2, "0")} 시`,
-      minuteLabel: `${String(minute).padStart(2, "0")} 분`,
-    };
-  }
-
-  function normalizePickerCellText(value) {
-    if (typeof value !== "string") {
-      return "";
-    }
-
-    return value.replace(/\s+/g, " ").trim();
-  }
-
   function findHostTimePickerButton(buttonLabel, root = document) {
     const normalizedLabel = normalizeTextForMatch(buttonLabel);
     const pickBestButton = (buttons) => {
@@ -3195,766 +3068,9 @@ import { createSlackSuccessFlow } from "./features/slack/success-flow.js";
     return null;
   }
 
-  function hasVisibleHostTimePickerCells() {
-    const pickerState = inspectHostTimePickerState();
-    if (pickerState.isOpen) {
-      return true;
-    }
-
-    const startButton = pickerState.startButton;
-    const endButton = pickerState.endButton;
-
-    const expandedPickerButton = [
-      startButton,
-      findHostTimePickerButton("시작"),
-      endButton,
-      findHostTimePickerButton("종료"),
-    ].find(
-      (button) =>
-        button instanceof HTMLButtonElement && button.getAttribute("aria-expanded") === "true",
-    );
-
-    if (expandedPickerButton) {
-      return true;
-    }
-
-    const radioCandidates = Array.from(document.querySelectorAll("input[type='radio']"));
-    const hasVisiblePickerRadio = radioCandidates.some((candidate) => {
-      if (!(candidate instanceof HTMLInputElement)) {
-        return false;
-      }
-      if (isInsideExtensionSurface(candidate)) {
-        return false;
-      }
-      if (!isElementVisible(candidate)) {
-        return false;
-      }
-
-      const labelText = normalizePickerCellText(candidate.getAttribute("aria-label") || "");
-      return (
-        labelText === "오전" ||
-        labelText === "오후" ||
-        /^\d{2}\s*시$/.test(labelText) ||
-        /^\d{2}\s*분$/.test(labelText)
-      );
-    });
-
-    if (hasVisiblePickerRadio) {
-      return true;
-    }
-
-    const cells = Array.from(document.querySelectorAll("label, span, button, div, li"));
-
-    return cells.some((candidate) => {
-      if (!(candidate instanceof HTMLElement)) {
-        return false;
-      }
-      if (isInsideExtensionSurface(candidate)) {
-        return false;
-      }
-      if (!isElementVisible(candidate)) {
-        return false;
-      }
-      const text = normalizePickerCellText(candidate.textContent || "");
-      const isTimePickerCell =
-        text === "오전" ||
-        text === "오후" ||
-        /^\d{2}\s*시$/.test(text) ||
-        /^\d{2}\s*분$/.test(text);
-      if (!isTimePickerCell) {
-        return false;
-      }
-
-      return true;
-    });
-  }
-
-  async function toggleHostTimePickerButton(button) {
-    if (!(button instanceof HTMLButtonElement)) {
-      return;
-    }
-    button.click();
-    await waitForTimeout(70);
-  }
-
-  function triggerHostButtonInteraction(button) {
-    if (!(button instanceof HTMLButtonElement)) {
-      return;
-    }
-
-    const eventInit = {
-      bubbles: true,
-      cancelable: true,
-      view: window,
-    };
-
-    button.dispatchEvent(new MouseEvent("mousedown", eventInit));
-    button.dispatchEvent(new MouseEvent("mouseup", eventInit));
-    button.dispatchEvent(new MouseEvent("click", eventInit));
-  }
-
-  async function collapseHostTimePickers(root = document) {
-    const startButton =
-      findHostTimePickerButton("시작시간", root) || findHostTimePickerButton("시작", root);
-    const endButton =
-      findHostTimePickerButton("종료시간", root) || findHostTimePickerButton("종료", root);
-
-    const closeByEscape = async () => {
-      if (document.activeElement instanceof HTMLElement) {
-        document.activeElement.dispatchEvent(
-          new KeyboardEvent("keydown", {
-            key: "Escape",
-            bubbles: true,
-            cancelable: true,
-          }),
-        );
-        document.activeElement.dispatchEvent(
-          new KeyboardEvent("keyup", {
-            key: "Escape",
-            bubbles: true,
-            cancelable: true,
-          }),
-        );
-      }
-      document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
-      document.dispatchEvent(new KeyboardEvent("keyup", { key: "Escape", bubbles: true }));
-      window.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
-      window.dispatchEvent(new KeyboardEvent("keyup", { key: "Escape", bubbles: true }));
-      await waitForTimeout(70);
-    };
-
-    const closeByOutsideClick = async () => {
-      if (!(document.body instanceof HTMLBodyElement)) {
-        return;
-      }
-      const eventInit = {
-        bubbles: true,
-        cancelable: true,
-        view: window,
-      };
-      document.body.dispatchEvent(new MouseEvent("mousedown", eventInit));
-      document.body.dispatchEvent(new MouseEvent("mouseup", eventInit));
-      document.body.dispatchEvent(new MouseEvent("click", eventInit));
-      await waitForTimeout(70);
-    };
-
-    const closeByToggleButton = async (button) => {
-      if (!(button instanceof HTMLButtonElement)) {
-        return;
-      }
-      await toggleHostTimePickerButton(button);
-    };
-
-    if (!hasVisibleHostTimePickerCells()) {
-      return;
-    }
-
-    for (let attempt = 0; attempt < 5; attempt += 1) {
-      const pickerState = inspectHostTimePickerState(root);
-      if (!pickerState.isOpen && !hasVisibleHostTimePickerCells()) {
-        break;
-      }
-
-      if (pickerState.activeButton instanceof HTMLButtonElement) {
-        await closeByToggleButton(pickerState.activeButton);
-      } else if (pickerState.startButton instanceof HTMLButtonElement) {
-        await closeByToggleButton(pickerState.startButton);
-      } else if (pickerState.endButton instanceof HTMLButtonElement) {
-        await closeByToggleButton(pickerState.endButton);
-      }
-
-      const afterToggleState = inspectHostTimePickerState(root);
-      if (!afterToggleState.isOpen && !hasVisibleHostTimePickerCells()) {
-        break;
-      }
-
-      await closeByEscape();
-      if (!hasVisibleHostTimePickerCells()) {
-        break;
-      }
-
-      await closeByOutsideClick();
-      if (!hasVisibleHostTimePickerCells()) {
-        break;
-      }
-
-      if (document.activeElement instanceof HTMLElement) {
-        document.activeElement.blur();
-      }
-    }
-
-    if (document.activeElement instanceof HTMLElement) {
-      document.activeElement.blur();
-    }
-
-    await waitForElement(() => (!hasVisibleHostTimePickerCells() ? true : null), 260, 40);
-  }
-
-  function inspectHostTimePickerState(root = document) {
-    const startButton =
-      findHostTimePickerButton("시작시간", root) || findHostTimePickerButton("시작", root);
-    const endButton =
-      findHostTimePickerButton("종료시간", root) || findHostTimePickerButton("종료", root);
-
-    let isOpen = false;
-    let activeButton = null;
-
-    if (startButton instanceof HTMLButtonElement && endButton instanceof HTMLButtonElement) {
-      const startClass = (startButton.className || "").trim();
-      const endClass = (endButton.className || "").trim();
-
-      if (startClass !== "" && endClass !== "") {
-        if (startClass === endClass) {
-          state.hostTimePickerIdleClass = startClass;
-        } else {
-          isOpen = true;
-          const idleClass = (state.hostTimePickerIdleClass || "").trim();
-          if (idleClass) {
-            if (startClass !== idleClass && endClass === idleClass) {
-              activeButton = startButton;
-            } else if (endClass !== idleClass && startClass === idleClass) {
-              activeButton = endButton;
-            }
-          }
-        }
-      }
-    }
-
-    return {
-      startButton,
-      endButton,
-      isOpen,
-      activeButton,
-    };
-  }
-
-  async function closeHostTimePickerAfterSelection(root = document) {
-    if (!hasVisibleHostTimePickerCells()) {
-      return;
-    }
-    for (let attempt = 0; attempt < 3; attempt += 1) {
-      await collapseHostTimePickers(root);
-      if (!hasVisibleHostTimePickerCells()) {
-        break;
-      }
-      await waitForTimeout(70);
-    }
-  }
-
-  async function setHostTimeByPicker(buttonLabelOrLabels, timeValue, root = document) {
-    const labels = Array.isArray(buttonLabelOrLabels) ? buttonLabelOrLabels : [buttonLabelOrLabels];
-    let button = null;
-    labels.some((label) => {
-      const matched = findHostTimePickerButton(label, root);
-      if (matched) {
-        button = matched;
-        return true;
-      }
-      return false;
-    });
-
-    if (!(button instanceof HTMLButtonElement)) {
-      return false;
-    }
-
-    const normalizedTargetTime = normalizeHourMinute(timeValue);
-    if (!normalizedTargetTime) {
-      return false;
-    }
-
-    if (readTimeValueFromElement(button) === normalizedTargetTime) {
-      await closeHostTimePickerAfterSelection(root);
-      return true;
-    }
-
-    triggerHostButtonInteraction(button);
-
-    const immediateOption = findVisibleHostTimeOption(timeValue, button);
-    if (immediateOption instanceof HTMLElement) {
-      immediateOption.click();
-      await waitForTimeout(80);
-
-      if (readTimeValueFromElement(button) === normalizedTargetTime) {
-        await closeHostTimePickerAfterSelection(root);
-        return true;
-      }
-    }
-
-    const segmentedLabels = formatSegmentedPickerLabels(normalizedTargetTime);
-    const quickSegmentedCell =
-      segmentedLabels &&
-      (await waitForElement(
-        () => findVisiblePickerCell(segmentedLabels.hourLabel, button),
-        420,
-        40,
-      ));
-
-    if (quickSegmentedCell instanceof HTMLElement) {
-      const segmentedApplied = await setHostTimeBySegmentedPicker(button, normalizedTargetTime);
-      if (segmentedApplied) {
-        await closeHostTimePickerAfterSelection(root);
-        return true;
-      }
-    }
-
-    const option = await waitForElement(
-      () => findVisibleHostTimeOption(timeValue, button),
-      300,
-      40,
-    );
-
-    if (option instanceof HTMLElement) {
-      option.click();
-      await waitForTimeout(80);
-
-      if (readTimeValueFromElement(button) === normalizedTargetTime) {
-        await closeHostTimePickerAfterSelection(root);
-        return true;
-      }
-    }
-
-    const segmentedApplied = await setHostTimeBySegmentedPicker(button, normalizedTargetTime);
-    if (segmentedApplied) {
-      await closeHostTimePickerAfterSelection(root);
-      return true;
-    }
-
-    const matched = readTimeValueFromElement(button) === normalizedTargetTime;
-    if (matched) {
-      await closeHostTimePickerAfterSelection(root);
-    }
-
-    return matched;
-  }
-
-  async function setHostTimeBySegmentedPicker(triggerButton, timeValue) {
-    if (!(triggerButton instanceof HTMLButtonElement)) {
-      return false;
-    }
-
-    const labels = formatSegmentedPickerLabels(timeValue);
-    if (!labels) {
-      return false;
-    }
-
-    const clickPickerCell = async (label) => {
-      const cell = await waitForElement(() => findVisiblePickerCell(label, triggerButton), 600, 40);
-      if (!(cell instanceof HTMLElement)) {
-        return false;
-      }
-
-      cell.click();
-      await waitForTimeout(60);
-      return true;
-    };
-
-    const ensurePickerOpen = async () => {
-      const existing = findVisiblePickerCell(labels.hourLabel, triggerButton);
-      if (existing instanceof HTMLElement) {
-        return true;
-      }
-
-      triggerHostButtonInteraction(triggerButton);
-      const opened = await waitForElement(
-        () => findVisiblePickerCell(labels.hourLabel, triggerButton),
-        320,
-        40,
-      );
-      if (opened instanceof HTMLElement) {
-        return true;
-      }
-
-      triggerHostButtonInteraction(triggerButton);
-      const openedOnRetry = await waitForElement(
-        () => findVisiblePickerCell(labels.hourLabel, triggerButton),
-        320,
-        40,
-      );
-      return openedOnRetry instanceof HTMLElement;
-    };
-
-    const pickerOpened = await ensurePickerOpen();
-    if (!pickerOpened) {
-      return false;
-    }
-
-    const currentTime = readTimeValueFromElement(triggerButton);
-    const currentMinuteOfDay = currentTime ? parseHourMinute(currentTime) : null;
-    const targetMinuteOfDay = parseHourMinute(labels.normalizedTime);
-
-    let meridiemApplied = true;
-    if (
-      Number.isInteger(currentMinuteOfDay) &&
-      Number.isInteger(targetMinuteOfDay) &&
-      currentMinuteOfDay >= 720 === targetMinuteOfDay >= 720
-    ) {
-      meridiemApplied = true;
-    } else {
-      meridiemApplied = await clickPickerCell(labels.meridiemLabel);
-    }
-
-    const hourApplied = await clickPickerCell(labels.hourLabel);
-    const minuteApplied = await clickPickerCell(labels.minuteLabel);
-
-    if (!meridiemApplied || !hourApplied || !minuteApplied) {
-      return false;
-    }
-
-    await waitForTimeout(120);
-    return readTimeValueFromElement(triggerButton) === labels.normalizedTime;
-  }
-
-  function findVisiblePickerCell(label, triggerButton) {
-    const normalizedLabel = normalizePickerCellText(label);
-    if (!normalizedLabel) {
-      return null;
-    }
-
-    const candidates = Array.from(document.querySelectorAll("label, span, button, div, li"));
-    const triggerRect =
-      triggerButton instanceof HTMLElement ? triggerButton.getBoundingClientRect() : null;
-
-    let bestCandidate = null;
-    let bestScore = Number.NEGATIVE_INFINITY;
-
-    candidates.forEach((candidate) => {
-      if (!(candidate instanceof HTMLElement)) {
-        return;
-      }
-      if (isInsideExtensionSurface(candidate)) {
-        return;
-      }
-      if (!isElementVisible(candidate)) {
-        return;
-      }
-      if (candidate.getAttribute("aria-hidden") === "true") {
-        return;
-      }
-      if (candidate.getAttribute("aria-disabled") === "true") {
-        return;
-      }
-
-      const text = normalizePickerCellText(candidate.textContent || "");
-      if (text !== normalizedLabel) {
-        return;
-      }
-
-      let score = 10;
-      if (candidate.tagName === "LABEL") {
-        score += 8;
-      }
-      if (candidate.tagName === "SPAN") {
-        score += 4;
-      }
-      if (candidate.childElementCount === 0) {
-        score += 4;
-      }
-
-      if (triggerRect) {
-        const rect = candidate.getBoundingClientRect();
-        const verticalDistance = Math.abs(rect.top - triggerRect.bottom);
-        score -= Math.min(8, verticalDistance / 90);
-      }
-
-      if (score > bestScore) {
-        bestScore = score;
-        bestCandidate = candidate;
-      }
-    });
-
-    return bestScore > 0 ? bestCandidate : null;
-  }
-
-  function findVisibleHostTimeOption(timeValue, triggerButton) {
-    const normalizedTime = normalizeHourMinute(timeValue);
-    if (!normalizedTime) {
-      return null;
-    }
-
-    const candidates = Array.from(
-      document.querySelectorAll(
-        "[role='option'], [role='menuitem'], [data-value], button, li, div, span",
-      ),
-    );
-
-    let bestCandidate = null;
-    let bestScore = Number.NEGATIVE_INFINITY;
-    const triggerRect =
-      triggerButton instanceof HTMLElement ? triggerButton.getBoundingClientRect() : null;
-
-    candidates.forEach((candidate) => {
-      if (!(candidate instanceof HTMLElement)) {
-        return;
-      }
-      if (isInsideExtensionSurface(candidate)) {
-        return;
-      }
-      if (!isElementVisible(candidate)) {
-        return;
-      }
-      if (candidate.getAttribute("aria-hidden") === "true") {
-        return;
-      }
-      if (candidate.getAttribute("aria-disabled") === "true") {
-        return;
-      }
-
-      if (
-        candidate.childElementCount > 0 &&
-        !candidate.matches("[role='option'], [role='menuitem'], button, li")
-      ) {
-        return;
-      }
-
-      const normalizedText = normalizePickerCellText(candidate.textContent || "");
-      if (
-        normalizedText.length > 30 &&
-        !candidate.matches("[role='option'], [role='menuitem'], button")
-      ) {
-        return;
-      }
-
-      const dataValueTime = normalizeHourMinute(candidate.getAttribute("data-value") || "");
-      const textTime = normalizeHourMinute(candidate.textContent || "");
-      const ariaLabelTime = normalizeHourMinute(candidate.getAttribute("aria-label") || "");
-      const matchedTime = dataValueTime || textTime;
-      if (matchedTime !== normalizedTime && ariaLabelTime !== normalizedTime) {
-        return;
-      }
-
-      let score = 10;
-      const role = candidate.getAttribute("role") || "";
-      if (role === "option" || role === "menuitem") {
-        score += 6;
-      }
-
-      if (candidate.closest("[role='listbox'], [role='menu'], [role='dialog']")) {
-        score += 4;
-      }
-
-      if (triggerRect) {
-        const candidateRect = candidate.getBoundingClientRect();
-        const verticalDistance = Math.abs(candidateRect.top - triggerRect.bottom);
-        score -= Math.min(6, verticalDistance / 120);
-      }
-
-      if (score > bestScore) {
-        bestScore = score;
-        bestCandidate = candidate;
-      }
-    });
-
-    return bestScore > 0 ? bestCandidate : null;
-  }
-
   function isElementVisible(element) {
     const rect = element.getBoundingClientRect();
     return rect.width > 0 && rect.height > 0;
-  }
-
-  function waitForElement(resolver, timeoutMs, intervalMs) {
-    return new Promise((resolve) => {
-      const startedAt = Date.now();
-
-      const tick = () => {
-        const resolved = resolver();
-        if (resolved) {
-          resolve(resolved);
-          return;
-        }
-        if (Date.now() - startedAt >= timeoutMs) {
-          resolve(null);
-          return;
-        }
-        setTimeout(tick, intervalMs);
-      };
-
-      tick();
-    });
-  }
-
-  function findVisibleHostRoomOption(roomId, roomName, triggerButton = null) {
-    const normalizedRoomName = normalizeTextForMatch(roomName || "");
-    const candidates = Array.from(
-      document.querySelectorAll(
-        "[role='option'], [role='menuitem'], [role='menuitemradio'], li, button, [data-value], div, span",
-      ),
-    );
-    const triggerRect =
-      triggerButton instanceof HTMLElement ? triggerButton.getBoundingClientRect() : null;
-
-    let bestOption = null;
-    let bestScore = Number.NEGATIVE_INFINITY;
-
-    candidates.forEach((candidate) => {
-      if (!(candidate instanceof HTMLElement)) {
-        return;
-      }
-      if (isInsideExtensionSurface(candidate)) {
-        return;
-      }
-      if (!isElementVisible(candidate)) {
-        return;
-      }
-      if (candidate.getAttribute("aria-hidden") === "true") {
-        return;
-      }
-      if (candidate.getAttribute("aria-disabled") === "true") {
-        return;
-      }
-
-      const text = normalizeTextForMatch(candidate.textContent || "");
-      if (!text) {
-        return;
-      }
-
-      const popupContainer = candidate.closest("[role='listbox'], [role='menu'], [role='dialog']");
-      const hasPopupContext = popupContainer instanceof HTMLElement;
-
-      const valueToken = (
-        candidate.getAttribute("value") ||
-        candidate.getAttribute("data-value") ||
-        ""
-      ).trim();
-      const idMatched = valueToken !== "" && valueToken === String(roomId);
-      const nameMatched = normalizedRoomName !== "" && text.includes(normalizedRoomName);
-
-      if (!idMatched && !nameMatched) {
-        return;
-      }
-
-      if (!idMatched && !hasPopupContext && candidate.getAttribute("role") !== "option") {
-        return;
-      }
-
-      let score = 0;
-      if (idMatched) {
-        score += 20;
-      }
-      if (nameMatched) {
-        score += 20;
-      }
-      if (candidate.getAttribute("role") === "option") {
-        score += 8;
-      }
-      if (hasPopupContext) {
-        score += 8;
-      }
-      if (candidate.tagName === "LI") {
-        score += 4;
-      }
-
-      if (triggerRect) {
-        const rect = candidate.getBoundingClientRect();
-        const verticalDistance = Math.abs(rect.top - triggerRect.bottom);
-        score -= Math.min(8, verticalDistance / 80);
-      }
-
-      if (score > bestScore) {
-        bestScore = score;
-        bestOption = candidate;
-      }
-    });
-
-    return bestScore > 0 ? bestOption : null;
-  }
-
-  async function syncHostRoomSelection(roomId, roomName, root = document) {
-    if (isHostRoomSelectionSynced(roomId, roomName, root)) {
-      return true;
-    }
-
-    const scopedRoomSelect = root.querySelector("select[name='spaceId'], select[name='roomId']");
-    const roomSelect =
-      scopedRoomSelect instanceof HTMLSelectElement
-        ? scopedRoomSelect
-        : document.querySelector("select[name='spaceId'], select[name='roomId']");
-    if (roomSelect instanceof HTMLSelectElement) {
-      const option = Array.from(roomSelect.options).find(
-        (candidate) =>
-          candidate.value === String(roomId) || candidate.textContent?.trim() === roomName,
-      );
-      if (option) {
-        setFormElementValue(roomSelect, option.value);
-        if (isHostRoomSelectionSynced(roomId, roomName, root)) {
-          return true;
-        }
-      }
-    }
-
-    for (let attempt = 0; attempt < 4; attempt += 1) {
-      const roomDropdownButton = findHostRoomDropdownButton(root);
-      if (!(roomDropdownButton instanceof HTMLButtonElement)) {
-        continue;
-      }
-
-      if (
-        roomDropdownButton.disabled ||
-        roomDropdownButton.getAttribute("aria-disabled") === "true"
-      ) {
-        return false;
-      }
-
-      const currentName = normalizeTextForMatch(roomDropdownButton.textContent || "");
-      const targetName = normalizeTextForMatch(roomName || "");
-      if (currentName && targetName && currentName === targetName) {
-        return true;
-      }
-
-      if (roomDropdownButton.getAttribute("aria-expanded") !== "true") {
-        triggerHostButtonInteraction(roomDropdownButton);
-        await waitForTimeout(80);
-      }
-
-      let roomOption = findVisibleHostRoomOption(roomId, roomName, roomDropdownButton);
-      if (!(roomOption instanceof HTMLElement)) {
-        roomOption = await waitForElement(
-          () => findVisibleHostRoomOption(roomId, roomName, roomDropdownButton),
-          420,
-          40,
-        );
-      }
-
-      if (roomOption instanceof HTMLElement) {
-        roomOption.click();
-        await waitForTimeout(100);
-
-        const settled = await waitForElement(
-          () => (isHostRoomSelectionSynced(roomId, roomName, root) ? true : null),
-          520,
-          40,
-        );
-        if (settled === true) {
-          return true;
-        }
-      }
-
-      if (roomDropdownButton.getAttribute("aria-expanded") === "true") {
-        triggerHostButtonInteraction(roomDropdownButton);
-        await waitForTimeout(60);
-      }
-    }
-
-    const roomNode = document.querySelector(`svg g[data-testid='${roomId}']`);
-    if (roomNode instanceof SVGGElement) {
-      roomNode.dispatchEvent(new MouseEvent("click", { bubbles: true }));
-      await waitForTimeout(120);
-      const mapSettled = await waitForElement(
-        () => (isHostRoomSelectionSynced(roomId, roomName, root) ? true : null),
-        520,
-        40,
-      );
-      if (mapSettled === true) {
-        return true;
-      }
-    }
-
-    const lastResolved = findHostRoomDropdownButton(root);
-    if (lastResolved instanceof HTMLButtonElement) {
-      return isHostRoomSelectionSynced(roomId, roomName, root);
-    }
-
-    return isHostRoomSelectionSynced(roomId, roomName, root);
   }
 
   function scheduleInputRefresh(delay = 220) {
@@ -3965,7 +3081,7 @@ import { createSlackSuccessFlow } from "./features/slack/success-flow.js";
         return;
       }
 
-      refreshAvailability();
+      void refreshAvailability();
     }, delay);
   }
 
@@ -4029,7 +3145,7 @@ import { createSlackSuccessFlow } from "./features/slack/success-flow.js";
         openMapCalendarModal();
       }
     }
-    refreshAvailability();
+    void refreshAvailability();
   }
 
   function getCurrentRouteKey() {
@@ -4044,7 +3160,7 @@ import { createSlackSuccessFlow } from "./features/slack/success-flow.js";
     handleLocationChange();
   }
 
-  function teardownGuestUi(options = {}) {
+  function teardownGuestUi(options: { preserveReservationContext?: boolean } = {}) {
     const preserveReservationContext = options?.preserveReservationContext === true;
     if (Number.isInteger(state.mutationGuestUiSyncTimer)) {
       window.clearTimeout(state.mutationGuestUiSyncTimer);
@@ -4102,8 +3218,12 @@ import { createSlackSuccessFlow } from "./features/slack/success-flow.js";
     }
     state.historyHookInstalled = true;
 
+    // 원본을 붙잡아 apply 로 호출한다. 몽키패칭의 본질이라 unbound-method 는
+    // 여기서 의도된 것이다(page-network-hook 과 같은 이유).
+    /* eslint-disable @typescript-eslint/unbound-method */
     const originalPushState = history.pushState;
     const originalReplaceState = history.replaceState;
+    /* eslint-enable @typescript-eslint/unbound-method */
 
     history.pushState = function patchedPushState(...args) {
       const result = originalPushState.apply(this, args);
@@ -4311,7 +3431,7 @@ import { createSlackSuccessFlow } from "./features/slack/success-flow.js";
     return false;
   }
 
-  function markReservationActionIntent(options = {}) {
+  function markReservationActionIntent(options: { root?: unknown } = {}) {
     state.lastReservationActionAt = Date.now();
 
     const rootCandidate = options?.root;
@@ -4413,87 +3533,6 @@ import { createSlackSuccessFlow } from "./features/slack/success-flow.js";
     return deleted;
   }
 
-  function resolveReservationAttemptForPayload(payload) {
-    prunePendingReservationAttempts();
-    const payloadAttemptId =
-      payload && typeof payload === "object" && typeof payload.reservationAttemptId === "string"
-        ? payload.reservationAttemptId
-        : "";
-    if (payloadAttemptId) {
-      return state.pendingReservationAttempts.get(payloadAttemptId) || null;
-    }
-
-    const payloadContext =
-      payload &&
-      typeof payload === "object" &&
-      payload.requestContext &&
-      typeof payload.requestContext === "object"
-        ? payload.requestContext
-        : null;
-    if (isCompleteReservationPayloadContext(payloadContext)) {
-      for (const attempt of state.pendingReservationAttempts.values()) {
-        if (doesReservationAttemptContextMatchPayload(attempt, payloadContext)) {
-          return attempt;
-        }
-      }
-    }
-
-    if (state.pendingReservationAttempts.size === 1) {
-      return Array.from(state.pendingReservationAttempts.values())[0] || null;
-    }
-
-    return null;
-  }
-
-  function doesReservationAttemptContextMatchPayload(attempt, payloadContext) {
-    const attemptContext =
-      attempt && attempt.context && typeof attempt.context === "object" ? attempt.context : null;
-    if (!attemptContext || !payloadContext) {
-      return false;
-    }
-
-    return (
-      normalizeReservationContextComparableValue(attemptContext.date) ===
-        normalizeReservationContextComparableValue(payloadContext.date) &&
-      normalizeReservationContextComparableValue(attemptContext.startTime) ===
-        normalizeReservationContextComparableValue(payloadContext.startTime) &&
-      normalizeReservationContextComparableValue(attemptContext.endTime) ===
-        normalizeReservationContextComparableValue(payloadContext.endTime) &&
-      normalizeReservationRoomComparableValue(attemptContext.roomName) ===
-        normalizeReservationRoomComparableValue(payloadContext.roomName)
-    );
-  }
-
-  function normalizeReservationContextComparableValue(value) {
-    return typeof value === "string" ? value.trim() : "";
-  }
-
-  function normalizeReservationRoomComparableValue(value) {
-    return typeof value === "string" ? value.replace(/\s+/g, "").trim() : "";
-  }
-
-  function shouldIgnoreAmbiguousReservationSuccess(payload, payloadContext) {
-    prunePendingReservationAttempts();
-    if (state.pendingReservationAttempts.size <= 1) {
-      return false;
-    }
-    if (resolveReservationAttemptForPayload(payload)) {
-      return false;
-    }
-    return !isCompleteReservationPayloadContext(payloadContext);
-  }
-
-  function consumeReservationAttempt(attemptId) {
-    if (typeof attemptId !== "string" || attemptId === "") {
-      return;
-    }
-    deletePendingReservationAttempt(attemptId);
-    clearReservationAttemptDataset(attemptId);
-    if (state.lastReservationAttemptId === attemptId) {
-      state.lastReservationAttemptId = "";
-    }
-  }
-
   function clearReservationAttemptDataset(attemptId = "") {
     if (!(document.documentElement instanceof HTMLElement)) {
       return;
@@ -4509,26 +3548,6 @@ import { createSlackSuccessFlow } from "./features/slack/success-flow.js";
 
     delete document.documentElement.dataset.zzkReservationAttemptId;
     delete document.documentElement.dataset.zzkReservationAttemptAt;
-  }
-
-  function isCompleteReservationPayloadContext(payloadContext) {
-    if (!payloadContext || typeof payloadContext !== "object") {
-      return false;
-    }
-    return Boolean(
-      isMeaningfulReservationContextField("date", payloadContext.date) &&
-      isMeaningfulReservationContextField("startTime", payloadContext.startTime) &&
-      isMeaningfulReservationContextField("endTime", payloadContext.endTime) &&
-      isMeaningfulReservationContextField("roomName", payloadContext.roomName),
-    );
-  }
-
-  function reportSessionStorageFailure(event, storageKey, error) {
-    pushDebugEvent("storage", event, {
-      area: "sessionStorage",
-      key: storageKey,
-      error: getErrorMessage(error),
-    });
   }
 
   function readActionTargetText(actionTarget) {
@@ -4557,10 +3576,6 @@ import { createSlackSuccessFlow } from "./features/slack/success-flow.js";
 
   function handleReservationNetworkMessage(event) {
     return slackSuccessFlow.handleReservationNetworkMessage(event);
-  }
-
-  function queuePendingSlackCopyModal(context, options = {}) {
-    return slackSuccessFlow.queuePendingSlackCopyModal(context, options);
   }
 
   function restorePendingSlackModalState() {
@@ -4594,7 +3609,7 @@ import { createSlackSuccessFlow } from "./features/slack/success-flow.js";
 
     try {
       return new URL(urlValue, location.origin);
-    } catch (error) {
+    } catch {
       return null;
     }
   }
@@ -4613,298 +3628,6 @@ import { createSlackSuccessFlow } from "./features/slack/success-flow.js";
     ]
       .join("|")
       .toLowerCase();
-  }
-
-  function buildMergedSlackReservationContext(options = {}) {
-    const liveContext =
-      options?.liveContext && typeof options.liveContext === "object"
-        ? options.liveContext
-        : buildSlackReservationContext();
-    const snapshotContext =
-      options?.snapshotContext && typeof options.snapshotContext === "object"
-        ? options.snapshotContext
-        : null;
-    const payloadContext =
-      options?.payloadContext && typeof options.payloadContext === "object"
-        ? options.payloadContext
-        : null;
-    const successPageContext =
-      options?.successPageContext && typeof options.successPageContext === "object"
-        ? options.successPageContext
-        : null;
-    const payloadOwnerName = normalizeHostReservationOwnerCandidate(
-      options?.payloadOwnerName || "",
-    );
-
-    const safeLiveContext = { ...liveContext };
-    const sources = [payloadContext, successPageContext, snapshotContext, safeLiveContext].filter(
-      (source) => source && typeof source === "object",
-    );
-
-    const pickField = (fieldName, extraCandidates = []) => {
-      const candidates = [...sources.map((source) => source[fieldName]), ...extraCandidates];
-      for (const candidate of candidates) {
-        const normalizedCandidate = normalizeReservationContextField(fieldName, candidate);
-        if (isMeaningfulReservationContextField(fieldName, normalizedCandidate)) {
-          return normalizedCandidate;
-        }
-      }
-
-      return "";
-    };
-
-    const mergedContext = {
-      mapName:
-        pickField("mapName") ||
-        normalizeReservationContextField("mapName", safeLiveContext.mapName) ||
-        state.latestMapName ||
-        "회의실 지도",
-      roomName: pickField("roomName") || "-",
-      ownerName:
-        pickField("ownerName", [payloadOwnerName, state.lastKnownReservationOwnerName]) ||
-        normalizeHostReservationOwnerCandidate(state.lastKnownReservationOwnerName || "") ||
-        "-",
-      channelMention:
-        pickField("channelMention") ||
-        normalizeSlackChannelToken(state.slackChannelMention || "", {
-          allowBare: true,
-        }),
-      description: pickField("description") || "-",
-      date: pickField("date") || "-",
-      startTime: pickField("startTime") || "--:--",
-      endTime: pickField("endTime") || "--:--",
-      reservationLink: resolveReservationLinkFromContext(pickField("reservationLink")),
-    };
-
-    if (isMeaningfulSlackContextValue(mergedContext.ownerName)) {
-      rememberReservationOwnerName(mergedContext.ownerName);
-    }
-
-    return mergedContext;
-  }
-
-  function resolveReservationContextFromPayload(payload) {
-    if (!payload || typeof payload !== "object") {
-      return null;
-    }
-
-    const requestContext =
-      payload.requestContext && typeof payload.requestContext === "object"
-        ? payload.requestContext
-        : null;
-    const source = requestContext || payload;
-    const roomNameFromContext = resolveReservationRoomNameFromSource(source);
-
-    const startParts = extractDateTimeParts(source.startDateTime || source.startTime || "");
-    const endParts = extractDateTimeParts(source.endDateTime || source.endTime || "");
-    const explicitDate = normalizeDateString(
-      source.date || source.reservationDate || source.startDate || "",
-    );
-    const context = {
-      date: explicitDate || startParts.date || endParts.date || "",
-      startTime: startParts.time || normalizeHourMinute(source.startTime || "") || "",
-      endTime: endParts.time || normalizeHourMinute(source.endTime || "") || "",
-      description: normalizeReservationDescriptionCandidate(
-        source.description ||
-          source.purpose ||
-          source.usagePurpose ||
-          source.memo ||
-          source.content ||
-          "",
-      ),
-      roomName: roomNameFromContext,
-      ownerName: normalizeHostReservationOwnerCandidate(
-        source.ownerName || source.name || source.ownerNameCandidate || "",
-      ),
-      reservationLink: normalizeReservationContextField(
-        "reservationLink",
-        source.reservationLink || payload.url || "",
-      ),
-    };
-
-    const hasAnyField = Object.values(context).some((value) =>
-      isMeaningfulSlackContextValue(String(value || "")),
-    );
-    return hasAnyField ? context : null;
-  }
-
-  function resolveReservationRoomNameFromSource(source) {
-    const directRoomName = normalizeReservationContextField(
-      "roomName",
-      source.roomName || source.spaceName || source.room || "",
-    );
-    if (directRoomName) {
-      return directRoomName;
-    }
-
-    const roomId = parseReservationRoomIdCandidate(
-      source.roomId || source.spaceId || source.targetRoomId || source.room_id || source.space_id,
-    );
-    const knownRooms = getLatestKnownRooms();
-    if (!Number.isInteger(roomId) || knownRooms.length === 0) {
-      return "";
-    }
-
-    const matchedRoom = knownRooms.find((room) => Number(room?.id) === roomId);
-    if (!matchedRoom || typeof matchedRoom.name !== "string") {
-      return "";
-    }
-
-    return normalizeReservationContextField("roomName", matchedRoom.name);
-  }
-
-  function parseReservationRoomIdCandidate(value) {
-    if (Number.isInteger(value)) {
-      return value;
-    }
-
-    if (typeof value === "string") {
-      const parsed = Number.parseInt(value.trim(), 10);
-      return Number.isInteger(parsed) ? parsed : null;
-    }
-
-    return null;
-  }
-
-  function normalizeReservationContextField(fieldName, value) {
-    if (fieldName === "date") {
-      return normalizeDateString(value) || "";
-    }
-
-    if (fieldName === "startTime" || fieldName === "endTime") {
-      return normalizeHourMinute(value) || "";
-    }
-
-    if (fieldName === "ownerName") {
-      return normalizeHostReservationOwnerCandidate(value) || "";
-    }
-
-    if (fieldName === "roomName") {
-      const normalizedRoomCandidate = normalizeHostRoomCandidate(value || "");
-      if (!normalizedRoomCandidate) {
-        return "";
-      }
-
-      return extractKnownRoomName(normalizedRoomCandidate);
-    }
-
-    if (fieldName === "description") {
-      return normalizeReservationDescriptionCandidate(value);
-    }
-
-    if (fieldName === "reservationLink") {
-      const normalizedValue = normalizeSlackFieldText(value || "");
-      if (!normalizedValue) {
-        return "";
-      }
-
-      const parsedUrl = parseUrlSafely(normalizedValue);
-      return parsedUrl ? parsedUrl.href : "";
-    }
-
-    if (fieldName === "attendeeMentions") {
-      return normalizeSlackMentionText(value || "");
-    }
-
-    return normalizeSlackFieldText(value || "");
-  }
-
-  function normalizeReservationDescriptionCandidate(value) {
-    const normalized = normalizeSlackFieldText(value || "");
-    if (!normalized) {
-      return "";
-    }
-
-    if (["-", "--", "내용", "예약내용", "사용목적", "이용목적"].includes(normalized)) {
-      return "";
-    }
-
-    return normalized;
-  }
-
-  function isMeaningfulReservationContextField(fieldName, value) {
-    const normalized = normalizeSlackFieldText(value || "");
-    if (!normalized || normalized === "-") {
-      return false;
-    }
-
-    if (fieldName === "date") {
-      return normalizeDateString(normalized) != null;
-    }
-    if (fieldName === "startTime" || fieldName === "endTime") {
-      return normalizeHourMinute(normalized) != null;
-    }
-    if (fieldName === "reservationLink") {
-      return parseUrlSafely(normalized) != null;
-    }
-
-    return true;
-  }
-
-  function extractDateTimeParts(value) {
-    const normalized = normalizeSlackFieldText(typeof value === "string" ? value : "");
-    if (!normalized) {
-      return { date: "", time: "" };
-    }
-
-    const dateMatch = normalized.match(/(\d{4}-\d{2}-\d{2})/);
-    const timeMatch = normalized.match(/(\d{1,2}:\d{2})/);
-
-    return {
-      date: dateMatch ? normalizeDateString(dateMatch[1]) || "" : "",
-      time: timeMatch ? normalizeHourMinute(timeMatch[1]) || "" : "",
-    };
-  }
-
-  function resolveReservationLinkFromContext(candidateLink) {
-    const parsedCandidate = parseUrlSafely(candidateLink || "");
-    const baseLink = getGuestBaseReservationLink();
-    if (!parsedCandidate) {
-      return baseLink;
-    }
-
-    if (isGuestSuccessPath(parsedCandidate.pathname)) {
-      return baseLink;
-    }
-
-    return parsedCandidate.href;
-  }
-
-  function getGuestBaseReservationLink() {
-    const match = location.pathname.match(/^\/guest\/([^/?#]+)/);
-    if (!match) {
-      return location.href;
-    }
-
-    return `${location.origin}/guest/${match[1]}`;
-  }
-
-  function isGuestSuccessPath(pathname) {
-    return typeof pathname === "string" && /^\/guest\/[^/?#]+\/success\/?$/.test(pathname);
-  }
-
-  function resolveReservationOwnerNameFromPayload(payload) {
-    if (!payload || typeof payload !== "object") {
-      return "";
-    }
-
-    const directCandidates = [
-      payload.ownerNameCandidate,
-      payload.ownerName,
-      payload.name,
-      payload.requesterName,
-      payload.bookerName,
-      payload.guestName,
-    ];
-
-    for (const candidate of directCandidates) {
-      const normalizedCandidate = normalizeHostReservationOwnerCandidate(candidate);
-      if (normalizedCandidate) {
-        return normalizedCandidate;
-      }
-    }
-
-    return "";
   }
 
   function isMeaningfulSlackContextValue(value) {
@@ -5126,7 +3849,9 @@ import { createSlackSuccessFlow } from "./features/slack/success-flow.js";
     let bestScore = Number.NEGATIVE_INFINITY;
 
     candidates.forEach((candidate) => {
-      const normalizedValue = normalizeHostReservationOwnerCandidate(candidate.value || "");
+      const normalizedValue = normalizeHostReservationOwnerCandidate(
+        (candidate as HTMLInputElement).value || "",
+      );
       if (!normalizedValue) {
         return;
       }
@@ -5163,7 +3888,17 @@ import { createSlackSuccessFlow } from "./features/slack/success-flow.js";
     return isTextField ? normalizeSlackFieldText(control.value || "") : "";
   }
 
-  function readHostReservationFieldValue(root, keywords, options = {}) {
+  function readHostReservationFieldValue(
+    root: Document | HTMLElement,
+    keywords: string[],
+    options: {
+      allowInputTypes?: string[];
+      includeReadOnly?: boolean;
+      includeDisabled?: boolean;
+      includeExtendedControls?: boolean;
+      requireVisible?: boolean;
+    } = {},
+  ) {
     if (
       !(root instanceof HTMLElement || root === document) ||
       !Array.isArray(keywords) ||
@@ -5253,10 +3988,6 @@ import { createSlackSuccessFlow } from "./features/slack/success-flow.js";
     return bestValue;
   }
 
-  function normalizeSlackMentionText(value) {
-    return normalizeSlackFieldText(value);
-  }
-
   function buildSlackReservationMessage(context) {
     const safeContext = context && typeof context === "object" ? context : {};
     const channelMention = normalizeSlackChannelToken(
@@ -5267,10 +3998,6 @@ import { createSlackSuccessFlow } from "./features/slack/success-flow.js";
     );
     const remindCommand = buildSlackRemindCommand(safeContext, channelMention);
     return remindCommand;
-  }
-
-  function resolveSlackRemindManagementGuide() {
-    return "리마인더 확인이 안 될 때는 이렇게 보세요: 내가 받은 리마인더는 Later 탭에서 확인할 수 있고, /remind list에는 채널 리마인더만 표시됩니다. 그래서 채널 리마인더가 없으면 빈 목록으로 보일 수 있어요.";
   }
 
   function buildSlackRemindCommand(context, channelMention) {
@@ -5349,19 +4076,7 @@ import { createSlackSuccessFlow } from "./features/slack/success-flow.js";
     return normalizedValue;
   }
 
-  function formatSlackReservationTimeRange(dateValue, startTime, endTime) {
-    const normalizedDate = isDateString(dateValue) ? dateValue : "";
-    const normalizedStart = typeof startTime === "string" && startTime ? startTime : "--:--";
-    const normalizedEnd = typeof endTime === "string" && endTime ? endTime : "--:--";
-
-    if (normalizedDate) {
-      return `${normalizedDate} ${normalizedStart} ~ ${normalizedDate} ${normalizedEnd}`;
-    }
-
-    return `${normalizedStart} ~ ${normalizedEnd}`;
-  }
-
-  const { showSlackCopyModal, closeSlackCopyModal, copyTextToClipboard } = createSlackWorkflow({
+  const { showSlackCopyModal, closeSlackCopyModal } = createSlackWorkflow({
     state,
     SLACK_CHANNEL_MENTION_STORAGE_KEY,
     SLACK_CHANNEL_HISTORY_STORAGE_KEY,
@@ -5527,7 +4242,14 @@ import { createSlackSuccessFlow } from "./features/slack/success-flow.js";
     writeStoredText(storageKey, normalizedTokens.join("\n"));
   }
 
-  function sendMessage(message) {
+  /** 백그라운드(또는 직접 폴백)가 돌려주는 응답. */
+  interface TransportResponse {
+    ok?: boolean;
+    error?: string;
+    data?: unknown;
+  }
+
+  function sendMessage(message: { type?: string; payload?: unknown }): Promise<TransportResponse> {
     pushDebugEvent("transport", "send-message", {
       type: message?.type,
       fallbackCandidate: shouldUseDirectApiFallback(message),
@@ -5621,7 +4343,8 @@ import { createSlackSuccessFlow } from "./features/slack/success-flow.js";
         settled = true;
         window.clearTimeout(timer);
         window.clearTimeout(hardTimer);
-        reject(error);
+        // catch 는 unknown 을 준다. Promise 거부는 Error 로 통일한다.
+        reject(error instanceof Error ? error : new Error(getErrorMessage(error)));
       }
     });
   }
@@ -5693,8 +4416,8 @@ import { createSlackSuccessFlow } from "./features/slack/success-flow.js";
     return inputElement.value;
   }
 
-  function getMinimumSelectableDateForCurrentContext(value) {
-    return shouldAllowPastReservationDate(value) ? "" : getTodayDateInKST();
+  function getMinimumSelectableDateForCurrentContext(_value?: unknown) {
+    return shouldAllowPastReservationDate() ? "" : getTodayDateInKST();
   }
 
   // lms+ 에는 과거 날짜를 허용하는 수정 페이지가 없다.
@@ -5757,18 +4480,6 @@ import { createSlackSuccessFlow } from "./features/slack/success-flow.js";
     return valid;
   }
 
-  function getLatestRoomsForSpaceTab(tab = state.mapCalendarSpaceTab) {
-    const normalizedTab = normalizeMapCalendarSpaceTab(tab);
-    const cachedRooms = state.latestRoomsBySpaceTab.get(normalizedTab);
-    if (Array.isArray(cachedRooms)) {
-      return cachedRooms;
-    }
-
-    return Array.isArray(state.latestRooms)
-      ? getRoomsForMapCalendarSpaceTab(state.latestRooms, normalizedTab)
-      : [];
-  }
-
   function getLatestKnownRooms() {
     const mergedById = new Map();
     if (Array.isArray(state.latestRooms)) {
@@ -5805,12 +4516,6 @@ import { createSlackSuccessFlow } from "./features/slack/success-flow.js";
           return roomKind === normalizedTab;
         })
       : [];
-  }
-
-  function getRoomTypeForRoomName(roomName) {
-    const normalizedName = normalizeTargetRoomName(roomName);
-    const metadata = TARGET_ROOM_METADATA_BY_NORMALIZED_NAME.get(normalizedName);
-    return metadata?.kind || inferRoomKindFromName(roomName);
   }
 
   function inferRoomKindFromName(roomName) {
@@ -5932,8 +4637,9 @@ import { createSlackSuccessFlow } from "./features/slack/success-flow.js";
         };
       },
       // availability 캐시(TTL) 동작 검증용.
+      // 테스트는 완료를 기다려야 하므로 await 한다.
       async refreshAvailability() {
-        return refreshAvailability();
+        await refreshAvailability();
       },
       // 라우트 판별. 전역 배럴을 걷어낸 뒤 테스트가 쓰던 진입점을 대체한다.
       routes: {

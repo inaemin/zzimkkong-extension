@@ -102,5 +102,7 @@ export interface RadarState {
   slackReminderLeadMinutes: number;
 
   lastLauncherRemountAt: number;
+  /** 스크롤 위치 계산에 쓰는 마지막 타임라인. */
+  mapCalendarTimelineSnapshot: unknown[];
   elements: PanelElements | null;
 }

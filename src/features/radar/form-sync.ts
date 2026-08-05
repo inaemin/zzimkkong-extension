@@ -1,3 +1,4 @@
+import type { SpaceTab } from "../../constants/runtime.js";
 import type { RadarState } from "../state.js";
 import { debugLog, pushDebugEvent } from "../../utils/shared.js";
 
@@ -242,7 +243,7 @@ export function createRadarFormSync(deps: Deps) {
     }
     clearTimeout(state.inputRefreshTimer);
     pushDebugEvent("radar-form-sync", "sync-succeeded", outcome);
-    refreshAvailability();
+    void refreshAvailability();
   }
 
   return {
@@ -280,8 +281,8 @@ type Deps = {
   applyPanelDateChange: (nextDate: unknown) => boolean;
   getMinimumSelectableDateForCurrentContext: (value?: unknown) => string;
   getFreshScheduleCache: (date: string) => unknown;
-  setScheduleLoadingDate: (date: string, loading: boolean, tab?: string) => void;
+  setScheduleLoadingDate: (date: string, isLoading: boolean, tab?: SpaceTab) => void;
   renderMapCalendarOverlay: (schedule: unknown) => void;
-  refreshAvailability: () => void;
+  refreshAvailability: () => void | Promise<void>;
   syncLmsReservationForm: (payload: unknown, requestId: number) => Promise<boolean>;
 };

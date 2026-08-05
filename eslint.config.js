@@ -151,11 +151,11 @@ export default defineConfig([
     },
   },
 
-  // content.js 는 3단계에서 React 로 옮기다 만 잔여 파일이다(6,000줄).
+  // content.ts 는 3단계에서 React 로 옮기다 만 잔여 파일이다(6,000줄).
   // 여기에 규칙을 걸면 통과 불가능한 게이트가 되므로, 해체가 끝날 때까지
   // 구조 규칙만 예외로 둔다. 파일이 사라지면 이 블록도 지운다.
   {
-    files: ["src/content.js"],
+    files: ["src/content.ts"],
     rules: {
       "no-restricted-syntax": "off",
       "max-params": "off",
