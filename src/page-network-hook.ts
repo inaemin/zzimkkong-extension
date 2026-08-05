@@ -171,24 +171,30 @@ declare global {
    * input 은 문자열·URL·Request 셋 다 올 수 있다. init.method 가 있으면
    * input.method 를 덮어쓴다(fetch 사양 순서).
    */
+  /** input 이 문자열·URL 이면 그대로, Request 면 .url 을 쓴다. */
+  function readUrl(input, isUrlLike, isRequestLike) {
+    if (isUrlLike) {
+      return String(input);
+    }
+    return isRequestLike && typeof input.url === "string" ? input.url : "";
+  }
+
+  /** init.method 가 input.method 를 덮어쓴다(fetch 사양 순서). */
+  function readMethod(input, init, isRequestLike) {
+    if (init && typeof init === "object" && typeof init.method === "string") {
+      return normalizeMethod(init.method);
+    }
+    return isRequestLike ? normalizeMethod(input.method) : "GET";
+  }
+
   function readFetchTarget(input, init) {
     const isUrlLike = typeof input === "string" || input instanceof URL;
     const isRequestLike = !isUrlLike && Boolean(input) && typeof input === "object";
 
-    const url = isUrlLike
-      ? String(input)
-      : isRequestLike && typeof input.url === "string"
-        ? input.url
-        : "";
-
-    const method =
-      init && typeof init === "object" && typeof init.method === "string"
-        ? normalizeMethod(init.method)
-        : isRequestLike
-          ? normalizeMethod(input.method)
-          : "GET";
-
-    return { url, method };
+    return {
+      url: readUrl(input, isUrlLike, isRequestLike),
+      method: readMethod(input, init, isRequestLike),
+    };
   }
 
   /**

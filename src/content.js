@@ -2354,12 +2354,9 @@ import { createSlackSuccessFlow } from "./features/slack/success-flow.js";
   }
 
   function getTargetRoomMetadata(roomOrName) {
-    const roomName =
-      typeof roomOrName === "string"
-        ? roomOrName
-        : typeof roomOrName?.name === "string"
-          ? roomOrName.name
-          : "";
+    // 방 객체와 방 이름 문자열을 모두 받는다.
+    const nameFromRoom = typeof roomOrName?.name === "string" ? roomOrName.name : "";
+    const roomName = typeof roomOrName === "string" ? roomOrName : nameFromRoom;
     const normalizedName = normalizeTargetRoomName(roomName);
     return TARGET_ROOM_METADATA_BY_NORMALIZED_NAME.get(normalizedName) || null;
   }
@@ -5229,6 +5226,13 @@ import { createSlackSuccessFlow } from "./features/slack/success-flow.js";
     return bestValue;
   }
 
+  /** input/textarea 의 값만 읽는다(확장 컨트롤을 포함하지 않을 때). */
+  function readPlainControlValue(control) {
+    const isTextField =
+      control instanceof HTMLInputElement || control instanceof HTMLTextAreaElement;
+    return isTextField ? normalizeSlackFieldText(control.value || "") : "";
+  }
+
   function readHostReservationFieldValue(root, keywords, options = {}) {
     if (
       !(root instanceof HTMLElement || root === document) ||
@@ -5296,9 +5300,7 @@ import { createSlackSuccessFlow } from "./features/slack/success-flow.js";
     controls.forEach((control) => {
       const value = includeExtendedControls
         ? readHostFieldDisplayValue(control)
-        : control instanceof HTMLInputElement || control instanceof HTMLTextAreaElement
-          ? normalizeSlackFieldText(control.value || "")
-          : "";
+        : readPlainControlValue(control);
       if (!value) {
         return;
       }

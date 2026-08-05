@@ -24,7 +24,10 @@ import { defineConfig, globalIgnores } from "eslint/config";
 //    나머지 확장 코드에는 여전히 맞지 않는다.
 //
 // 점진 강화 대상(5단계에서 켠다). 지금 켜면 전부 소음이 되는 규칙들:
-//  - no-ternary          : 기존 176곳. 삼항이 오히려 읽기 쉬운 자리가 많다.
+//  - no-ternary 는 no-nested-ternary 로 대체했다. 실측해 보니 전면 금지는
+//    290건인데 대부분이 `typeof x === "string" ? x : ""` 같은 자리라, if 로
+//    풀면 3줄이 5줄이 되면서 바로 위 max-lines: 20 을 도로 압박한다.
+//    실제로 읽기 어려운 건 중첩 삼항이고 그건 7건뿐이라 전부 정리했다.
 //  - max-depth: 1        : DOM 조립/이벤트 처리 코드라 중첩이 잦다.
 //  - max-params: 2       : 정규화 함수들이 (value, options, context) 형태다.
 //  - max-lines-per-function: 10
@@ -103,6 +106,9 @@ export default defineConfig([
       // 중첩 1단. try/catch 도 한 겹으로 세므로, 저장소·클립보드처럼 던지는
       // 접근은 헬퍼로 뽑아 쓴다(safely/attempt 계열).
       "max-depth": ["error", 1],
+      // 중첩 삼항만 금지한다(위 주석 참고). 단순 삼항은 if 보다 의도가 분명한
+      // 자리가 많고, 풀어 쓰면 함수가 길어져 max-lines 와 부딪힌다.
+      "no-nested-ternary": "error",
       // 의미 없는 변수명 금지. 확장 코드에 흔한 축약형을 추가했다.
       "id-denylist": [
         "error",

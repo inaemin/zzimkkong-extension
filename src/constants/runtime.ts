@@ -179,9 +179,12 @@ export function normalizeMapCalendarSpaceTab(value: unknown): SpaceTab {
 }
 
 export function normalizeFetchRoomType(value: unknown): SpaceTab | null {
-  return value === MAP_CALENDAR_SPACE_TAB_PAIR
-    ? MAP_CALENDAR_SPACE_TAB_PAIR
-    : value === MAP_CALENDAR_SPACE_TAB_MEETING
-      ? MAP_CALENDAR_SPACE_TAB_MEETING
-      : null;
+  // 아는 탭 두 개만 통과시키고 나머지는 null(= 전체 조회).
+  if (value === MAP_CALENDAR_SPACE_TAB_PAIR) {
+    return MAP_CALENDAR_SPACE_TAB_PAIR;
+  }
+  if (value === MAP_CALENDAR_SPACE_TAB_MEETING) {
+    return MAP_CALENDAR_SPACE_TAB_MEETING;
+  }
+  return null;
 }
