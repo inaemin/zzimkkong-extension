@@ -18,6 +18,7 @@ import {
   writeStoredNumber,
 } from "./utils/storage.js";
 import {
+  clampDateToMin,
   normalizeDateString,
   isDateString,
   parseHourMinute,
@@ -87,7 +88,6 @@ import {
   MAP_CALENDAR_ALWAYS_OPEN_STORAGE_KEY,
   MAP_CALENDAR_SPACE_TAB_STORAGE_KEY,
   MAP_CALENDAR_WIDTH_STORAGE_KEY,
-  MAP_CALENDAR_OFFSET_STORAGE_KEY,
   MAP_CALENDAR_FLOORMAP_OPEN_STORAGE_KEY,
   MAP_CALENDAR_MIN_WIDTH,
   MAP_CALENDAR_VIEWPORT_MARGIN,
@@ -99,7 +99,6 @@ import {
   SLACK_REMINDER_LEAD_TIME_OPTIONS,
   LMS_DEFAULT_RESERVATION_MINUTES,
   CALENDAR_SIDE_MARGIN,
-  DRAG_SAFE_TOP,
   NAV_SAFE_Z_INDEX,
   RADAR_LAUNCHER_Z_INDEX,
   TARGET_ROOM_METADATA_BY_NORMALIZED_NAME,
@@ -120,6 +119,12 @@ import {
   findGuestReservationTabContainer as radarFindGuestReservationTabContainer,
   findGuestReservationTabStyleSource as radarFindGuestReservationTabStyleSource,
 } from "./features/radar/shared.js";
+import {
+  clampOffsetWithinViewport,
+  persistMapCalendarOffset,
+  pointInRect,
+  readStoredMapCalendarOffset,
+} from "./features/radar/overlay-position.js";
 import { getRoomTags, resolveMapCalendarRoomFloor } from "./features/radar/room-metadata.js";
 import {
   buildMapCalendarTimelineGridLayout,
@@ -157,33 +162,6 @@ declare global {
     });
 
   // 드래그로 옮긴 모달 위치({x,y})를 저장소에 JSON 으로 보관한다.
-  function readStoredMapCalendarOffset() {
-    const fallback = { x: 0, y: 0 };
-    const raw = readStoredText(MAP_CALENDAR_OFFSET_STORAGE_KEY, "");
-    if (!raw) {
-      return fallback;
-    }
-    try {
-      const parsed = JSON.parse(raw);
-      const x = Number(parsed?.x);
-      const y = Number(parsed?.y);
-      if (Number.isFinite(x) && Number.isFinite(y)) {
-        return { x, y };
-      }
-    } catch {
-      // 파싱 실패 시 기본 위치를 쓴다.
-    }
-    return fallback;
-  }
-
-  function persistMapCalendarOffset(offset) {
-    const x = Number(offset?.x);
-    const y = Number(offset?.y);
-    if (!Number.isFinite(x) || !Number.isFinite(y)) {
-      return;
-    }
-    writeStoredText(MAP_CALENDAR_OFFSET_STORAGE_KEY, JSON.stringify({ x, y }));
-  }
 
   function isFloorMapSectionOpen() {
     // 기본은 접힘.
@@ -588,10 +566,6 @@ declare global {
     );
 
     return [myPageLink, logoutButton].filter((node) => node instanceof HTMLElement);
-  }
-
-  function pointInRect(x, y, rect) {
-    return x >= rect.left && x <= rect.right && y >= rect.top && y <= rect.bottom;
   }
 
   async function refreshAvailability() {
@@ -1906,6 +1880,7 @@ declare global {
     }
 
     return clampOffsetWithinViewport({
+      viewport: { width: window.innerWidth, height: window.innerHeight },
       startRect: rect,
       baseOffset,
       deltaX: 0,
@@ -1974,6 +1949,7 @@ declare global {
       const deltaX = moveEvent.clientX - startX;
       const deltaY = moveEvent.clientY - startY;
       const nextOffset = clampOffsetWithinViewport({
+        viewport: { width: window.innerWidth, height: window.innerHeight },
         startRect,
         baseOffset,
         deltaX,
@@ -1996,24 +1972,6 @@ declare global {
     window.addEventListener("pointerup", handlePointerUp);
     window.addEventListener("pointercancel", handlePointerUp);
     event.preventDefault();
-  }
-
-  function clampOffsetWithinViewport({ startRect, baseOffset, deltaX, deltaY }) {
-    const margin = 8;
-    const maxLeft = Math.max(margin, window.innerWidth - startRect.width - margin);
-    const minTop = Math.max(margin, DRAG_SAFE_TOP);
-    const maxTop = Math.max(minTop, window.innerHeight - startRect.height - margin);
-
-    const desiredLeft = startRect.left + deltaX;
-    const desiredTop = startRect.top + deltaY;
-
-    const clampedLeft = Math.min(maxLeft, Math.max(margin, desiredLeft));
-    const clampedTop = Math.min(maxTop, Math.max(minTop, desiredTop));
-
-    return {
-      x: baseOffset.x + (clampedLeft - startRect.left),
-      y: baseOffset.y + (clampedTop - startRect.top),
-    };
   }
 
   function initializeDefaults(elements) {
@@ -4265,18 +4223,6 @@ declare global {
       return;
     }
     inputElement.removeAttribute("min");
-  }
-
-  function clampDateToMin(value, minDate) {
-    if (!isDateString(minDate)) {
-      return isDateString(value) ? value : "";
-    }
-
-    if (!isDateString(value)) {
-      return minDate;
-    }
-
-    return value < minDate ? minDate : value;
   }
 
   function normalizeTimeInput(inputElement) {

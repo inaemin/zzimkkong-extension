@@ -2,6 +2,7 @@ import { expect, test } from "@playwright/test";
 
 import {
   addDaysToDateString,
+  clampDateToMin,
   formatDateSelectorText,
   getEarliestSelectableMinuteForDate,
   isDateString,
@@ -149,6 +150,29 @@ test.describe("formatDateSelectorText", () => {
 
   test("날짜가 아니면 빈 문자열이다", () => {
     expect(formatDateSelectorText("아무거나")).toBe("");
+  });
+});
+
+test.describe("clampDateToMin", () => {
+  // 레이더는 과거 날짜를 고를 수 없다. 날짜를 옮길 때마다 이걸로 거른다.
+
+  test("최소 날짜보다 이르면 최소 날짜로 올린다", () => {
+    expect(clampDateToMin("2026-08-01", "2026-08-05")).toBe("2026-08-05");
+  });
+
+  test("최소 날짜 이후면 그대로 둔다", () => {
+    expect(clampDateToMin("2026-08-09", "2026-08-05")).toBe("2026-08-09");
+    expect(clampDateToMin("2026-08-05", "2026-08-05")).toBe("2026-08-05");
+  });
+
+  test("값이 날짜가 아니면 최소 날짜를 준다", () => {
+    expect(clampDateToMin("아무거나", "2026-08-05")).toBe("2026-08-05");
+    expect(clampDateToMin(null, "2026-08-05")).toBe("2026-08-05");
+  });
+
+  test("최소 날짜가 없으면 값만 검증한다", () => {
+    expect(clampDateToMin("2026-08-09", null)).toBe("2026-08-09");
+    expect(clampDateToMin("아무거나", null)).toBe("");
   });
 });
 

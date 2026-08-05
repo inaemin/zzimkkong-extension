@@ -297,3 +297,19 @@ export function formatDateSelectorText(dateString: string): string {
   const weekdayText = formatKSTWeekday(dateString);
   return weekdayText ? `${year}.${month}.${day} (${weekdayText})` : `${year}.${month}.${day}`;
 }
+
+/**
+ * 최소 날짜 아래로 내려가지 않게 잡아준다.
+ *
+ * 레이더는 과거 날짜를 고를 수 없다. 날짜를 옮길 때마다 이 함수로 한 번
+ * 거른다. 최소값이 없으면(형식이 아니면) 값만 검증해서 돌려준다.
+ */
+export function clampDateToMin(value: unknown, minDate: unknown): string {
+  if (!isDateString(minDate)) {
+    return isDateString(value) ? value : "";
+  }
+  if (!isDateString(value)) {
+    return minDate;
+  }
+  return value < minDate ? minDate : value;
+}
