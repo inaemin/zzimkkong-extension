@@ -3,7 +3,26 @@
 // content.js 는 아직 .js 라(3단계에서 .tsx 로 다시 쓴다) 여기서 각 의존성의
 // 정확한 타입을 알 수 없다. 지금은 형태만 열어두고, content.js 가 컴포넌트로
 // 쪼개질 때 이 인터페이스를 구체 타입으로 좁힌다.
-type Deps = Record<string, any>;
+/**
+ * 이미 타입이 있는 의존성은 원본에서 끌어온다. 손으로 다시 적으면 원본이
+ * 바뀔 때 조용히 어긋난다. content.js 에서만 오는 것들(state, 렌더 함수 등)은
+ * 아직 .js 라 타입을 알 수 없어 unknown 계열로 남긴다.
+ */
+type Deps = Record<string, any> & {
+  queryRadarOverlay: typeof import("../../ui/radar-overlay-mount.js").queryRadarOverlay;
+  renderRadarLauncher: typeof import("../../ui/radar-launcher-mount.js").renderRadarLauncher;
+  removeRadarLauncher: typeof import("../../ui/radar-launcher-mount.js").removeRadarLauncher;
+  getRadarLauncherHost: typeof import("../../ui/radar-launcher-mount.js").getRadarLauncherHost;
+  readStoredBoolean: typeof import("../../utils/storage.js").readStoredBoolean;
+  isDateString: typeof import("../../utils/date-time.js").isDateString;
+  // content.js 에 있어 타입을 끌어올 수 없다. 쓰는 형태만 적는다.
+  normalizeDateInput: (input: unknown) => string;
+  formatDateSelectorText: typeof import("../../utils/date-time.js").formatDateSelectorText;
+  normalizeTextForMatch: typeof import("../../utils/shared.js").normalizeTextForMatch;
+  getErrorMessage: typeof import("../../utils/shared.js").getErrorMessage;
+  findGuestReservationTabContainer: () => HTMLElement | null;
+  findGuestReservationTabStyleSource: () => HTMLButtonElement | null;
+};
 
 // DI 팩토리 래퍼: 길이가 곧 복잡도가 아니다(안쪽 함수는 개별 측정된다).
 // eslint-disable-next-line max-lines-per-function
