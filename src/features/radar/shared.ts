@@ -81,10 +81,10 @@ export function findGuestReservationTabStyleSource({
     (child) => child instanceof HTMLButtonElement && isElementVisible(child),
   );
 
-  const prioritized = buttonCandidates.find((button) => {
-    const text = normalizeTextForMatch(button.textContent || "");
-    return text === "예약하기" || text === "예약현황";
-  });
+  // 탭 버튼을 우선하고, 없으면 첫 버튼의 스타일을 빌린다.
+  const prioritized = buttonCandidates.find((button) =>
+    ["예약하기", "예약현황"].includes(normalizeTextForMatch(button.textContent || "")),
+  );
 
   return prioritized instanceof HTMLButtonElement
     ? prioritized

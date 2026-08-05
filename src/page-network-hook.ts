@@ -181,20 +181,9 @@ declare global {
    * 원본 response 는 소비하지 않는다(readReservationResponseBody 가 복제해서
    * 읽는다). 페이지 앱이 같은 응답을 다시 읽을 수 있어야 한다.
    */
-  function reportFetchResponse(response, context) {
-    if (!response || response.ok !== true) {
-      return response;
-    }
-
-    const { url, method, reservationAttemptId } = context;
-    const eventUrl = String(response.url || url || "");
-    const base = { url, eventUrl, method, status: response.status, reservationAttemptId };
-
-    Promise.all([
-      context.ownerNamePromise,
-      context.requestContextPromise,
-      readReservationResponseBody(response, eventUrl, method),
-    ])
+  /** 세 조각이 모두 모이면 이벤트를 띄운다. 하나라도 실패하면 비운 채로 띄운다. */
+  function emitWhenDetailsResolved(base, promises) {
+    Promise.all(promises)
       .then(([ownerNameCandidate, requestContext, responseBody]) => {
         emitFetchReservationEvent({ ...base, ownerNameCandidate, requestContext, responseBody });
       })
@@ -208,6 +197,22 @@ declare global {
           force: true,
         });
       });
+  }
+
+  function reportFetchResponse(response, context) {
+    if (!response || response.ok !== true) {
+      return response;
+    }
+
+    const { url, method, reservationAttemptId } = context;
+    const eventUrl = String(response.url || url || "");
+    const base = { url, eventUrl, method, status: response.status, reservationAttemptId };
+
+    emitWhenDetailsResolved(base, [
+      context.ownerNamePromise,
+      context.requestContextPromise,
+      readReservationResponseBody(response, eventUrl, method),
+    ]);
 
     return response;
   }
