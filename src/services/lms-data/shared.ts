@@ -106,6 +106,17 @@ function releaseInflight(query: string, request: Promise<Reservation[]>): void {
   reservationInflight.delete(query);
 }
 
+/** 실제 조회 + 캐시 적재. 응답이 배열일 수도, { reservations } 일 수도 있다. */
+async function requestReservations(query: string): Promise<Reservation[]> {
+  const response = await fetchApiJson(`${LMS_API_BASE_URL}/api/space-reservations?${query}`);
+  const reservationsValue = Array.isArray(response)
+    ? response
+    : (response as { reservations?: unknown } | null)?.reservations;
+  const reservations = lmsDataNormalizers.normalizeReservations(reservationsValue);
+  reservationCache.set(query, { reservations, fetchedAt: Date.now() });
+  return reservations;
+}
+
 export async function fetchReservationsForRoom(
   roomId: number,
   date: string,
@@ -125,15 +136,7 @@ export async function fetchReservationsForRoom(
     return pending;
   }
 
-  const request = (async () => {
-    const response = await fetchApiJson(`${LMS_API_BASE_URL}/api/space-reservations?${query}`);
-    const reservationsValue = Array.isArray(response)
-      ? response
-      : (response as { reservations?: unknown } | null)?.reservations;
-    const reservations = lmsDataNormalizers.normalizeReservations(reservationsValue);
-    reservationCache.set(query, { reservations, fetchedAt: Date.now() });
-    return reservations;
-  })();
+  const request = requestReservations(query);
 
   reservationInflight.set(query, request);
   try {
@@ -143,8 +146,6 @@ export async function fetchReservationsForRoom(
   }
 }
 
-// 개편 서비스에는 availability 엔드포인트가 없어서, 각 공간의 당일 예약을 받아와
-// 요청 구간과 겹치는지로 예약 가능 여부를 계산한다.
 /** 요청 구간을 검증해 정규화한다. 형식이 틀리면 여기서 던진다. */
 function sanitizeAvailabilityWindow(payload: FetchPayload) {
   const date = sanitizeDateForApi(payload && payload.date, {
@@ -186,6 +187,8 @@ async function resolveRoomAvailability(
   );
 }
 
+// 개편 서비스에는 availability 엔드포인트가 없어서, 각 공간의 당일 예약을 받아와
+// 요청 구간과 겹치는지로 예약 가능 여부를 계산한다.
 export async function fetchAvailability(payload: FetchPayload): Promise<AvailabilityResult> {
   const { date, startTime, endTime, roomType } = sanitizeAvailabilityWindow(payload);
   const spaceContext = await loadSpaceContext(roomType);
@@ -216,15 +219,10 @@ export async function fetchAvailability(payload: FetchPayload): Promise<Availabi
   };
 }
 
-export async function fetchDailySchedule(payload: FetchPayload): Promise<DailyScheduleResult> {
-  const date = sanitizeDateForApi(payload && payload.date, {
-    allowPastDate: payload?.allowPastDate === true,
-  });
-  const roomType = normalizeFetchRoomType(payload && payload.roomType);
-  const spaceContext = await loadSpaceContext(roomType);
-
-  const rooms = await Promise.all(
-    spaceContext.targetRooms.map(async (room) => ({
+/** 방마다 그날 예약을 붙여 스케줄 행을 만든다. */
+async function loadRoomSchedules(rooms: Room[], date: string) {
+  return Promise.all(
+    rooms.map(async (room) => ({
       id: room.id,
       name: room.name,
       color: room.color,
@@ -235,6 +233,16 @@ export async function fetchDailySchedule(payload: FetchPayload): Promise<DailySc
       reservations: await fetchReservationsForRoom(room.id, date),
     })),
   );
+}
+
+export async function fetchDailySchedule(payload: FetchPayload): Promise<DailyScheduleResult> {
+  const date = sanitizeDateForApi(payload && payload.date, {
+    allowPastDate: payload?.allowPastDate === true,
+  });
+  const roomType = normalizeFetchRoomType(payload && payload.roomType);
+  const spaceContext = await loadSpaceContext(roomType);
+
+  const rooms = await loadRoomSchedules(spaceContext.targetRooms, date);
 
   const range = lmsDataNormalizers.computeTimelineRange(rooms);
   const timeline = lmsDataNormalizers.buildTimelineSlots(

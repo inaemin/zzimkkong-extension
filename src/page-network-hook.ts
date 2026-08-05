@@ -99,18 +99,21 @@ declare global {
     }
     return cloned
       .text()
-      .then((text) => {
-        if (!text) {
-          return null;
-        }
-        try {
-          const parsedBody = JSON.parse(text);
-          return parsedBody && typeof parsedBody === "object" ? parsedBody : null;
-        } catch (error) {
-          return null;
-        }
-      })
+      .then(parseJsonObject)
       .catch(() => null);
+  }
+
+  /** JSON 객체면 그대로, 아니면 null. */
+  function parseJsonObject(text) {
+    if (!text) {
+      return null;
+    }
+    try {
+      const parsed = JSON.parse(text);
+      return parsed && typeof parsed === "object" ? parsed : null;
+    } catch {
+      return null;
+    }
   }
 
   /**
@@ -257,6 +260,29 @@ declare global {
     return originalXhrOpen.apply(this, arguments);
   };
 
+  /** XHR 이 끝났을 때 예약 성공이면 이벤트를 띄운다. */
+  function reportXhrReservation(xhr) {
+    const method = normalizeMethod(xhr.__zzkReservationMethod);
+    const url = String(xhr.__zzkReservationUrl || "");
+    const status = Number(xhr.status);
+    const succeeded = Number.isInteger(status) && status >= 200 && status < 300;
+    if (!succeeded || !shouldEmitReservationMutationEvent(url, method)) {
+      return;
+    }
+
+    emitReservationEvent(
+      buildReservationMutationEventPayload({
+        via: "xhr",
+        url,
+        method,
+        status,
+        ownerNameCandidate: xhr.__zzkReservationOwnerNameCandidate,
+        requestContext: xhr.__zzkReservationRequestContext,
+        reservationAttemptId: xhr.__zzkReservationAttemptId,
+      }),
+    );
+  }
+
   XMLHttpRequest.prototype.send = function patchedSend() {
     this.__zzkReservationAttemptId = readReservationAttemptId();
     // eslint-disable-next-line prefer-rest-params
@@ -265,29 +291,8 @@ declare global {
     this.__zzkReservationRequestContext = extractReservationRequestContextFromBody(sendBody);
     if (this.__zzkReservationListenerBound !== true) {
       this.__zzkReservationListenerBound = true;
-      this.addEventListener("loadend", () => {
-        const method = normalizeMethod(this.__zzkReservationMethod);
-        const url = String(this.__zzkReservationUrl || "");
-        const status = Number(this.status);
-        if (
-          Number.isInteger(status) &&
-          status >= 200 &&
-          status < 300 &&
-          shouldEmitReservationMutationEvent(url, method)
-        ) {
-          emitReservationEvent(
-            buildReservationMutationEventPayload({
-              via: "xhr",
-              url,
-              method,
-              status,
-              ownerNameCandidate: this.__zzkReservationOwnerNameCandidate,
-              requestContext: this.__zzkReservationRequestContext,
-              reservationAttemptId: this.__zzkReservationAttemptId,
-            }),
-          );
-        }
-      });
+      // 한 XHR 인스턴스가 여러 번 send 될 수 있어 리스너는 한 번만 건다.
+      this.addEventListener("loadend", () => reportXhrReservation(this));
     }
 
     // eslint-disable-next-line prefer-rest-params

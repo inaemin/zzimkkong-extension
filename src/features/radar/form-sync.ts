@@ -73,21 +73,27 @@ export function createRadarFormSync(deps: Deps) {
     return requestId === state.timelineSelectionRequestId;
   }
 
+  /** 대기 중이던 선택 반영을 실행한다. 그 사이 새 선택이 왔으면 버린다. */
+  function runQueuedSelectionApply(selection, requestId) {
+    state.timelineSelectionApplyTimer = null;
+    if (!isLatestTimelineSelectionRequest(requestId)) {
+      return;
+    }
+    applyTimelineReservationSelection(selection, requestId).catch(() => {
+      // 사용자에게 보이는 에러는 React 오버레이(renderRadarError)가 그린다.
+    });
+  }
+
   function queueTimelineSelectionApply(selection) {
     if (!selection) {
       return;
     }
     pushDebugEvent("radar-form-sync", "queue-selection", {
-      date: selection.date,
-      roomId: selection.room?.id,
-      roomName: selection.room?.name,
+      ...describeSelection(selection),
       startMinute: selection.startMinute,
       endMinute: selection.endMinute,
     });
-    if (!state.elements) {
-      ensurePanel();
-    }
-    if (!state.elements) {
+    if (!ensurePanelElements()) {
       return;
     }
 
@@ -95,20 +101,7 @@ export function createRadarFormSync(deps: Deps) {
     const hadPendingApply = state.timelineSelectionApplyTimer != null;
     clearTimeout(state.timelineSelectionApplyTimer);
     state.timelineSelectionApplyTimer = setTimeout(
-      () => {
-        state.timelineSelectionApplyTimer = null;
-
-        if (!isLatestTimelineSelectionRequest(requestId)) {
-          return;
-        }
-
-        applyTimelineReservationSelection(selection, requestId).catch((error) => {
-          if (!isLatestTimelineSelectionRequest(requestId)) {
-            return;
-          }
-          // 사용자에게 보이는 에러는 React 오버레이(renderRadarError)가 그린다.
-        });
-      },
+      () => runQueuedSelectionApply(selection, requestId),
       hadPendingApply ? 80 : 0,
     );
   }
