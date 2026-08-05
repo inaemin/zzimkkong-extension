@@ -293,31 +293,45 @@ export function createRadarWorkflow(deps: Deps) {
     }
   }
 
-  function openMapCalendarModal() {
+  /** 지금 그려야 할 날짜. 패널 입력이 있으면 그쪽이 우선이다. */
+  function resolveTargetScheduleDate() {
+    const dateInput = state.elements?.dateInput;
+    const currentDate =
+      dateInput instanceof HTMLInputElement
+        ? normalizeDateInput(dateInput)
+        : state.activeScheduleDate;
+    return currentDate || state.activeScheduleDate;
+  }
+
+  /** 지금 오버레이를 띄워도 되는지. 안 되면 정리까지 하고 false. */
+  function canOpenMapCalendarModal() {
     if (!isRadarSupportedPage() || !state.scheduleOverlayEnabled) {
       updateMapCalendarLauncherState();
-      return;
+      return false;
     }
 
     if (shouldDelayGuestMapCalendarUi()) {
       state.mapCalendarVisible = false;
       state.lastAutoOpenPath = null;
       removeMapCalendarOverlay();
-      return;
+      return false;
     }
 
     if (state.mapCalendarSuppressedBySlack) {
       removeMapCalendarOverlay();
+      return false;
+    }
+
+    return true;
+  }
+
+  function openMapCalendarModal() {
+    if (!canOpenMapCalendarModal()) {
       return;
     }
 
-    const dateInput = state.elements?.dateInput;
     const activeTab = normalizeMapCalendarSpaceTab(state.mapCalendarSpaceTab);
-    const currentDate =
-      dateInput instanceof HTMLInputElement
-        ? normalizeDateInput(dateInput)
-        : state.activeScheduleDate;
-    const targetDate = currentDate || state.activeScheduleDate;
+    const targetDate = resolveTargetScheduleDate();
     const targetDateCachedSchedule = targetDate
       ? getFreshScheduleCacheForTab(targetDate, activeTab)
       : null;

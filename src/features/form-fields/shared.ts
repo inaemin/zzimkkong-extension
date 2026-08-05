@@ -102,54 +102,53 @@ export function extractKnownRoomName(rawName: unknown): string {
   return normalizeSlackFieldText(rawName);
 }
 
+/** control.labels 로 이어진 라벨(<label> 이 for/중첩으로 붙은 경우). */
+function readNativeLabels(control: HTMLElement): string[] {
+  const supportsLabels =
+    control instanceof HTMLInputElement ||
+    control instanceof HTMLTextAreaElement ||
+    control instanceof HTMLSelectElement ||
+    control instanceof HTMLButtonElement;
+  if (!supportsLabels || !control.labels?.length) {
+    return [];
+  }
+  return Array.from(control.labels).map((label) => label.textContent || "");
+}
+
+/** label[for=id] 로 가리키는 라벨. control.labels 가 못 잡는 경우를 채운다. */
+function readForLabels(control: HTMLElement): string[] {
+  if (!control.id) {
+    return [];
+  }
+  return Array.from(document.querySelectorAll("label[for]"))
+    .filter((label) => label instanceof HTMLLabelElement && label.htmlFor === control.id)
+    .map((label) => label.textContent || "");
+}
+
+/** aria-labelledby 가 가리키는 요소들의 텍스트. */
+function readAriaLabelledByTexts(control: HTMLElement): string[] {
+  return (control.getAttribute("aria-labelledby") || "")
+    .split(/\s+/)
+    .map((token) => token.trim())
+    .filter(Boolean)
+    .map((id) => document.getElementById(id))
+    .filter((node) => node instanceof HTMLElement)
+    .map((node) => node.textContent || "");
+}
+
 export function getControlAssociatedLabelText(control: Element | null): string {
   if (!(control instanceof HTMLElement)) {
     return "";
   }
 
-  const labels = [];
-  if (
-    (control instanceof HTMLInputElement ||
-      control instanceof HTMLTextAreaElement ||
-      control instanceof HTMLSelectElement ||
-      control instanceof HTMLButtonElement) &&
-    control.labels &&
-    control.labels.length > 0
-  ) {
-    Array.from(control.labels).forEach((label) => {
-      labels.push(label.textContent || "");
-    });
-  }
-
-  if (control.id) {
-    const forLabelCandidates = Array.from(document.querySelectorAll("label[for]")).filter(
-      (label) => {
-        return label instanceof HTMLLabelElement && label.htmlFor === control.id;
-      },
-    );
-    forLabelCandidates.forEach((label) => {
-      labels.push(label.textContent || "");
-    });
-  }
-
-  const labelledBy = (control.getAttribute("aria-labelledby") || "")
-    .split(/\s+/)
-    .map((token) => token.trim())
-    .filter(Boolean);
-
-  labelledBy.forEach((id) => {
-    const node = document.getElementById(id);
-    if (node instanceof HTMLElement) {
-      labels.push(node.textContent || "");
-    }
-  });
-
   const wrappedLabel = control.closest("label");
-  if (wrappedLabel instanceof HTMLLabelElement) {
-    labels.push(wrappedLabel.textContent || "");
-  }
 
-  return labels.join(" ");
+  return [
+    ...readNativeLabels(control),
+    ...readForLabels(control),
+    ...readAriaLabelledByTexts(control),
+    ...(wrappedLabel instanceof HTMLLabelElement ? [wrappedLabel.textContent || ""] : []),
+  ].join(" ");
 }
 
 export function buildHostFieldDescriptor(control: Element | null): string {

@@ -187,6 +187,34 @@ export function createSlackSuccessFlow(deps: Deps) {
     removePendingSlackModalStorage("remove-failed");
   }
 
+  /**
+   * 대기 중이던 Slack 모달을 연다.
+   *
+   * 타이머가 도는 사이에 사용자가 화면을 옮기거나 모달을 이미 열었을 수 있어
+   * 조건을 다시 확인한다. requestAnimationFrame 은 라우팅 직후 화면이 덜
+   * 그려진 상태에서 모달이 뜨는 걸 막는다.
+   */
+  function openPendingModalIfStillReady() {
+    state.pendingSlackModalTimer = null;
+    if (
+      !state.pendingSlackModalContext ||
+      state.slackModalVisible ||
+      !isGuestUiReadyForActivation()
+    ) {
+      return;
+    }
+
+    const pendingContext = state.pendingSlackModalContext;
+    clearPendingSlackModalState();
+    window.requestAnimationFrame(() => {
+      if (state.slackModalVisible) {
+        return;
+      }
+      pushDebugEvent("slack-success", "open-pending-modal", { pathname: location.pathname });
+      showSlackCopyModal(pendingContext);
+    });
+  }
+
   function tryOpenPendingSlackCopyModal() {
     if (!state.pendingSlackModalContext || state.slackModalVisible) {
       return false;
@@ -209,27 +237,7 @@ export function createSlackSuccessFlow(deps: Deps) {
       return false;
     }
 
-    state.pendingSlackModalTimer = window.setTimeout(() => {
-      state.pendingSlackModalTimer = null;
-      if (
-        !state.pendingSlackModalContext ||
-        state.slackModalVisible ||
-        !isGuestUiReadyForActivation()
-      ) {
-        return;
-      }
-
-      const pendingContext = state.pendingSlackModalContext;
-      clearPendingSlackModalState();
-      window.requestAnimationFrame(() => {
-        if (!state.slackModalVisible) {
-          pushDebugEvent("slack-success", "open-pending-modal", {
-            pathname: location.pathname,
-          });
-          showSlackCopyModal(pendingContext);
-        }
-      });
-    }, 350);
+    state.pendingSlackModalTimer = window.setTimeout(openPendingModalIfStillReady, 350);
     return true;
   }
 

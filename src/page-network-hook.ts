@@ -172,6 +172,43 @@ declare global {
     return { url, method };
   }
 
+  /**
+   * 성공 응답을 보고 예약 이벤트를 띄운다. 응답 자체는 그대로 돌려준다.
+   *
+   * 원본 response 는 소비하지 않는다(readReservationResponseBody 가 복제해서
+   * 읽는다). 페이지 앱이 같은 응답을 다시 읽을 수 있어야 한다.
+   */
+  function reportFetchResponse(response, context) {
+    if (!response || response.ok !== true) {
+      return response;
+    }
+
+    const { url, method, reservationAttemptId } = context;
+    const eventUrl = String(response.url || url || "");
+    const base = { url, eventUrl, method, status: response.status, reservationAttemptId };
+
+    Promise.all([
+      context.ownerNamePromise,
+      context.requestContextPromise,
+      readReservationResponseBody(response, eventUrl, method),
+    ])
+      .then(([ownerNameCandidate, requestContext, responseBody]) => {
+        emitFetchReservationEvent({ ...base, ownerNameCandidate, requestContext, responseBody });
+      })
+      // 본문을 못 읽어도 예약 요청이었다면 알려야 한다(정보만 비운다).
+      .catch(() => {
+        emitFetchReservationEvent({
+          ...base,
+          ownerNameCandidate: "",
+          requestContext: null,
+          responseBody: null,
+          force: true,
+        });
+      });
+
+    return response;
+  }
+
   window.__zzkReservationHookRestore = function restoreReservationNetworkHook() {
     if (typeof originalFetch === "function" && window.fetch !== originalFetch) {
       window.fetch = originalFetch;
@@ -201,48 +238,15 @@ declare global {
       // 원본 fetch 에 인자를 그대로 넘겨야 해서 arguments 를 쓴다.
       // rest 로 바꾸면 호출부가 넘긴 형태(Request 객체 등)를 잃을 수 있다.
       // eslint-disable-next-line prefer-rest-params
-      return Promise.resolve(originalFetch.apply(this, arguments)).then((response) => {
-        if (!response || response.ok !== true) {
-          return response;
-        }
-
-        const eventUrl = String(response.url || url || "");
-
-        // 개편 서비스(lms+) 예약 POST 는 응답 body 에 spaceName/floor/reserverName 등
-        // Slack 메시지에 필요한 정보가 모두 들어있으므로, 응답을 복제해 파싱해 둔다.
-        // (원본 response 는 소비하지 않고 그대로 페이지 앱에 돌려준다.)
-        const responseBodyPromise = readReservationResponseBody(response, eventUrl, method);
-
-        Promise.all([ownerNamePromise, requestContextPromise, responseBodyPromise])
-          .then(([ownerNameCandidate, requestContext, responseBody]) => {
-            emitFetchReservationEvent({
-              url,
-              eventUrl,
-              method,
-              status: response.status,
-              reservationAttemptId,
-              ownerNameCandidate,
-              requestContext,
-              responseBody,
-            });
-          })
-          // 본문을 못 읽어도 예약 요청이었다면 알려야 한다(정보만 비운다).
-          .catch(() => {
-            emitFetchReservationEvent({
-              url,
-              eventUrl,
-              method,
-              status: response.status,
-              reservationAttemptId,
-              ownerNameCandidate: "",
-              requestContext: null,
-              responseBody: null,
-              force: true,
-            });
-          });
-
-        return response;
-      });
+      return Promise.resolve(originalFetch.apply(this, arguments)).then((response) =>
+        reportFetchResponse(response, {
+          url,
+          method,
+          reservationAttemptId,
+          ownerNamePromise,
+          requestContextPromise,
+        }),
+      );
     };
   }
 

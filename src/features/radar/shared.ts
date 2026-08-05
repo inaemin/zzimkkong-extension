@@ -7,47 +7,56 @@ interface DomProbes {
   isElementVisible: (node: Element) => boolean;
 }
 
+/** 우리 UI 밖의 버튼들을 담고 있는 부모 요소들. */
+function collectButtonParents(
+  isInsideExtensionSurface: DomProbes["isInsideExtensionSurface"],
+): HTMLElement[] {
+  const parents = Array.from(document.querySelectorAll("button"))
+    .filter((button) => !isInsideExtensionSurface(button))
+    .map((button) => button.parentElement)
+    .filter((parent): parent is HTMLElement => parent instanceof HTMLElement);
+  return [...new Set(parents)];
+}
+
+/**
+ * "예약하기 + 예약현황" 탭 묶음처럼 보이는지 점수로 매긴다.
+ *
+ * 조건에 안 맞으면 빈 배열이라 flatMap 에서 그대로 걸러진다.
+ */
+function scoreTabContainer(
+  parent: HTMLElement,
+  isElementVisible: DomProbes["isElementVisible"],
+): Array<{ parent: HTMLElement; score: number }> {
+  const childButtons = Array.from(parent.children).filter(
+    (child) => child instanceof HTMLButtonElement && isElementVisible(child),
+  );
+  if (childButtons.length < 2) {
+    return [];
+  }
+
+  const labels = childButtons.map((button) => normalizeTextForMatch(button.textContent || ""));
+  if (!labels.includes("예약하기") || !labels.includes("예약현황")) {
+    return [];
+  }
+
+  const score =
+    20 +
+    (childButtons.length <= 4 ? 6 : 0) +
+    (isElementVisible(parent) ? 4 : 0) +
+    (parent.closest("aside, nav, section") ? 3 : 0);
+
+  return [{ parent, score }];
+}
+
 export function findGuestReservationTabContainer({
   isInsideExtensionSurface,
   isElementVisible,
 }: DomProbes): HTMLElement | null {
-  const buttons = Array.from(document.querySelectorAll("button")).filter(
-    (candidate) => candidate instanceof HTMLButtonElement && !isInsideExtensionSurface(candidate),
-  );
-
-  const parentCandidates = new Set<HTMLElement>();
-  buttons.forEach((button) => {
-    if (button.parentElement instanceof HTMLElement) {
-      parentCandidates.add(button.parentElement);
-    }
-  });
-
   // 후보마다 점수를 매겨 가장 높은 것을 고른다. 점수가 같으면 먼저 나온 쪽이
-  // 이긴다(> 비교라 뒤엣것이 덮어쓰지 않는다).
-  const scored = [...parentCandidates].flatMap((parent) => {
-    const childButtons = Array.from(parent.children).filter(
-      (child) => child instanceof HTMLButtonElement && isElementVisible(child),
-    );
-
-    if (childButtons.length < 2) {
-      return [];
-    }
-
-    const labels = childButtons.map((button) => normalizeTextForMatch(button.textContent || ""));
-    const hasReserve = labels.some((label) => label === "예약하기");
-    const hasStatus = labels.some((label) => label === "예약현황");
-    if (!hasReserve || !hasStatus) {
-      return [];
-    }
-
-    const score =
-      20 +
-      (childButtons.length <= 4 ? 6 : 0) +
-      (isElementVisible(parent) ? 4 : 0) +
-      (parent.closest("aside, nav, section") ? 3 : 0);
-
-    return [{ parent, score }];
-  });
+  // 이긴다(>= 비교라 뒤엣것이 덮어쓰지 않는다).
+  const scored = collectButtonParents(isInsideExtensionSurface).flatMap((parent) =>
+    scoreTabContainer(parent, isElementVisible),
+  );
 
   const best = scored.reduce<{ parent: HTMLElement; score: number } | null>(
     (winner, candidate) => (winner && winner.score >= candidate.score ? winner : candidate),
