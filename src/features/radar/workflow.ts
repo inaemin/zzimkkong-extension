@@ -1,3 +1,4 @@
+import type { SpaceTab } from "../../constants/runtime.js";
 import type { RadarState } from "../state.js";
 
 // content.js 가 주입하는 의존성 묶음.
@@ -10,8 +11,13 @@ import type { RadarState } from "../state.js";
  * 바뀔 때 조용히 어긋난다. content.js 에서만 오는 것들(state, 렌더 함수 등)은
  * 아직 .js 라 타입을 알 수 없어 unknown 계열로 남긴다.
  */
-type Deps = Record<string, any> & {
+type Deps = {
   state: RadarState;
+  MAP_CALENDAR_OVERLAY_ID: string;
+  MAP_CALENDAR_LAUNCHER_ID: string;
+  SLACK_MODAL_TRIGGER_ID: string;
+  MAP_CALENDAR_ALWAYS_OPEN_STORAGE_KEY: string;
+  DEBUG_MODE: boolean;
   queryRadarOverlay: typeof import("../../ui/radar-overlay-mount.js").queryRadarOverlay;
   renderRadarLauncher: typeof import("../../ui/radar-launcher-mount.js").renderRadarLauncher;
   removeRadarLauncher: typeof import("../../ui/radar-launcher-mount.js").removeRadarLauncher;
@@ -105,7 +111,7 @@ export function createRadarWorkflow(deps: Deps) {
   }
 
   /** 호스트 탭 버튼의 생김새를 그대로 빌린다(우리 버튼이 튀지 않게). */
-  function copyTabButtonStyle(trigger, styleSource) {
+  function copyTabButtonStyle(trigger: HTMLButtonElement, styleSource: HTMLButtonElement | null) {
     if (!(styleSource instanceof HTMLButtonElement)) {
       return;
     }
@@ -141,7 +147,7 @@ export function createRadarWorkflow(deps: Deps) {
   }
 
   /** 런처를 눌렀을 때. 열면 오버레이를 띄우고 닫으면 걷는다. */
-  function toggleMapCalendar(nextOpen) {
+  function toggleMapCalendar(nextOpen: boolean) {
     enableScheduleOverlayOnce();
     state.mapCalendarVisible = nextOpen;
     if (nextOpen) {
@@ -191,7 +197,7 @@ export function createRadarWorkflow(deps: Deps) {
     return readStoredBoolean(MAP_CALENDAR_ALWAYS_OPEN_STORAGE_KEY, true);
   }
 
-  function scheduleAutoOpenMapCalendarLauncher(launcher) {
+  function scheduleAutoOpenMapCalendarLauncher(launcher: HTMLElement | null) {
     if (!(launcher instanceof HTMLButtonElement) || !isRadarSupportedPage()) {
       return;
     }
@@ -218,7 +224,7 @@ export function createRadarWorkflow(deps: Deps) {
   }
 
   /** 지금도 같은 화면이고 아직 닫혀 있으면 런처를 누른다. */
-  function clickLauncherIfStillClosed(expectedPath) {
+  function clickLauncherIfStillClosed(expectedPath: string) {
     if (!isRadarSupportedPage() || location.pathname !== expectedPath) {
       return;
     }
@@ -255,7 +261,7 @@ export function createRadarWorkflow(deps: Deps) {
     ensureMapCalendarLauncher();
   }
 
-  function ensureMapCalendarLoadingOverlay(bodyElement, forceCreate = false) {
+  function ensureMapCalendarLoadingOverlay(bodyElement: Element | null, forceCreate = false) {
     if (!(bodyElement instanceof HTMLElement)) {
       return null;
     }
@@ -323,7 +329,7 @@ export function createRadarWorkflow(deps: Deps) {
   }
 
   /** 로딩 문구에 날짜를 붙인다(날짜를 알 때만). */
-  function updateLoadingText(loadingOverlay, hasLoadingDate) {
+  function updateLoadingText(loadingOverlay: HTMLElement, hasLoadingDate: boolean) {
     const loadingText = loadingOverlay.querySelector(".zzk-map-calendar-loading-text");
     if (!(loadingText instanceof HTMLElement)) {
       return;
@@ -369,7 +375,7 @@ export function createRadarWorkflow(deps: Deps) {
   }
 
   /** 캐시가 살아 있으면 서버를 기다리지 않고 바로 그린다. */
-  function renderCachedSchedule(targetDate, activeTab, cachedSchedule) {
+  function renderCachedSchedule(targetDate: string, activeTab: SpaceTab, cachedSchedule: unknown) {
     state.activeScheduleDate = targetDate;
     state.activeScheduleTab = activeTab;
     setScheduleLoadingDate(targetDate, false, activeTab);
@@ -377,7 +383,7 @@ export function createRadarWorkflow(deps: Deps) {
   }
 
   /** 캐시가 있으면 바로 그리고, 없으면 받아온다. */
-  function showScheduleForDate(targetDate, activeTab) {
+  function showScheduleForDate(targetDate: string, activeTab: SpaceTab) {
     const cached = getFreshScheduleCacheForTab(targetDate, activeTab);
     if (cached) {
       renderCachedSchedule(targetDate, activeTab, cached);

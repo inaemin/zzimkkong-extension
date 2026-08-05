@@ -113,7 +113,7 @@ export function createRadarFormSync(deps: Deps) {
     );
   }
 
-  function withInternalHostDateSync(task) {
+  function withInternalHostDateSync<T>(task: () => T): T {
     if (typeof task !== "function") {
       return undefined;
     }
@@ -260,7 +260,7 @@ export function createRadarFormSync(deps: Deps) {
  * 바뀔 때 조용히 어긋난다. content.js 에서만 오는 것들은 아직 .js 라 타입을
  * 알 수 없어 형태만 적는다.
  */
-type Deps = Record<string, any> & {
+type Deps = {
   state: RadarState;
   minuteToHourMinute: typeof import("../../utils/date-time.js").minuteToHourMinute;
   getTodayDateInKST: typeof import("../../utils/date-time.js").getTodayDateInKST;
@@ -270,6 +270,7 @@ type Deps = Record<string, any> & {
   clampDateToMin: (value: unknown, minimum: unknown) => string;
   // content.js 에 있어 타입을 끌어올 수 없다. 쓰는 형태만 적는다.
   ensurePanel: () => void;
+  applyPanelDateChange: (nextDate: unknown) => boolean;
   getMinimumSelectableDateForCurrentContext: (value?: unknown) => string;
   getFreshScheduleCache: (date: string) => unknown;
   setScheduleLoadingDate: (date: string, loading: boolean, tab?: string) => void;

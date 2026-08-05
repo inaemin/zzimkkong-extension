@@ -14,7 +14,7 @@ import {
  * 바뀔 때 조용히 어긋난다. content.js 에서만 오는 것들은 아직 .js 라 타입을
  * 알 수 없어 형태만 적는다.
  */
-type Deps = Record<string, any> & {
+type Deps = {
   state: RadarState;
   SLACK_CHANNEL_MENTION_STORAGE_KEY: string;
   SLACK_REMINDER_LEAD_TIME_STORAGE_KEY: string;
@@ -72,7 +72,7 @@ export function createSlackWorkflow(deps: Deps) {
   } = deps;
 
   /** 넘겨받은 문맥을 쓰되, 채널이 비어 있으면 마지막으로 쓴 채널을 채운다. */
-  function buildBaseSlackContext(context) {
+  function buildBaseSlackContext(context: unknown): Record<string, unknown> {
     const base =
       context && typeof context === "object" ? { ...context } : buildSlackReservationContext();
     return typeof base.channelMention === "string"
@@ -105,7 +105,7 @@ export function createSlackWorkflow(deps: Deps) {
   }
 
   /** 채널 입력 관련 옵션. 고른 채널은 저장소와 최근 목록에 남는다. */
-  function buildChannelOptions(baseContext) {
+  function buildChannelOptions(baseContext: Record<string, unknown>) {
     return {
       initialChannel: normalizeSlackChannelToken(baseContext.channelMention, { allowBare: true }),
       channelHistory: Array.isArray(state.slackChannelHistory)

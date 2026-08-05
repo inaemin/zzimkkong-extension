@@ -1,6 +1,13 @@
 import type { RadarState } from "../state.js";
 import { pushDebugEvent } from "../../utils/shared.js";
 
+/** sessionStorage 에 넣어두는 대기 모달 상태. */
+interface PersistedSlackModalState {
+  context?: Record<string, unknown>;
+  requireNonEditPage?: boolean;
+  reloadAttempted?: boolean;
+}
+
 /** MAIN world 훅이 보내는 예약 이벤트 페이로드. */
 interface ReservationEventPayload {
   ok?: boolean;
@@ -84,7 +91,7 @@ export function createSlackSuccessFlow(deps: Deps) {
 
   /** 우리 MAIN world 훅이 보낸 예약 이벤트인지. */
   function isReservationHookMessage(event: MessageEvent) {
-    const data = event.data;
+    const data = event.data as { source?: unknown; type?: unknown } | null;
     return (
       event.source === window &&
       Boolean(data) &&
@@ -99,7 +106,7 @@ export function createSlackSuccessFlow(deps: Deps) {
       return;
     }
 
-    const data = event.data;
+    const data = event.data as { payload?: ReservationEventPayload };
 
     // 예약 생성 응답 body 로 바로 Slack 모달을 띄운다.
     if (!isTrustedReservationNetworkMessage(event, data.payload)) {
@@ -175,10 +182,10 @@ export function createSlackSuccessFlow(deps: Deps) {
   }
 
   /** 저장된 값을 읽어 파싱한다. 접근 실패·파싱 실패 모두 null. */
-  function readPendingSlackModalStorage() {
+  function readPendingSlackModalStorage(): PersistedSlackModalState | null {
     try {
       const rawValue = window.sessionStorage.getItem(PENDING_SLACK_MODAL_STORAGE_KEY);
-      return rawValue ? JSON.parse(rawValue) : null;
+      return rawValue ? (JSON.parse(rawValue) as PersistedSlackModalState) : null;
     } catch (error) {
       reportSessionStorageFailure("read-failed", PENDING_SLACK_MODAL_STORAGE_KEY, error);
       return null;
@@ -191,7 +198,7 @@ export function createSlackSuccessFlow(deps: Deps) {
       return;
     }
 
-    if (typeof parsed !== "object" || !parsed.context || typeof parsed.context !== "object") {
+    if (!parsed.context || typeof parsed.context !== "object") {
       removePendingSlackModalStorage("read-failed");
       return;
     }
@@ -261,7 +268,7 @@ export function createSlackSuccessFlow(deps: Deps) {
     return true;
   }
 
-  function reportSessionStorageFailure(event, storageKey, error) {
+  function reportSessionStorageFailure(event: string, storageKey: string, error: unknown) {
     pushDebugEvent("storage", event, {
       area: "sessionStorage",
       key: storageKey,
@@ -341,7 +348,7 @@ export function createSlackSuccessFlow(deps: Deps) {
  * 바뀔 때 조용히 어긋난다. content.js 에서만 오는 것들은 아직 .js 라 타입을
  * 알 수 없어 형태만 적는다.
  */
-type Deps = Record<string, any> & {
+type Deps = {
   state: RadarState;
   PAGE_RESERVATION_EVENT_TYPE: string;
   PENDING_SLACK_MODAL_STORAGE_KEY: string;
