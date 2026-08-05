@@ -38,37 +38,38 @@ export function buildHostInputDescriptor(input: HTMLInputElement): string {
     .toLowerCase();
 }
 
+/**
+ * 예약자 이름이 아니라 자리표시자·라벨인 값들.
+ *
+ * 호출마다 Set 을 새로 만들 이유가 없어 모듈 상수로 둔다.
+ */
+const IGNORED_OWNER_TOKENS = new Set([
+  "-",
+  "이름",
+  "name",
+  "예약자",
+  "예약자명",
+  "신청자",
+  "신청자명",
+  "owner",
+  "ownername",
+  "requester",
+  "booker",
+  "guest",
+  "guestname",
+  "select",
+  "선택",
+  "choose",
+  "입력",
+]);
+
 export function normalizeHostReservationOwnerCandidate(value: unknown): string {
   const normalized = normalizeSlackFieldText(value || "");
   if (!normalized) {
     return "";
   }
 
-  const normalizedKey = normalizeTextForMatch(normalized);
-  const ignoredTokens = new Set([
-    "-",
-    "이름",
-    "name",
-    "예약자",
-    "예약자명",
-    "신청자",
-    "신청자명",
-    "owner",
-    "ownername",
-    "requester",
-    "booker",
-    "guest",
-    "guestname",
-    "select",
-    "선택",
-    "choose",
-    "입력",
-  ]);
-  if (ignoredTokens.has(normalizedKey)) {
-    return "";
-  }
-
-  return normalized;
+  return IGNORED_OWNER_TOKENS.has(normalizeTextForMatch(normalized)) ? "" : normalized;
 }
 
 export function normalizeHostRoomCandidate(rawName: unknown): string {
@@ -175,6 +176,16 @@ export function buildHostFieldDescriptor(control: Element | null): string {
     .toLowerCase();
 }
 
+/** select 는 고른 option 의 텍스트를 우선하고, 없으면 value 를 쓴다. */
+function readSelectDisplayValue(control: HTMLSelectElement): string {
+  const selectedOption = control.selectedIndex >= 0 ? control.options[control.selectedIndex] : null;
+  const selectedText =
+    selectedOption instanceof HTMLOptionElement
+      ? normalizeSlackFieldText(selectedOption.textContent || "")
+      : "";
+  return selectedText || normalizeSlackFieldText(control.value || "");
+}
+
 export function readHostFieldDisplayValue(control: Element | null): string {
   if (!(control instanceof HTMLElement)) {
     return "";
@@ -185,16 +196,10 @@ export function readHostFieldDisplayValue(control: Element | null): string {
   }
 
   if (control instanceof HTMLSelectElement) {
-    const selectedOption =
-      control.selectedIndex >= 0 ? control.options[control.selectedIndex] : null;
-    const selectedText =
-      selectedOption instanceof HTMLOptionElement
-        ? normalizeSlackFieldText(selectedOption.textContent || "")
-        : "";
-
-    return selectedText || normalizeSlackFieldText(control.value || "");
+    return readSelectDisplayValue(control);
   }
 
+  // 커스텀 컨트롤(div 기반 등)은 값을 어디에 두는지 제각각이라 순서대로 훑는다.
   const valueSnapshots = [
     control.getAttribute("data-value") || "",
     control.getAttribute("aria-valuetext") || "",
@@ -202,12 +207,9 @@ export function readHostFieldDisplayValue(control: Element | null): string {
     control.getAttribute("aria-label") || "",
     control.getAttribute("title") || "",
   ];
-  const firstFilled = valueSnapshots
-    .map((snapshot) => normalizeSlackFieldText(snapshot))
-    .find((snapshot) => Boolean(snapshot));
-  if (firstFilled) {
-    return firstFilled;
-  }
-
-  return "";
+  return (
+    valueSnapshots
+      .map((snapshot) => normalizeSlackFieldText(snapshot))
+      .find((snapshot) => Boolean(snapshot)) || ""
+  );
 }

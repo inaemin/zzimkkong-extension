@@ -74,6 +74,30 @@ export function normalizeText(value: unknown): string {
   return value.replace(/\s+/g, " ").trim();
 }
 
+/**
+ * 예약자 이름이 아니라 자리표시자·라벨인 값들.
+ *
+ * 호출마다 Set 을 새로 만들 이유가 없어 모듈 상수로 둔다.
+ */
+const IGNORED_OWNER_VALUES = new Set([
+  "-",
+  "name",
+  "이름",
+  "예약자",
+  "예약자명",
+  "신청자",
+  "신청자명",
+  "owner",
+  "ownername",
+  "requester",
+  "booker",
+  "guest",
+  "guestname",
+  "select",
+  "선택",
+  "입력",
+]);
+
 export function normalizeOwnerCandidate(value: unknown): string {
   const normalized = normalizeText(toDisplayString(value));
   if (!normalized) {
@@ -81,29 +105,7 @@ export function normalizeOwnerCandidate(value: unknown): string {
   }
 
   const normalizedKey = normalized.replace(/\s+/g, "").toLowerCase();
-  const ignored = new Set([
-    "-",
-    "name",
-    "이름",
-    "예약자",
-    "예약자명",
-    "신청자",
-    "신청자명",
-    "owner",
-    "ownername",
-    "requester",
-    "booker",
-    "guest",
-    "guestname",
-    "select",
-    "선택",
-    "입력",
-  ]);
-  if (ignored.has(normalizedKey)) {
-    return "";
-  }
-
-  return normalized;
+  return IGNORED_OWNER_VALUES.has(normalizedKey) ? "" : normalized;
 }
 
 /** 예약자 이름이 들어오는 필드 키. lms+ 가 요청마다 다른 이름을 쓴다. */
@@ -453,6 +455,13 @@ export function mergeReservationRequestContext(
   return next;
 }
 
+/** 값이 하나라도 채워져 있는지. */
+function hasAnyValue(context: ReservationRequestContext): boolean {
+  return Object.values(context).some((value) =>
+    typeof value === "number" ? Number.isFinite(value) : typeof value === "string" && value !== "",
+  );
+}
+
 export function finalizeReservationRequestContext(
   context: ReservationRequestContext | null,
 ): ReservationRequestContext | null {
@@ -460,32 +469,19 @@ export function finalizeReservationRequestContext(
     return null;
   }
 
-  const date = normalizeDateCandidate(context.date || "");
-  const startTime = normalizeTimeCandidate(context.startTime || "");
-  const endTime = normalizeTimeCandidate(context.endTime || "");
-  const description = normalizeDescriptionCandidate(context.description || "");
-  const roomName = normalizeText(String(context.roomName || ""));
-  const roomId = Number.isInteger(context.roomId) ? context.roomId : null;
-
   const normalized: ReservationRequestContext = {
-    date,
-    startTime,
-    endTime,
-    description,
-    roomName,
+    date: normalizeDateCandidate(context.date || ""),
+    startTime: normalizeTimeCandidate(context.startTime || ""),
+    endTime: normalizeTimeCandidate(context.endTime || ""),
+    description: normalizeDescriptionCandidate(context.description || ""),
+    roomName: normalizeText(String(context.roomName || "")),
   };
-  if (typeof roomId === "number" && Number.isInteger(roomId)) {
-    normalized.roomId = roomId;
+  if (Number.isInteger(context.roomId)) {
+    normalized.roomId = context.roomId;
   }
 
-  const hasValue = Object.values(normalized).some((value) => {
-    if (typeof value === "number") {
-      return Number.isFinite(value);
-    }
-    return typeof value === "string" && value !== "";
-  });
-
-  return hasValue ? normalized : null;
+  // 하나라도 건진 게 있어야 문맥으로 인정한다. 전부 비었으면 null.
+  return hasAnyValue(normalized) ? normalized : null;
 }
 
 /**
@@ -493,17 +489,8 @@ export function finalizeReservationRequestContext(
  *
  * lms+ 가 요청마다 다른 키를 써서 별칭 판정(isXxxFieldKey)이 여럿이다.
  */
-function patchForEntry(rawKey: string, rawValue: unknown) {
-  const normalizedKey = normalizeFieldKey(rawKey);
-  if (!normalizedKey) {
-    return null;
-  }
-
-  const stringValue = typeof rawValue === "string" ? rawValue : toDisplayString(rawValue);
-  if (!normalizeText(stringValue)) {
-    return null;
-  }
-
+/** 키 종류별로 문맥 조각을 만든다. 해당 없으면 null. */
+function patchForKnownKey(normalizedKey: string, stringValue: string, rawValue: unknown) {
   if (isStartDateTimeFieldKey(normalizedKey)) {
     const parts = extractDateTimeParts(stringValue);
     return { date: parts.date, startTime: parts.time };
@@ -526,6 +513,20 @@ function patchForEntry(rawKey: string, rawValue: unknown) {
     return { roomName: normalizeText(stringValue) };
   }
   return null;
+}
+
+function patchForEntry(rawKey: string, rawValue: unknown) {
+  const normalizedKey = normalizeFieldKey(rawKey);
+  if (!normalizedKey) {
+    return null;
+  }
+
+  const stringValue = typeof rawValue === "string" ? rawValue : toDisplayString(rawValue);
+  if (!normalizeText(stringValue)) {
+    return null;
+  }
+
+  return patchForKnownKey(normalizedKey, stringValue, rawValue);
 }
 
 export function extractReservationRequestContextFromEntries(
@@ -737,16 +738,20 @@ export function readReservationAttemptId(): string {
   return value || "";
 }
 
+/** 옵션에 실려 온 attemptId 를 쓰되, 없으면 문서에서 다시 읽는다. */
+function resolveAttemptId(options: Record<string, unknown> | undefined): string {
+  const fromOptions = options?.reservationAttemptId;
+  if (typeof fromOptions === "string" && fromOptions.trim()) {
+    return fromOptions.trim();
+  }
+  return readReservationAttemptId();
+}
+
 export function buildReservationMutationEventPayload(
   options: Record<string, unknown>,
 ): ReservationEventPayload {
   const eventUrl = toDisplayString(options?.url);
-  const reservationAttemptId =
-    options &&
-    typeof options.reservationAttemptId === "string" &&
-    options.reservationAttemptId.trim()
-      ? options.reservationAttemptId.trim()
-      : readReservationAttemptId();
+  const reservationAttemptId = resolveAttemptId(options);
 
   const payload: ReservationEventPayload = {
     via: options && typeof options.via === "string" ? options.via : "fetch",
