@@ -23,6 +23,20 @@ function collectButtonParents(
  *
  * 조건에 안 맞으면 빈 배열이라 flatMap 에서 그대로 걸러진다.
  */
+/** 탭 묶음다움 점수. 버튼이 적고, 보이고, 사이드 영역에 있을수록 높다. */
+function scoreOf(
+  parent: HTMLElement,
+  buttonCount: number,
+  isElementVisible: DomProbes["isElementVisible"],
+): number {
+  return (
+    20 +
+    (buttonCount <= 4 ? 6 : 0) +
+    (isElementVisible(parent) ? 4 : 0) +
+    (parent.closest("aside, nav, section") ? 3 : 0)
+  );
+}
+
 function scoreTabContainer(
   parent: HTMLElement,
   isElementVisible: DomProbes["isElementVisible"],
@@ -39,13 +53,7 @@ function scoreTabContainer(
     return [];
   }
 
-  const score =
-    20 +
-    (childButtons.length <= 4 ? 6 : 0) +
-    (isElementVisible(parent) ? 4 : 0) +
-    (parent.closest("aside, nav, section") ? 3 : 0);
-
-  return [{ parent, score }];
+  return [{ parent, score: scoreOf(parent, childButtons.length, isElementVisible) }];
 }
 
 export function findGuestReservationTabContainer({

@@ -122,16 +122,29 @@ declare global {
    * force 는 본문 파싱이 실패한 경로다. 이때는 URL/attemptId 만으로 판단한다
    * — 예약 요청이었다는 사실은 이미 알고 있으므로 놓치면 안 된다.
    */
-  function emitFetchReservationEvent(detail) {
-    const { url, eventUrl, method, reservationAttemptId, force } = detail;
-    const shouldEmit = force
-      ? isReservationMutationRequest(url, method) ||
+  /**
+   * 이 요청을 알릴지 판단한다.
+   *
+   * force 는 본문 파싱이 실패한 경로다. 이때는 URL/attemptId 만으로 본다 —
+   * 예약 요청이었다는 사실은 이미 알고 있으므로 놓치면 안 된다.
+   */
+  function shouldEmitFetchEvent({ url, eventUrl, method, reservationAttemptId, force }) {
+    if (force) {
+      return (
+        isReservationMutationRequest(url, method) ||
         isReservationMutationRequest(eventUrl, method) ||
         Boolean(reservationAttemptId)
-      : shouldEmitReservationMutationEvent(url, method) ||
-        shouldEmitReservationMutationEvent(eventUrl, method);
+      );
+    }
+    return (
+      shouldEmitReservationMutationEvent(url, method) ||
+      shouldEmitReservationMutationEvent(eventUrl, method)
+    );
+  }
 
-    if (!shouldEmit) {
+  function emitFetchReservationEvent(detail) {
+    const { eventUrl, method, reservationAttemptId } = detail;
+    if (!shouldEmitFetchEvent(detail)) {
       return;
     }
 

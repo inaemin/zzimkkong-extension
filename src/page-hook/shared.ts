@@ -504,30 +504,47 @@ export function finalizeReservationRequestContext(
  * lms+ 가 요청마다 다른 키를 써서 별칭 판정(isXxxFieldKey)이 여럿이다.
  */
 /** 키 종류별로 문맥 조각을 만든다. 해당 없으면 null. */
+/**
+ * 키 종류 → 문맥 조각. 위에서부터 처음 맞는 것을 쓴다.
+ *
+ * 시작/종료는 "2026-08-05T09:00" 처럼 날짜와 시각이 붙어 온다.
+ */
+const FIELD_PATCH_RULES: Array<{
+  matches: (key: string) => boolean;
+  toPatch: (stringValue: string, rawValue: unknown) => ReservationRequestContext | null;
+}> = [
+  {
+    matches: isStartDateTimeFieldKey,
+    toPatch: (value) => {
+      const { date, time } = extractDateTimeParts(value);
+      return { date, startTime: time };
+    },
+  },
+  {
+    matches: isEndDateTimeFieldKey,
+    toPatch: (value) => {
+      const { date, time } = extractDateTimeParts(value);
+      return { date, endTime: time };
+    },
+  },
+  { matches: isDateFieldKey, toPatch: (value) => ({ date: normalizeDateCandidate(value) }) },
+  {
+    matches: isDescriptionFieldKey,
+    toPatch: (value) => ({ description: normalizeDescriptionCandidate(value) }),
+  },
+  {
+    matches: isRoomIdFieldKey,
+    toPatch: (_value, rawValue) => {
+      const roomId = parseReservationRoomIdCandidate(rawValue);
+      return Number.isInteger(roomId) ? { roomId } : null;
+    },
+  },
+  { matches: isRoomNameFieldKey, toPatch: (value) => ({ roomName: normalizeText(value) }) },
+];
+
 function patchForKnownKey(normalizedKey: string, stringValue: string, rawValue: unknown) {
-  // 시작/종료는 "2026-08-05T09:00" 처럼 날짜와 시각이 붙어 온다.
-  if (isStartDateTimeFieldKey(normalizedKey)) {
-    const { date, time } = extractDateTimeParts(stringValue);
-    return { date, startTime: time };
-  }
-  if (isEndDateTimeFieldKey(normalizedKey)) {
-    const { date, time } = extractDateTimeParts(stringValue);
-    return { date, endTime: time };
-  }
-  if (isDateFieldKey(normalizedKey)) {
-    return { date: normalizeDateCandidate(stringValue) };
-  }
-  if (isDescriptionFieldKey(normalizedKey)) {
-    return { description: normalizeDescriptionCandidate(stringValue) };
-  }
-  if (isRoomIdFieldKey(normalizedKey)) {
-    const roomId = parseReservationRoomIdCandidate(rawValue);
-    return Number.isInteger(roomId) ? { roomId } : null;
-  }
-  if (isRoomNameFieldKey(normalizedKey)) {
-    return { roomName: normalizeText(stringValue) };
-  }
-  return null;
+  const rule = FIELD_PATCH_RULES.find((candidate) => candidate.matches(normalizedKey));
+  return rule ? rule.toPatch(stringValue, rawValue) : null;
 }
 
 function patchForEntry(rawKey: string, rawValue: unknown) {
@@ -616,11 +633,7 @@ export function extractReservationRequestContextFromBody(
   }
 
   if (typeof FormData !== "undefined" && body instanceof FormData) {
-    const entries = [];
-    body.forEach((value, key) => {
-      entries.push([key, typeof value === "string" ? value : ""]);
-    });
-    return extractReservationRequestContextFromEntries(entries);
+    return extractReservationRequestContextFromEntries(toEntryPairs(body));
   }
 
   if (typeof URLSearchParams !== "undefined" && body instanceof URLSearchParams) {
