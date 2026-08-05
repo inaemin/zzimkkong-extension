@@ -68,7 +68,7 @@ function parseMeridiemMatch(match: RegExpMatchArray): number | null {
   return toMinuteOfDay(String(hour24), match[3]);
 }
 
-export function parseLocalizedHourMinute(value: unknown): number | null {
+function parseLocalizedHourMinute(value: unknown): number | null {
   if (typeof value !== "string") {
     return null;
   }
@@ -83,7 +83,7 @@ export function parseLocalizedHourMinute(value: unknown): number | null {
   return compactMatch ? toMinuteOfDay(compactMatch[2], compactMatch[3]) : null;
 }
 
-export function extractHourMinute(value: unknown): string {
+function extractHourMinute(value: unknown): string {
   if (typeof value !== "string") {
     return null;
   }
@@ -132,13 +132,6 @@ export function isTenMinuteAligned(value: unknown): boolean {
   }
 
   return totalMinute % TIME_STEP_MINUTES === 0;
-}
-
-export function formatDate(date: Date): string {
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, "0");
-  const day = String(date.getDate()).padStart(2, "0");
-  return `${year}-${month}-${day}`;
 }
 
 export function getTodayDateInKST(): string {
@@ -262,17 +255,7 @@ export function addDaysToDateString(dateString: string, dayOffset: number): stri
   return `${shiftedYear}-${shiftedMonth}-${shiftedDay}`;
 }
 
-export function formatUTCDateString(date: Date): string {
-  if (!(date instanceof Date) || Number.isNaN(date.getTime())) {
-    return "";
-  }
-  const year = String(date.getUTCFullYear()).padStart(4, "0");
-  const month = String(date.getUTCMonth() + 1).padStart(2, "0");
-  const day = String(date.getUTCDate()).padStart(2, "0");
-  return `${year}-${month}-${day}`;
-}
-
-export function parseDateStringAsUTC(dateString: string): Date | null {
+function parseDateStringAsUTC(dateString: string): Date | null {
   if (!isDateString(dateString)) {
     return null;
   }
@@ -281,7 +264,7 @@ export function parseDateStringAsUTC(dateString: string): Date | null {
   return Number.isNaN(date.getTime()) ? null : date;
 }
 
-export function formatKSTWeekday(dateString: string): string {
+function formatKSTWeekday(dateString: string): string {
   const parsedDate = parseDateStringAsUTC(dateString);
   if (!(parsedDate instanceof Date)) {
     return "";

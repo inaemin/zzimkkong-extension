@@ -136,10 +136,7 @@ function reuseReservations(query: string): Promise<Reservation[]> | Reservation[
   return reservationInflight.get(query) ?? null;
 }
 
-export async function fetchReservationsForRoom(
-  roomId: number,
-  date: string,
-): Promise<Reservation[]> {
+async function fetchReservationsForRoom(roomId: number, date: string): Promise<Reservation[]> {
   const query = new URLSearchParams({ date, spaceId: String(roomId) }).toString();
 
   const reused = reuseReservations(query);
@@ -369,7 +366,7 @@ function throwApiError(status: number, data: unknown, hasToken: boolean): never 
   throw new Error(serverMessage ?? `요청 실패 (${status})`);
 }
 
-export async function fetchApiJson(url: string): Promise<unknown> {
+async function fetchApiJson(url: string): Promise<unknown> {
   const token = readLmsAuthToken();
 
   const response = await fetch(url, {

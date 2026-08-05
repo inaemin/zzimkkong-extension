@@ -63,7 +63,7 @@ export interface SlackReminderDateTime {
   time: string;
 }
 
-export function computeSlackReminderDateTime(
+function computeSlackReminderDateTime(
   dateValue: unknown,
   startTimeValue: unknown,
   leadMinutesValue: unknown,

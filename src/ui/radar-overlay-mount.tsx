@@ -102,16 +102,6 @@ export function renderRadarOverlay(node: React.ReactNode): HTMLElement {
   return current.host;
 }
 
-export function unmountRadarOverlay(): void {
-  if (!mount) {
-    return;
-  }
-  mount.stopThemeBridge();
-  mount.root.unmount();
-  mount.host.remove();
-  mount = null;
-}
-
 /**
  * 팝오버·달력을 띄울 층. 카드 바깥이라 카드 크기에 영향을 주지 않는다.
  *
@@ -120,11 +110,6 @@ export function unmountRadarOverlay(): void {
  */
 export function getRadarPortalLayer(): HTMLElement | null {
   return mount && mount.host.isConnected ? mount.portalLayer : null;
-}
-
-/** 명령형 코드가 아직 오버레이 엘리먼트를 직접 찾는다. */
-export function getRadarOverlayHost(): HTMLElement | null {
-  return mount && mount.host.isConnected ? mount.host : null;
 }
 
 /**

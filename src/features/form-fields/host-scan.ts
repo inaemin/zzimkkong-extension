@@ -18,7 +18,7 @@ export function isElementVisible(element: Element | null): boolean {
 }
 
 /** 값을 써넣을 수 있는 호스트 입력인지. */
-export function isHostInputCandidate(
+function isHostInputCandidate(
   input: Element | null,
   isInsideExtensionSurface: (node: Element) => boolean,
 ): input is HTMLInputElement {
@@ -31,7 +31,7 @@ export function isHostInputCandidate(
   return !isInsideExtensionSurface(input);
 }
 
-export function getScopedHostInputs(root: Document | HTMLElement) {
+function getScopedHostInputs(root: Document | HTMLElement) {
   const scoped = Array.from(root.querySelectorAll("input")).filter(
     (candidate) => candidate instanceof HTMLInputElement,
   );
@@ -102,7 +102,7 @@ function scoreExactNameMatch(input: HTMLInputElement, keywords: string[]): numbe
  *
  * 키워드가 안 맞거나 시각 입력이 아니면 후보에서 아예 뺀다(-Infinity).
  */
-export function scoreHostTimeInput(input: HTMLInputElement, keywords: string[]): number {
+function scoreHostTimeInput(input: HTMLInputElement, keywords: string[]): number {
   const descriptor = buildHostInputDescriptor(input);
   const hasKeyword = keywords.some((keyword) => descriptor.includes(keyword));
   if (!hasKeyword || !looksLikeTimeInput(input, descriptor)) {

@@ -95,7 +95,6 @@ import {
   MAP_CALENDAR_SPACE_TAB_MEETING,
   MAP_CALENDAR_SPACE_TAB_PAIR,
   RUNTIME_MESSAGE_TIMEOUT_MS,
-  RESERVATION_SCHEDULE_STALE_MS,
   DEFAULT_SLACK_REMINDER_LEAD_TIME_MINUTES,
   SLACK_REMINDER_LEAD_TIME_OPTIONS,
   LMS_DEFAULT_RESERVATION_MINUTES,
@@ -133,6 +132,14 @@ import {
   queryHostDateInput,
   queryHostTimeInput,
 } from "./features/form-fields/host-scan.js";
+import {
+  buildScheduleScopeKey,
+  clearAvailabilityCache,
+  readAvailabilityCache,
+  readScheduleCache,
+  writeAvailabilityCache,
+  writeScheduleCache,
+} from "./features/radar/schedule-cache.js";
 import { getRoomTags, resolveMapCalendarRoomFloor } from "./features/radar/room-metadata.js";
 import {
   buildMapCalendarTimelineGridLayout,
@@ -603,7 +610,7 @@ declare global {
       if (isSharingMapSwitch) {
         state.scheduleCache.clear();
         state.scheduleCacheFetchedAtByDate.clear();
-        clearAvailabilityCache();
+        clearAvailabilityCache(state);
         state.scheduleInflightByDate.clear();
         state.activeScheduleDate = null;
         state.activeScheduleTab = null;
@@ -637,7 +644,7 @@ declare global {
     const availabilityToken = `${sharingMapId}|${date}|${startTime}|${endTime}|${roomType}`;
 
     // 타임블록을 연속으로 누르면 같은 조건으로 반복 조회된다. TTL 안이면 재사용한다.
-    const cachedAvailability = getFreshAvailabilityCache(availabilityToken);
+    const cachedAvailability = readAvailabilityCache(state, availabilityToken);
     if (cachedAvailability) {
       pushDebugEvent("availability", "cache-hit", { token: availabilityToken });
       applyAvailabilityData(cachedAvailability, { roomType, date, startTime, endTime });
@@ -694,7 +701,7 @@ declare global {
         return;
       }
 
-      cacheAvailability(availabilityToken, data);
+      writeAvailabilityCache(state, availabilityToken, data);
       applyAvailabilityData(data, { roomType, date, startTime, endTime });
 
       if (state.scheduleOverlayEnabled) {
@@ -783,31 +790,6 @@ declare global {
 
   // 예약 현황(availability)은 회의실 수만큼 요청을 보낸다. 타임블록을 연속으로
   // 누르면 그때마다 전량 재조회되므로, 스케줄 캐시와 같은 TTL 로 재사용한다.
-  function getFreshAvailabilityCache(token: string) {
-    const fetchedAt = state.availabilityCacheFetchedAt.get(token);
-    if (!Number.isFinite(fetchedAt)) {
-      return null;
-    }
-
-    if (Date.now() - fetchedAt >= RESERVATION_SCHEDULE_STALE_MS) {
-      state.availabilityCache.delete(token);
-      state.availabilityCacheFetchedAt.delete(token);
-      return null;
-    }
-
-    return state.availabilityCache.get(token) || null;
-  }
-
-  function cacheAvailability(token: string, data: unknown) {
-    state.availabilityCache.set(token, data);
-    state.availabilityCacheFetchedAt.set(token, Date.now());
-  }
-
-  function clearAvailabilityCache() {
-    state.availabilityCache.clear();
-    state.availabilityCacheFetchedAt.clear();
-    state.availabilityInflightByToken.clear();
-  }
 
   // 예약이 새로 생기면 캐시된 예약 목록이 즉시 낡는다. TTL(3초)을 기다리면
   // 방금 잡은 예약이 레이더에 안 보이므로, 성공 즉시 전 계층 캐시를 비우고 다시 그린다.
@@ -815,7 +797,7 @@ declare global {
     if (typeof clearLmsReservationCache === "function") {
       clearLmsReservationCache();
     }
-    clearAvailabilityCache();
+    clearAvailabilityCache(state);
     state.scheduleCache.clear();
     state.scheduleCacheFetchedAtByDate.clear();
     state.scheduleInflightByDate.clear();
@@ -838,84 +820,17 @@ declare global {
       typeof payload.mapName === "string" ? payload.mapName : state.latestMapName;
   }
 
-  function isScheduleCacheStale(date: string) {
-    const fetchedAt = state.scheduleCacheFetchedAtByDate.get(date);
-    if (!Number.isFinite(fetchedAt)) {
-      return false;
-    }
-
-    return Date.now() - fetchedAt >= RESERVATION_SCHEDULE_STALE_MS;
-  }
-
   function getFreshScheduleCache(date: string): DailyScheduleResult | null {
     return getFreshScheduleCacheForTab(date, state.mapCalendarSpaceTab);
   }
 
-  function buildScheduleScopeKey(
-    date: string,
-    tab = state.mapCalendarSpaceTab,
-    sharingMapId = state.currentSharingMapId || getSharingMapId(),
-  ) {
-    const normalizedDate = normalizeDateString(typeof date === "string" ? date : "");
-    if (!isDateString(normalizedDate)) {
-      return "";
-    }
-
-    const normalizedSharingMapId = typeof sharingMapId === "string" ? sharingMapId.trim() : "";
-    if (!normalizedSharingMapId) {
-      return "";
-    }
-
-    return `${normalizedSharingMapId}|${normalizedDate}|${normalizeMapCalendarSpaceTab(tab)}`;
-  }
-
+  /** 지금 화면 조건에 맞는 캐시. 규칙은 schedule-cache 모듈이 정한다. */
   function getFreshScheduleCacheForTab(
     date: string,
-    tab = state.mapCalendarSpaceTab,
-    sharingMapId = state.currentSharingMapId || getSharingMapId(),
-  ) {
-    const normalizedDate = normalizeDateString(typeof date === "string" ? date : "");
-    if (!isDateString(normalizedDate)) {
-      return null;
-    }
-
-    const scopeKey = buildScheduleScopeKey(normalizedDate, tab, sharingMapId);
-    if (!scopeKey) {
-      return null;
-    }
-
-    const cached = state.scheduleCache.get(scopeKey);
-    if (!cached) {
-      return null;
-    }
-
-    if (isScheduleCacheStale(scopeKey)) {
-      state.scheduleCache.delete(scopeKey);
-      state.scheduleCacheFetchedAtByDate.delete(scopeKey);
-      return null;
-    }
-
-    return cached;
-  }
-
-  function cacheScheduleForDate(
-    date: string,
-    scheduleData: DailyScheduleResult | null,
-    tab = state.mapCalendarSpaceTab,
-    sharingMapId = state.currentSharingMapId || getSharingMapId(),
-  ) {
-    const normalizedDate = normalizeDateString(typeof date === "string" ? date : "");
-    if (!isDateString(normalizedDate)) {
-      return;
-    }
-
-    const scopeKey = buildScheduleScopeKey(normalizedDate, tab, sharingMapId);
-    if (!scopeKey) {
-      return;
-    }
-
-    state.scheduleCache.set(scopeKey, scheduleData);
-    state.scheduleCacheFetchedAtByDate.set(scopeKey, Date.now());
+    tab: unknown = state.mapCalendarSpaceTab,
+    sharingMapId: unknown = state.currentSharingMapId || getSharingMapId(),
+  ): DailyScheduleResult | null {
+    return readScheduleCache(state, { date, tab, sharingMapId });
   }
 
   function isScheduleOverlayRenderedForDate(date: string, tab = state.mapCalendarSpaceTab) {
@@ -993,7 +908,11 @@ declare global {
       return;
     }
 
-    const scopeKey = buildScheduleScopeKey(normalizedDate, activeTab, sharingMapId);
+    const scopeKey = buildScheduleScopeKey({
+      date: normalizedDate,
+      tab: activeTab,
+      sharingMapId: sharingMapId,
+    });
     const existingInflight = state.scheduleInflightByDate.get(scopeKey);
     if (existingInflight instanceof Promise) {
       setScheduleLoadingDate(normalizedDate, true, activeTab);
@@ -1036,11 +955,10 @@ declare global {
       if (getSharingMapId() !== sharingMapId) {
         return response.data;
       }
-      cacheScheduleForDate(
-        normalizedDate,
+      writeScheduleCache(
+        state,
+        { date: normalizedDate, tab: activeTab, sharingMapId: sharingMapId },
         response.data as DailyScheduleResult,
-        activeTab,
-        sharingMapId,
       );
       return response.data;
     })();
@@ -2121,7 +2039,11 @@ declare global {
       return;
     }
 
-    const scopeKey = buildScheduleScopeKey(requestedDate, requestedTab, requestedSharingMapId);
+    const scopeKey = buildScheduleScopeKey({
+      date: requestedDate,
+      tab: requestedTab,
+      sharingMapId: requestedSharingMapId,
+    });
     const existingInflight = state.scheduleInflightByDate.get(scopeKey);
     if (existingInflight instanceof Promise) {
       setScheduleLoadingDate(requestedDate, true, requestedTab);
@@ -2816,7 +2738,7 @@ declare global {
     state.latestRoomsBySpaceTab.clear();
     state.scheduleCache.clear();
     state.scheduleCacheFetchedAtByDate.clear();
-    clearAvailabilityCache();
+    clearAvailabilityCache(state);
     state.scheduleInflightByDate.clear();
     state.activeScheduleDate = null;
     state.activeScheduleTab = null;

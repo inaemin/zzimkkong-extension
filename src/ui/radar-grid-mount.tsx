@@ -30,9 +30,3 @@ export function renderRadarGrid(container: HTMLElement, props: RadarGridProps): 
     </ShadowRootProvider>,
   );
 }
-
-export function unmountRadarGrid(): void {
-  root?.unmount();
-  root = null;
-  mountedInto = null;
-}

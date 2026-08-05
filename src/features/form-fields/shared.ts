@@ -2,7 +2,7 @@ import { TARGET_ROOM_NAMES } from "../../constants/runtime.js";
 import { normalizeTextForMatch } from "../../utils/shared.js";
 import { normalizeSlackFieldText } from "../slack/shared.js";
 
-export function getInputAssociatedLabelText(input: HTMLInputElement): string {
+function getInputAssociatedLabelText(input: HTMLInputElement): string {
   const labels: string[] = [];
   if (input.labels && input.labels.length > 0) {
     Array.from(input.labels).forEach((label) => {
@@ -137,7 +137,7 @@ function readAriaLabelledByTexts(control: HTMLElement): string[] {
     .map((node) => node.textContent || "");
 }
 
-export function getControlAssociatedLabelText(control: Element | null): string {
+function getControlAssociatedLabelText(control: Element | null): string {
   if (!(control instanceof HTMLElement)) {
     return "";
   }

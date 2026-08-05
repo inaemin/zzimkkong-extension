@@ -31,9 +31,3 @@ export function renderRadarHeader(container: HTMLElement, props: RadarHeaderProp
     </ShadowRootProvider>,
   );
 }
-
-export function unmountRadarHeader(): void {
-  root?.unmount();
-  root = null;
-  mountedInto = null;
-}

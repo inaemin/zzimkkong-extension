@@ -17,7 +17,6 @@ export { DEBUG_MODE };
 export const MAP_CALENDAR_OVERLAY_TAB_MEETING_ID = "zzk-map-calendar-overlay-tab-meeting";
 export const MAP_CALENDAR_OVERLAY_TAB_PAIR_ID = "zzk-map-calendar-overlay-tab-pair";
 export const PAGE_RESERVATION_EVENT_TYPE = "ZZK_RESERVATION_NETWORK_EVENT";
-export const FLOOR_MAP_ZOOM_ID = "zzk-floormap-zoom";
 export const X_ICON_SVG =
   '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-x-icon lucide-x"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>';
 export const SLACK_CHANNEL_MENTION_STORAGE_KEY = "zzk-slack-channel-mention-v1";
@@ -38,7 +37,7 @@ export const MAP_CALENDAR_SPACE_TAB_PAIR = "pair";
 export const LMS_API_BASE_URL = "https://techcourse-lms-plus-api.woowahan.com";
 export const RUNTIME_MESSAGE_TIMEOUT_MS = 3000;
 export const RESERVATION_SCHEDULE_STALE_MS = 3000;
-export const SEOUL_TIMEZONE = "Asia/Seoul";
+const SEOUL_TIMEZONE = "Asia/Seoul";
 export const KST_DATE_PARTS_FORMATTER = new Intl.DateTimeFormat("en-GB", {
   timeZone: SEOUL_TIMEZONE,
   year: "numeric",
@@ -63,13 +62,11 @@ export const TIME_STEP_MINUTES = 10;
 export const LMS_TIME_STEP_MINUTES = 30;
 // lms+ 블록 클릭 시 기본 60분(30분 슬롯 2칸)을 선택한다.
 export const LMS_DEFAULT_RESERVATION_MINUTES = 60;
-export const CALENDAR_SLOT_MIN_WIDTH = 9;
 // lms+ 는 슬롯이 30분 단위(시간당 2칸)라 클릭 대상이 되도록 더 넓게 그린다.
 export const LMS_CALENDAR_SLOT_MIN_WIDTH = 20;
 export const CALENDAR_SLOT_GAP = 2;
 export const CALENDAR_HOUR_BOUNDARY_LINE_WIDTH = 1;
 export const CALENDAR_HOUR_BOUNDARY_SIDE_GAP = CALENDAR_SLOT_GAP;
-export const MAX_RESERVATION_BLOCKS = 6;
 export const CALENDAR_FLOOR_COL_WIDTH = 52;
 export const CALENDAR_ROOM_COL_WIDTH = 86;
 export const CALENDAR_ROW_GAP = 4;
@@ -119,7 +116,7 @@ export interface TargetRoomMetadata {
   tags: string[];
 }
 
-export const ROOM_TAG_METADATA: RoomTagMetadata[] = [
+const ROOM_TAG_METADATA: RoomTagMetadata[] = [
   { key: "window", label: "창", description: "창문 있음" },
 ];
 export const ROOM_TAG_METADATA_BY_KEY = new Map(
@@ -165,9 +162,6 @@ export const MAP_CALENDAR_ROOM_FLOOR_BY_NAME = new Map(
   TARGET_ROOM_METADATA.map((entry) => [normalizeTargetRoomName(entry.name), entry.floor]),
 );
 export const TARGET_ROOM_NAMES = TARGET_ROOM_METADATA.map((entry) => entry.name);
-export const TARGET_ROOM_SET = new Set(
-  TARGET_ROOM_NAMES.map((name) => normalizeTargetRoomName(name)),
-);
 export const TARGET_ROOM_ORDER = new Map(
   TARGET_ROOM_METADATA.map((entry, index) => [normalizeTargetRoomName(entry.name), index]),
 );
