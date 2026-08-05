@@ -39,11 +39,11 @@ import {
   isRadarSupportedPage,
 } from "./utils/routes.js";
 import {
+  buildSlackRemindCommand,
   normalizeSlackFieldText,
   normalizeSlackChannelToken,
   normalizeSlackReminderLeadMinutes,
   formatSlackReminderLeadOptionLabel,
-  computeSlackReminderDateTime,
 } from "./features/slack/shared.js";
 import {
   buildHostInputDescriptor,
@@ -102,7 +102,6 @@ import {
   NAV_SAFE_Z_INDEX,
   RADAR_LAUNCHER_Z_INDEX,
   TARGET_ROOM_METADATA_BY_NORMALIZED_NAME,
-  MAP_CALENDAR_ROOM_FLOOR_BY_NAME,
   TARGET_ROOM_ORDER,
   normalizeTargetRoomName,
   normalizeMapCalendarSpaceTab,
@@ -3787,82 +3786,6 @@ declare global {
     );
     const remindCommand = buildSlackRemindCommand(safeContext, channelMention);
     return remindCommand;
-  }
-
-  function buildSlackRemindCommand(context, channelMention) {
-    const normalizedChannelMention = normalizeSlackChannelToken(channelMention || "", {
-      allowBare: true,
-    });
-    const remindTimeRangeLabel = resolveSlackRemindTimeRangeLabel(context);
-    const remindSubjectLabel = resolveSlackRemindSubjectLabel(context);
-    const remindLocationLabel = resolveSlackRemindLocationLabel(context);
-    const remindBodyPrefix = `${remindTimeRangeLabel} ${remindSubjectLabel} at ${remindLocationLabel}`;
-    const reminderDateTime = computeSlackReminderDateTime(
-      context?.date,
-      context?.startTime,
-      context?.reminderLeadMinutes,
-    );
-
-    const formatRemindCommand = (recipient, body) => {
-      const escapedRemindBody = body.replace(/"/g, '\\"');
-      if (reminderDateTime) {
-        return `/remind ${recipient} "${escapedRemindBody}" on ${reminderDateTime.date} at ${reminderDateTime.time}`;
-      }
-
-      return `/remind ${recipient} "${escapedRemindBody}" at HH:MM`;
-    };
-
-    if (normalizedChannelMention) {
-      return formatRemindCommand(normalizedChannelMention, `${remindBodyPrefix} @channel`);
-    }
-
-    return formatRemindCommand("me", remindBodyPrefix);
-  }
-
-  function resolveSlackRemindTimeRangeLabel(context) {
-    const rawStartTime = typeof context?.startTime === "string" ? context.startTime : "";
-    const rawEndTime = typeof context?.endTime === "string" ? context.endTime : "";
-    const normalizedStartTime = normalizeHourMinute(rawStartTime) || "--:--";
-    const normalizedEndTime = normalizeHourMinute(rawEndTime) || "--:--";
-    return `${normalizedStartTime}-${normalizedEndTime}`;
-  }
-
-  function resolveSlackRemindSubjectLabel(context) {
-    const normalizedSubject = normalizeSlackFieldText(
-      typeof context?.description === "string" ? context.description : "",
-    );
-
-    if (!normalizedSubject || normalizedSubject === "-") {
-      return "회의";
-    }
-
-    return normalizedSubject;
-  }
-
-  function resolveSlackRemindLocationLabel(context) {
-    const rawRoomName = normalizeSlackFieldText(
-      typeof context?.roomName === "string" ? context.roomName : "",
-    );
-    const sanitizedRoomName = rawRoomName === "-" ? "" : rawRoomName;
-    const normalizedRoomName =
-      sanitizedRoomName.replace(/^\d+\s*층\s*/u, "").trim() || sanitizedRoomName;
-    const floorFromMap = normalizedRoomName
-      ? MAP_CALENDAR_ROOM_FLOOR_BY_NAME.get(normalizedRoomName) || ""
-      : "";
-    const floorFromText = sanitizedRoomName.match(/(\d+\s*층)/u)?.[1]?.replace(/\s+/g, "") || "";
-    const floorLabel = formatSlackFloorLabel(floorFromMap || floorFromText);
-    const roomLabel = normalizedRoomName || "회의실";
-    return [floorLabel, roomLabel].filter(Boolean).join(" ");
-  }
-
-  function formatSlackFloorLabel(value) {
-    const normalizedValue = normalizeSlackFieldText(value);
-    const matchedFloor = normalizedValue.match(/^(\d+)\s*층$/u);
-    if (matchedFloor) {
-      return `${matchedFloor[1]}F`;
-    }
-
-    return normalizedValue;
   }
 
   const { showSlackCopyModal, closeSlackCopyModal } = createSlackWorkflow({
