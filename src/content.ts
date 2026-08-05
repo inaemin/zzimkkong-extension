@@ -2,6 +2,7 @@ import { createElement } from "react";
 import { flushSync } from "react-dom";
 
 import {
+  cancelTimer,
   toDisplayString,
   normalizeTextForMatch,
   getErrorMessage,
@@ -342,7 +343,7 @@ declare global {
     }
 
     if (Number.isInteger(state.mutationGuestUiSyncTimer)) {
-      window.clearTimeout(state.mutationGuestUiSyncTimer);
+      cancelTimer(state.mutationGuestUiSyncTimer);
     }
 
     state.mutationGuestUiSyncTimer = window.setTimeout(() => {
@@ -1010,7 +1011,7 @@ declare global {
     }
 
     const errorRefs: { header?: HTMLElement | null } = {};
-    let overlay: HTMLElement | null;
+    let overlay: HTMLElement | null = null;
     flushSync(() => {
       overlay = renderRadarError({
         message: errorMessage || "예약 현황을 불러오지 못했습니다.",
@@ -1035,7 +1036,7 @@ declare global {
       bindDraggableHeader({
         header: errorRefs.header,
         element: overlay,
-        getOffset: () => state.mapCalendarOffset,
+        getOffset: () => state.mapCalendarOffset ?? { x: 0, y: 0 },
         setOffset: (nextOffset: { x: number; y: number }) => {
           state.mapCalendarOffset = nextOffset;
           persistMapCalendarOffset(nextOffset);
@@ -1199,7 +1200,7 @@ declare global {
     bindDraggableHeader({
       header,
       element: overlay,
-      getOffset: () => state.mapCalendarOffset,
+      getOffset: () => state.mapCalendarOffset ?? { x: 0, y: 0 },
       setOffset: (nextOffset: { x: number; y: number }) => {
         state.mapCalendarOffset = nextOffset;
         persistMapCalendarOffset(nextOffset);
@@ -2362,7 +2363,7 @@ declare global {
 
   async function syncLmsReservationForm(
     payload: Record<string, unknown>,
-    requestId: number = null,
+    requestId: number | null = null,
   ) {
     // 타임블록 연속 클릭 시 이전 sync 가 나중 선택을 덮어쓰지 않도록
     // 각 await 뒤에서 최신 요청인지 확인한다.
@@ -2372,7 +2373,7 @@ declare global {
     const endMinute = parseHourMinute(normalizeHourMinute(payload.endTime));
     const startMinute = parseHourMinute(startTime);
     const durationMinutes =
-      Number.isInteger(startMinute) && Number.isInteger(endMinute) && endMinute > startMinute
+      startMinute !== null && endMinute !== null && endMinute > startMinute
         ? endMinute - startMinute
         : null;
 
@@ -2433,7 +2434,7 @@ declare global {
 
     // 3) 이용 시간 select (30분 단위 개수)
     let durationSynced = true;
-    if (Number.isInteger(durationMinutes) && durationMinutes > 0) {
+    if (durationMinutes !== null && durationMinutes > 0) {
       const durationSelect = findLmsDurationSelect();
       if (durationSelect instanceof HTMLSelectElement) {
         const units = String(Math.max(1, Math.round(durationMinutes / 30)));
@@ -2626,7 +2627,7 @@ declare global {
   }
 
   function scheduleInputRefresh(delay = 220) {
-    clearTimeout(state.inputRefreshTimer);
+    cancelTimer(state.inputRefreshTimer);
     state.inputRefreshTimer = window.setTimeout(() => {
       if (state.loading) {
         scheduleInputRefresh(180);
@@ -2638,7 +2639,7 @@ declare global {
   }
 
   function scheduleCalendarOverlayRefresh() {
-    clearTimeout(state.autoScheduleRefreshTimer);
+    cancelTimer(state.autoScheduleRefreshTimer);
     state.autoScheduleRefreshTimer = window.setTimeout(() => {
       if (
         !state.scheduleOverlayEnabled ||
@@ -2715,7 +2716,7 @@ declare global {
   function teardownGuestUi(options: { preserveReservationContext?: boolean } = {}) {
     const preserveReservationContext = options?.preserveReservationContext === true;
     if (Number.isInteger(state.mutationGuestUiSyncTimer)) {
-      window.clearTimeout(state.mutationGuestUiSyncTimer);
+      cancelTimer(state.mutationGuestUiSyncTimer);
     }
     state.mutationGuestUiSyncTimer = null;
     const hasActiveGuestState =
@@ -2748,7 +2749,7 @@ declare global {
     state.mapCalendarVisible = false;
     state.lastAutoOpenPath = null;
     if (Number.isInteger(state.pendingSlackModalTimer)) {
-      window.clearTimeout(state.pendingSlackModalTimer);
+      cancelTimer(state.pendingSlackModalTimer);
     }
     state.pendingSlackModalTimer = null;
     if (!preserveReservationContext) {
@@ -3253,10 +3254,9 @@ declare global {
       }
     }
 
-    if (state.appliedSelection && Number.isInteger(state.appliedSelection.roomId)) {
-      const matchedRoom = getLatestKnownRooms().find(
-        (room) => room.id === state.appliedSelection.roomId,
-      );
+    const appliedRoomId = state.appliedSelection?.roomId;
+    if (Number.isInteger(appliedRoomId)) {
+      const matchedRoom = getLatestKnownRooms().find((room) => room.id === appliedRoomId);
       if (matchedRoom && typeof matchedRoom.name === "string" && matchedRoom.name.trim()) {
         return matchedRoom.name.trim();
       }
@@ -3724,7 +3724,7 @@ declare global {
   }
 
   function sendMessageViaRuntime(message: { type?: string; payload?: Record<string, unknown> }) {
-    return new Promise((resolve, reject) => {
+    return new Promise<TransportResponse>((resolve, reject) => {
       if (
         typeof chrome === "undefined" ||
         !chrome.runtime ||
@@ -3837,7 +3837,7 @@ declare global {
     try {
       const handler = getDirectApiFallbackHandler(message && message.type);
       if (typeof handler === "function") {
-        const data = await handler(message.payload);
+        const data = await handler(message.payload ?? {});
         pushDebugEvent("transport", "direct-fallback-success", {
           type: message?.type,
         });
@@ -3850,7 +3850,7 @@ declare global {
     }
   }
 
-  function normalizeDateInput(inputElement: Element | null) {
+  function normalizeDateInput(inputElement: Element | null | undefined) {
     if (!(inputElement instanceof HTMLInputElement)) {
       return "";
     }

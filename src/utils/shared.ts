@@ -121,3 +121,14 @@ export function getDebugEvents(): unknown[] {
 export function clearDebugEvents(): void {
   debugEvents.length = 0;
 }
+
+/**
+ * 예약된 타이머를 취소한다. state 의 타이머 필드는 "없음"을 null 로 두는데
+ * clearTimeout 은 null 을 받지 않아서, 호출부마다 분기하는 대신 여기서 흡수한다.
+ */
+export function cancelTimer(timerId: number | null | undefined): void {
+  if (timerId === null || typeof timerId === "undefined") {
+    return;
+  }
+  clearTimeout(timerId);
+}

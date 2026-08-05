@@ -1,7 +1,7 @@
 import type { SpaceTab } from "../../constants/runtime.js";
 import type { DailyScheduleResult } from "../../services/lms-data/types.js";
-import type { RadarState } from "../state.js";
-import { debugLog, pushDebugEvent } from "../../utils/shared.js";
+import type { PanelElements, RadarState } from "../state.js";
+import { cancelTimer, debugLog, pushDebugEvent } from "../../utils/shared.js";
 
 /** 타임블록에서 고른 예약 구간. 그리드가 만들어 넘긴다. */
 /** 패널 입력에 적어 넣은 구간. */
@@ -113,7 +113,7 @@ export function createRadarFormSync(deps: Deps) {
 
     const requestId = createTimelineSelectionRequestId();
     const hadPendingApply = state.timelineSelectionApplyTimer != null;
-    clearTimeout(state.timelineSelectionApplyTimer);
+    cancelTimer(state.timelineSelectionApplyTimer);
     // 브라우저에서 setTimeout 은 number 를 준다. @types/node 가 섞여 Timeout 으로
     // 추론되므로 명시한다.
     state.timelineSelectionApplyTimer = window.setTimeout(
@@ -123,10 +123,6 @@ export function createRadarFormSync(deps: Deps) {
   }
 
   function withInternalHostDateSync<T>(task: () => T): T {
-    if (typeof task !== "function") {
-      return undefined;
-    }
-
     state.hostDateSyncDepth = Number.isInteger(state.hostDateSyncDepth)
       ? state.hostDateSyncDepth + 1
       : 1;
@@ -140,7 +136,7 @@ export function createRadarFormSync(deps: Deps) {
 
   function resetTimelineSelectionState() {
     state.appliedSelection = null;
-    clearTimeout(state.timelineSelectionApplyTimer);
+    cancelTimer(state.timelineSelectionApplyTimer);
     state.timelineSelectionApplyTimer = null;
     createTimelineSelectionRequestId();
   }
@@ -155,22 +151,24 @@ export function createRadarFormSync(deps: Deps) {
   }
 
   /** 패널 입력이 준비됐는지 보장한다. 못 만들면 false. */
-  function ensurePanelElements() {
+  /** 패널이 없으면 만들고, 준비된 요소를 돌려준다. 못 만들면 null. */
+  function ensurePanelElements(): PanelElements | null {
     if (!state.elements) {
       ensurePanel();
     }
-    return Boolean(state.elements);
+    return state.elements;
   }
 
   /** 고른 구간을 패널 입력에 적어 넣고, 정규화된 값을 돌려준다. */
-  function writeSelectionToPanel(selection: TimelineSelection): PanelWindow {
+  function writeSelectionToPanel(
+    selection: TimelineSelection,
+    elements: PanelElements,
+  ): PanelWindow {
     const normalizedDate = clampDateToMin(selection.date, getTodayDateInKST());
     const startTime = minuteToHourMinute(selection.startMinute);
     const endTime = minuteToHourMinute(selection.endMinute);
 
-    state.elements.dateInput.value = normalizedDate;
-    state.elements.startInput.value = startTime;
-    state.elements.endInput.value = endTime;
+    writePanelInputs(elements, { normalizedDate, startTime, endTime });
     state.appliedSelection = {
       date: normalizedDate,
       roomId: selection.room.id,
@@ -178,10 +176,17 @@ export function createRadarFormSync(deps: Deps) {
       endMinute: selection.endMinute,
     };
 
-    normalizeDateInput(state.elements.dateInput);
-    normalizeTimeInput(state.elements.startInput);
-    normalizeTimeInput(state.elements.endInput);
     return { normalizedDate, startTime, endTime };
+  }
+
+  /** 패널 입력 3개에 값을 적고 곧바로 정규화한다. */
+  function writePanelInputs(elements: PanelElements, window: PanelWindow) {
+    elements.dateInput.value = window.normalizedDate;
+    elements.startInput.value = window.startTime;
+    elements.endInput.value = window.endTime;
+    normalizeDateInput(elements.dateInput);
+    normalizeTimeInput(elements.startInput);
+    normalizeTimeInput(elements.endInput);
   }
 
   /** 캐시가 살아 있으면 서버 응답을 기다리지 않고 먼저 그린다. */
@@ -200,11 +205,12 @@ export function createRadarFormSync(deps: Deps) {
     requestId: number = state.timelineSelectionRequestId,
   ) {
     debugLog("radar-form-sync", "apply:start", { requestId, ...describeSelection(selection) });
-    if (!isLatestTimelineSelectionRequest(requestId) || !ensurePanelElements()) {
+    const elements = isLatestTimelineSelectionRequest(requestId) ? ensurePanelElements() : null;
+    if (!elements) {
       return;
     }
 
-    const window = writeSelectionToPanel(selection);
+    const window = writeSelectionToPanel(selection, elements);
     if (!isLatestTimelineSelectionRequest(requestId)) {
       return;
     }
@@ -242,7 +248,7 @@ export function createRadarFormSync(deps: Deps) {
       pushDebugEvent("radar-form-sync", "sync-failed", outcome);
       return;
     }
-    clearTimeout(state.inputRefreshTimer);
+    cancelTimer(state.inputRefreshTimer);
     pushDebugEvent("radar-form-sync", "sync-succeeded", outcome);
     void refreshAvailability();
   }

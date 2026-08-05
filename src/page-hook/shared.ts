@@ -536,7 +536,7 @@ const FIELD_PATCH_RULES: Array<{
     matches: isRoomIdFieldKey,
     toPatch: (_value, rawValue) => {
       const roomId = parseReservationRoomIdCandidate(rawValue);
-      return Number.isInteger(roomId) ? { roomId } : null;
+      return roomId === null ? null : { roomId };
     },
   },
   { matches: isRoomNameFieldKey, toPatch: (value) => ({ roomName: normalizeText(value) }) },
@@ -705,7 +705,7 @@ export async function extractReservationRequestContextFromFetchRequest(
 
   // 본문 형태마다 담긴 정보가 달라서, 읽히는 것을 모두 합친다.
   const bodies = await readRequestBodies(input);
-  const context = bodies.reduce(
+  const context = bodies.reduce<ReservationRequestContext | null>(
     (acc, body) =>
       mergeReservationRequestContext(acc, extractReservationRequestContextFromBody(body)),
     fromInit,

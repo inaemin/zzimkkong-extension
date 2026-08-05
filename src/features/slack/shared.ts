@@ -73,7 +73,7 @@ function computeSlackReminderDateTime(
   }
 
   const startMinute = parseHourMinute(typeof startTimeValue === "string" ? startTimeValue : "");
-  if (!Number.isInteger(startMinute)) {
+  if (startMinute === null) {
     return null;
   }
 

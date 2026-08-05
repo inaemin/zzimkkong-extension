@@ -319,7 +319,8 @@ export function createRadarWorkflow(deps: Deps) {
       return;
     }
 
-    const hasLoadingDate = isDateString(state.scheduleLoadingDate || "");
+    const loadingDate = state.scheduleLoadingDate || "";
+    const hasLoadingDate = isDateString(loadingDate);
     const shouldShowLoading = hasLoadingDate && isLoadingCurrentView();
 
     body.classList.toggle("zzk-map-calendar-body-loading", shouldShowLoading);
@@ -330,18 +331,16 @@ export function createRadarWorkflow(deps: Deps) {
       return;
     }
     loadingOverlay.setAttribute("aria-hidden", shouldShowLoading ? "false" : "true");
-    updateLoadingText(loadingOverlay, hasLoadingDate);
+    updateLoadingText(loadingOverlay, hasLoadingDate ? loadingDate : "");
   }
 
   /** 로딩 문구에 날짜를 붙인다(날짜를 알 때만). */
-  function updateLoadingText(loadingOverlay: HTMLElement, hasLoadingDate: boolean) {
+  function updateLoadingText(loadingOverlay: HTMLElement, loadingDate: string) {
     const loadingText = loadingOverlay.querySelector(".zzk-map-calendar-loading-text");
     if (!(loadingText instanceof HTMLElement)) {
       return;
     }
-    const loadingDateLabel = hasLoadingDate
-      ? formatDateSelectorText(state.scheduleLoadingDate)
-      : "";
+    const loadingDateLabel = loadingDate ? formatDateSelectorText(loadingDate) : "";
     loadingText.textContent = loadingDateLabel
       ? `${loadingDateLabel} 예약 현황 로딩 중...`
       : "예약 현황 로딩 중...";

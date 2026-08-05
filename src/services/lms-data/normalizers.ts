@@ -82,8 +82,8 @@ export function createLmsDataNormalizers(deps: LmsDataNormalizerDeps) {
 
   /** 층 → 이름 → id 순. 서버가 내려준 floor 가 1순위다. */
   function compareRooms(a: Room, b: Room): number {
-    const floorA = Number.isInteger(a.floor) ? a.floor : Number.MAX_SAFE_INTEGER;
-    const floorB = Number.isInteger(b.floor) ? b.floor : Number.MAX_SAFE_INTEGER;
+    const floorA = a.floor ?? Number.MAX_SAFE_INTEGER;
+    const floorB = b.floor ?? Number.MAX_SAFE_INTEGER;
     if (floorA !== floorB) {
       return floorA - floorB;
     }
@@ -111,7 +111,7 @@ export function createLmsDataNormalizers(deps: LmsDataNormalizerDeps) {
   function toReservation(reservation: unknown): Reservation | null {
     const startMinute = parseTimeToMinute(getProperty(reservation, "startTime"));
     const endMinute = parseTimeToMinute(getProperty(reservation, "endTime"));
-    if (!Number.isInteger(startMinute) || !Number.isInteger(endMinute)) {
+    if (startMinute === null || endMinute === null) {
       return null;
     }
 
@@ -163,8 +163,9 @@ export function createLmsDataNormalizers(deps: LmsDataNormalizerDeps) {
     rawStartMinute: number;
     rawEndMinute: number;
   } {
-    const starts = rooms.map((room) => room.windowStartMinute).filter(Number.isInteger);
-    const ends = rooms.map((room) => room.windowEndMinute).filter(Number.isInteger);
+    const isMinute = (value: number | null): value is number => value !== null;
+    const starts = rooms.map((room) => room.windowStartMinute).filter(isMinute);
+    const ends = rooms.map((room) => room.windowEndMinute).filter(isMinute);
     return {
       rawStartMinute: starts.length > 0 ? Math.min(...starts) : 7 * 60,
       rawEndMinute: ends.length > 0 ? Math.max(...ends) : 23 * 60,

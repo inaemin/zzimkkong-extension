@@ -12,7 +12,7 @@ export function isDateString(value: unknown): value is string {
   return typeof value === "string" && /^\d{4}-\d{2}-\d{2}$/.test(value);
 }
 
-export function normalizeDateString(value: unknown): string {
+export function normalizeDateString(value: unknown): string | null {
   if (!isDateString(value)) {
     return null;
   }
@@ -83,7 +83,7 @@ function parseLocalizedHourMinute(value: unknown): number | null {
   return compactMatch ? toMinuteOfDay(compactMatch[2], compactMatch[3]) : null;
 }
 
-function extractHourMinute(value: unknown): string {
+function extractHourMinute(value: unknown): string | null {
   if (typeof value !== "string") {
     return null;
   }
@@ -93,19 +93,19 @@ function extractHourMinute(value: unknown): string {
   return totalMinute === null ? null : minuteToHourMinute(totalMinute);
 }
 
-export function normalizeHourMinute(value: unknown): string {
+export function normalizeHourMinute(value: unknown): string | null {
   if (typeof value !== "string") {
     return null;
   }
 
   const raw = value.trim();
   const parsed = parseHourMinute(raw);
-  if (Number.isInteger(parsed)) {
+  if (parsed !== null) {
     return minuteToHourMinute(parsed);
   }
 
   const localized = parseLocalizedHourMinute(raw);
-  if (Number.isInteger(localized)) {
+  if (localized !== null) {
     return minuteToHourMinute(localized);
   }
 
@@ -115,7 +115,7 @@ export function normalizeHourMinute(value: unknown): string {
 // 파싱 실패 시 입력을 그대로 돌려준다(호출부가 input.value 라 항상 문자열).
 export function normalizeToTenMinute(value: string): string {
   const totalMinute = parseHourMinute(value);
-  if (!Number.isInteger(totalMinute)) {
+  if (totalMinute === null) {
     return value;
   }
 
@@ -127,7 +127,7 @@ export function normalizeToTenMinute(value: string): string {
 
 export function isTenMinuteAligned(value: unknown): boolean {
   const totalMinute = parseHourMinute(value);
-  if (!Number.isInteger(totalMinute)) {
+  if (totalMinute === null) {
     return false;
   }
 
@@ -176,7 +176,7 @@ export function sanitizeTimeForApi(value: unknown): string {
   }
 
   const minute = parseHourMinute(value);
-  if (!Number.isInteger(minute)) {
+  if (minute === null) {
     throw new Error("시간 형식이 올바르지 않습니다.");
   }
   if (minute % TIME_STEP_MINUTES !== 0) {

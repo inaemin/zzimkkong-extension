@@ -1,5 +1,5 @@
 import type { RadarState } from "../state.js";
-import { pushDebugEvent, toDisplayString } from "../../utils/shared.js";
+import { cancelTimer, pushDebugEvent, toDisplayString } from "../../utils/shared.js";
 
 /** sessionStorage 에 넣어두는 대기 모달 상태. */
 interface PersistedSlackModalState {
@@ -92,10 +92,11 @@ export function createSlackSuccessFlow(deps: Deps) {
   /** 우리 MAIN world 훅이 보낸 예약 이벤트인지. */
   function isReservationHookMessage(event: MessageEvent) {
     const data = event.data as { source?: unknown; type?: unknown } | null;
+    if (!data || typeof data !== "object") {
+      return false;
+    }
     return (
       event.source === window &&
-      Boolean(data) &&
-      typeof data === "object" &&
       data.source === "zzk-page-reservation-hook" &&
       data.type === PAGE_RESERVATION_EVENT_TYPE
     );
@@ -109,6 +110,9 @@ export function createSlackSuccessFlow(deps: Deps) {
     const data = event.data as { payload?: ReservationEventPayload };
 
     // 예약 생성 응답 body 로 바로 Slack 모달을 띄운다.
+    if (!data.payload) {
+      return;
+    }
     if (!isTrustedReservationNetworkMessage(event, data.payload)) {
       pushDebugEvent("slack-success", "lms-ignored-untrusted", {
         origin: event.origin,
@@ -136,7 +140,7 @@ export function createSlackSuccessFlow(deps: Deps) {
 
   function cancelPendingSlackModalTimer() {
     if (Number.isInteger(state.pendingSlackModalTimer)) {
-      window.clearTimeout(state.pendingSlackModalTimer);
+      cancelTimer(state.pendingSlackModalTimer);
     }
     state.pendingSlackModalTimer = null;
   }

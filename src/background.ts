@@ -35,6 +35,14 @@ interface FetchPayload {
   allowPastDate?: boolean;
 }
 
+/**
+ * 런타임 메시지의 payload 는 무엇이든 올 수 있다. 필드는 전부 unknown 이고
+ * 실제 검증은 sanitize* 가 하므로, 여기서는 객체인지만 확인해 넘긴다.
+ */
+function asFetchPayload(value: unknown): FetchPayload {
+  return value && typeof value === "object" ? value : {};
+}
+
 interface SpaceContext {
   mapId: number | null;
   mapName: string;
@@ -82,11 +90,11 @@ interface SpaceContext {
         debugLog("background", "received runtime message", { type: messageType });
 
         if (messageType === MESSAGE_TYPE_FETCH_AVAILABILITY) {
-          return respondWith(sendResponse, loadAvailability(payload));
+          return respondWith(sendResponse, loadAvailability(asFetchPayload(payload)));
         }
 
         if (messageType === MESSAGE_TYPE_FETCH_DAILY_SCHEDULE) {
-          return respondWith(sendResponse, loadDailySchedule(payload));
+          return respondWith(sendResponse, loadDailySchedule(asFetchPayload(payload)));
         }
 
         return false;
@@ -170,6 +178,10 @@ interface SpaceContext {
       const roomType = normalizeRoomType(getProperty(payload, "roomType"));
       const startMinute = lmsDataNormalizers.parseTimeToMinute(startTime);
       const endMinute = lmsDataNormalizers.parseTimeToMinute(endTime);
+      // sanitizeTimeForApi 를 통과했으면 HH:MM 이다. 그래도 어긋나면 멈춘다.
+      if (startMinute === null || endMinute === null) {
+        throw new Error("시간 형식이 올바르지 않습니다.");
+      }
       const spaceContext = await loadLmsSpaceContext(roomType);
 
       const rooms = await Promise.all(

@@ -154,6 +154,19 @@ async function fetchReservationsForRoom(roomId: number, date: string): Promise<R
   }
 }
 
+/**
+ * HH:MM 두 개를 분으로. sanitizeAvailabilityWindow 를 통과했으면 성공이
+ * 보장되지만, 어긋나면 조용히 넘기지 않고 여기서 멈춘다.
+ */
+function toMinuteWindow(startTime: string, endTime: string) {
+  const startMinute = lmsDataNormalizers.parseTimeToMinute(startTime);
+  const endMinute = lmsDataNormalizers.parseTimeToMinute(endTime);
+  if (startMinute === null || endMinute === null) {
+    throw new Error("시간 형식이 올바르지 않습니다.");
+  }
+  return { startMinute, endMinute };
+}
+
 /** 요청 구간을 검증해 정규화한다. 형식이 틀리면 여기서 던진다. */
 function sanitizeAvailabilityWindow(payload: FetchPayload) {
   const date = sanitizeDateForApi(payload && payload.date, {
@@ -209,8 +222,7 @@ export async function fetchAvailability(payload: FetchPayload): Promise<Availabi
 
   const rooms = await resolveRoomAvailability(spaceContext.targetRooms, {
     date,
-    startMinute: lmsDataNormalizers.parseTimeToMinute(startTime),
-    endMinute: lmsDataNormalizers.parseTimeToMinute(endTime),
+    ...toMinuteWindow(startTime, endTime),
   });
 
   return {
