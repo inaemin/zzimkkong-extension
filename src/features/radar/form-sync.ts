@@ -181,29 +181,21 @@ export function createRadarFormSync(deps: Deps) {
     selection,
     requestId = state.timelineSelectionRequestId,
   ) {
-    if (!isLatestTimelineSelectionRequest(requestId)) {
-      return;
-    }
-    debugLog("radar-form-sync", "applyTimelineReservationSelection:start", {
-      requestId,
-      ...describeSelection(selection),
-    });
-    if (!ensurePanelElements()) {
+    debugLog("radar-form-sync", "apply:start", { requestId, ...describeSelection(selection) });
+    if (!isLatestTimelineSelectionRequest(requestId) || !ensurePanelElements()) {
       return;
     }
 
-    const { normalizedDate, startTime, endTime } = writeSelectionToPanel(selection);
-
+    const window = writeSelectionToPanel(selection);
     if (!isLatestTimelineSelectionRequest(requestId)) {
       return;
     }
 
-    renderCachedOverlayForDate(normalizedDate);
-
+    renderCachedOverlayForDate(window.normalizedDate);
     await syncHostFormAndReport(selection, requestId, {
-      date: normalizedDate,
-      startTime,
-      endTime,
+      date: window.normalizedDate,
+      startTime: window.startTime,
+      endTime: window.endTime,
     });
   }
 

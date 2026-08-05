@@ -117,25 +117,29 @@ async function requestReservations(query: string): Promise<Reservation[]> {
   return reservations;
 }
 
-export async function fetchReservationsForRoom(
-  roomId: number,
-  date: string,
-): Promise<Reservation[]> {
-  const query = new URLSearchParams({
-    date,
-    spaceId: String(roomId),
-  }).toString();
-
-  // 캐시가 살아 있으면 그대로, 같은 요청이 날아가 있으면 거기 얹는다.
-  // (빈 배열도 유효한 캐시라 null 검사로 갈라야 한다 — 예약 0건인 방)
+/**
+ * 다시 요청하지 않아도 되는 경우를 걸러낸다.
+ *
+ * 캐시가 살아 있으면 그대로, 같은 요청이 이미 날아가 있으면 거기 얹는다.
+ * 빈 배열도 유효한 캐시라 null 검사로 갈라야 한다(예약 0건인 방).
+ */
+function reuseReservations(query: string): Promise<Reservation[]> | Reservation[] | null {
   const cached = readCachedReservations(query);
   if (cached !== null) {
     return cached;
   }
+  return reservationInflight.get(query) ?? null;
+}
 
-  const pending = reservationInflight.get(query);
-  if (pending) {
-    return pending;
+export async function fetchReservationsForRoom(
+  roomId: number,
+  date: string,
+): Promise<Reservation[]> {
+  const query = new URLSearchParams({ date, spaceId: String(roomId) }).toString();
+
+  const reused = reuseReservations(query);
+  if (reused) {
+    return reused;
   }
 
   const request = requestReservations(query);
@@ -191,6 +195,12 @@ async function resolveRoomAvailability(
 
 // 개편 서비스에는 availability 엔드포인트가 없어서, 각 공간의 당일 예약을 받아와
 // 요청 구간과 겹치는지로 예약 가능 여부를 계산한다.
+/** 전체·빈 곳·사용 중 개수. */
+function countAvailability(rooms: Array<{ isAvailable: boolean }>) {
+  const available = rooms.filter((room) => room.isAvailable).length;
+  return { total: rooms.length, available, occupied: rooms.length - available };
+}
+
 export async function fetchAvailability(payload: FetchPayload): Promise<AvailabilityResult> {
   const { date, startTime, endTime, roomType } = sanitizeAvailabilityWindow(payload);
   const spaceContext = await loadSpaceContext(roomType);
@@ -201,22 +211,12 @@ export async function fetchAvailability(payload: FetchPayload): Promise<Availabi
     endMinute: lmsDataNormalizers.parseTimeToMinute(endTime),
   });
 
-  const availableCount = rooms.filter((room) => room.isAvailable).length;
-
   return {
     mapId: spaceContext.mapId,
     mapName: spaceContext.mapName,
-    selectedWindow: {
-      date,
-      startTime,
-      endTime,
-    },
+    selectedWindow: { date, startTime, endTime },
     roomType,
-    counts: {
-      total: rooms.length,
-      available: availableCount,
-      occupied: rooms.length - availableCount,
-    },
+    counts: countAvailability(rooms),
     rooms,
   };
 }
@@ -365,16 +365,12 @@ function throwApiError(status: number, data: unknown, hasToken: boolean): never 
 }
 
 export async function fetchApiJson(url: string): Promise<unknown> {
-  const headers: Record<string, string> = {
-    accept: "application/json",
-  };
   const token = readLmsAuthToken();
-  if (token) {
-    headers.authorization = `Bearer ${token}`;
-  }
 
   const response = await fetch(url, {
-    headers,
+    headers: token
+      ? { accept: "application/json", authorization: `Bearer ${token}` }
+      : { accept: "application/json" },
     // 쿠키도 함께 보낸다(일부 엔드포인트가 세션 쿠키를 병행할 수 있음).
     credentials: "include",
   });

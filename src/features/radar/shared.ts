@@ -73,6 +73,27 @@ export function findGuestReservationTabContainer({
   return best?.parent ?? null;
 }
 
+const TAB_LABELS = ["예약하기", "예약현황"];
+
+/** 컨테이너 직계 자식 중 보이는 버튼들. */
+function visibleButtonsIn(
+  container: HTMLElement,
+  isElementVisible: DomProbes["isElementVisible"],
+): Element[] {
+  return Array.from(container.children).filter(
+    (child) => child instanceof HTMLButtonElement && isElementVisible(child),
+  );
+}
+
+/** 탭 버튼을 우선하고, 없으면 첫 버튼의 스타일을 빌린다. */
+function pickStyleSourceButton(buttons: Element[]): HTMLButtonElement | null {
+  const prioritized = buttons.find((button) =>
+    TAB_LABELS.includes(normalizeTextForMatch(button.textContent || "")),
+  );
+  const chosen = prioritized ?? buttons[0];
+  return chosen instanceof HTMLButtonElement ? chosen : null;
+}
+
 export function findGuestReservationTabStyleSource({
   isInsideExtensionSurface,
   isElementVisible,
@@ -84,19 +105,5 @@ export function findGuestReservationTabStyleSource({
   if (!(actionContainer instanceof HTMLElement)) {
     return null;
   }
-
-  const buttonCandidates = Array.from(actionContainer.children).filter(
-    (child) => child instanceof HTMLButtonElement && isElementVisible(child),
-  );
-
-  // 탭 버튼을 우선하고, 없으면 첫 버튼의 스타일을 빌린다.
-  const prioritized = buttonCandidates.find((button) =>
-    ["예약하기", "예약현황"].includes(normalizeTextForMatch(button.textContent || "")),
-  );
-
-  return prioritized instanceof HTMLButtonElement
-    ? prioritized
-    : buttonCandidates[0] instanceof HTMLButtonElement
-      ? buttonCandidates[0]
-      : null;
+  return pickStyleSourceButton(visibleButtonsIn(actionContainer, isElementVisible));
 }

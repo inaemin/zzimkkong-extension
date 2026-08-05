@@ -224,20 +224,18 @@ export function createSlackSuccessFlow(deps: Deps) {
   }
 
   function tryOpenPendingSlackCopyModal() {
-    if (!state.pendingSlackModalContext || state.slackModalVisible) {
-      return false;
-    }
-    if (!isGuestUiReadyForActivation()) {
+    if (
+      !state.pendingSlackModalContext ||
+      state.slackModalVisible ||
+      !isGuestUiReadyForActivation()
+    ) {
       return false;
     }
 
-    const elapsedSinceRouteChange = Date.now() - (state.lastGuestRouteChangeAt || 0);
-    if (
-      Number.isFinite(elapsedSinceRouteChange) &&
-      elapsedSinceRouteChange >= 0 &&
-      elapsedSinceRouteChange < 1200
-    ) {
-      scheduleRetryAfterRouteChange(1200 - elapsedSinceRouteChange);
+    // 라우팅 직후엔 화면이 덜 그려져 있어 잠깐 뒤 다시 시도한다.
+    const elapsed = Date.now() - (state.lastGuestRouteChangeAt || 0);
+    if (Number.isFinite(elapsed) && elapsed >= 0 && elapsed < 1200) {
+      scheduleRetryAfterRouteChange(1200 - elapsed);
       return false;
     }
 

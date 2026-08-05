@@ -50,6 +50,15 @@ export function createSlackWorkflow(deps: Deps) {
     writeStoredText,
   } = deps;
 
+  /** 넘겨받은 문맥을 쓰되, 채널이 비어 있으면 마지막으로 쓴 채널을 채운다. */
+  function buildBaseSlackContext(context) {
+    const base =
+      context && typeof context === "object" ? { ...context } : buildSlackReservationContext();
+    return typeof base.channelMention === "string"
+      ? base
+      : { ...base, channelMention: state.slackChannelMention || "" };
+  }
+
   function showSlackCopyModal(context) {
     if (!(document.body instanceof HTMLBodyElement)) {
       return;
@@ -59,11 +68,7 @@ export function createSlackWorkflow(deps: Deps) {
     state.slackModalVisible = true;
     setMapCalendarSuppressedBySlack(true);
 
-    const baseContext =
-      context && typeof context === "object" ? { ...context } : buildSlackReservationContext();
-    if (typeof baseContext.channelMention !== "string") {
-      baseContext.channelMention = state.slackChannelMention || "";
-    }
+    const baseContext = buildBaseSlackContext(context);
 
     openSlackCopyModal({
       buildMessage: ({ channelMention, reminderLeadMinutes }) =>

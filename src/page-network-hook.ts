@@ -80,20 +80,23 @@ declare global {
     return /\/api\/space-reservations\/?$/i.test(parsed.pathname);
   }
 
+  /** 응답을 복제한다. 이미 소비됐거나 복제할 수 없으면 null. */
+  function cloneResponse(response) {
+    if (!response || typeof response.clone !== "function") {
+      return null;
+    }
+    try {
+      return response.clone();
+    } catch {
+      return null;
+    }
+  }
+
   function readReservationResponseBody(response, urlValue, methodValue) {
     if (!isLmsReservationCreatePath(urlValue, methodValue)) {
       return Promise.resolve(null);
     }
-    if (!response || typeof response.clone !== "function") {
-      return Promise.resolve(null);
-    }
-    const cloned = (() => {
-      try {
-        return response.clone();
-      } catch {
-        return null;
-      }
-    })();
+    const cloned = cloneResponse(response);
     if (!cloned) {
       return Promise.resolve(null);
     }

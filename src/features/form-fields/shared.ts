@@ -194,6 +194,21 @@ function readSelectDisplayValue(control: HTMLSelectElement): string {
   return selectedText || normalizeSlackFieldText(control.value || "");
 }
 
+/** 커스텀 컨트롤(div 기반 등)은 값을 어디에 두는지 제각각이라 순서대로 훑는다. */
+function readCustomControlValue(control: HTMLElement): string {
+  return (
+    [
+      control.getAttribute("data-value") || "",
+      control.getAttribute("aria-valuetext") || "",
+      control.textContent || "",
+      control.getAttribute("aria-label") || "",
+      control.getAttribute("title") || "",
+    ]
+      .map((snapshot) => normalizeSlackFieldText(snapshot))
+      .find((snapshot) => Boolean(snapshot)) || ""
+  );
+}
+
 export function readHostFieldDisplayValue(control: Element | null): string {
   if (!(control instanceof HTMLElement)) {
     return "";
@@ -207,17 +222,5 @@ export function readHostFieldDisplayValue(control: Element | null): string {
     return readSelectDisplayValue(control);
   }
 
-  // 커스텀 컨트롤(div 기반 등)은 값을 어디에 두는지 제각각이라 순서대로 훑는다.
-  const valueSnapshots = [
-    control.getAttribute("data-value") || "",
-    control.getAttribute("aria-valuetext") || "",
-    control.textContent || "",
-    control.getAttribute("aria-label") || "",
-    control.getAttribute("title") || "",
-  ];
-  return (
-    valueSnapshots
-      .map((snapshot) => normalizeSlackFieldText(snapshot))
-      .find((snapshot) => Boolean(snapshot)) || ""
-  );
+  return readCustomControlValue(control);
 }

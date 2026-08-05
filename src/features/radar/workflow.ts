@@ -244,11 +244,17 @@ export function createRadarWorkflow(deps: Deps) {
     if (existing instanceof HTMLElement) {
       return existing;
     }
-
     if (!forceCreate) {
       return null;
     }
 
+    const loadingOverlay = createLoadingOverlay();
+    bodyElement.appendChild(loadingOverlay);
+    return loadingOverlay;
+  }
+
+  /** 스피너 + 문구를 담은 로딩 오버레이. */
+  function createLoadingOverlay() {
     const loadingOverlay = document.createElement("div");
     loadingOverlay.className = "zzk-map-calendar-loading-overlay";
     loadingOverlay.setAttribute("role", "status");
@@ -262,8 +268,17 @@ export function createRadarWorkflow(deps: Deps) {
     loadingText.className = "zzk-map-calendar-loading-text";
 
     loadingOverlay.append(spinner, loadingText);
-    bodyElement.appendChild(loadingOverlay);
     return loadingOverlay;
+  }
+
+  /** 지금 로딩 중인 날짜·탭이 화면에 보이는 그것인지. */
+  function isLoadingCurrentView() {
+    return (
+      state.scheduleLoadingDate === state.activeScheduleDate &&
+      state.scheduleLoadingTab === state.activeScheduleTab &&
+      state.scheduleOverlayEnabled &&
+      isMapCalendarModalOpenRequested()
+    );
   }
 
   function syncMapCalendarBodyLoadingState() {
@@ -274,12 +289,7 @@ export function createRadarWorkflow(deps: Deps) {
     }
 
     const hasLoadingDate = isDateString(state.scheduleLoadingDate || "");
-    const shouldShowLoading =
-      hasLoadingDate &&
-      state.scheduleLoadingDate === state.activeScheduleDate &&
-      state.scheduleLoadingTab === state.activeScheduleTab &&
-      state.scheduleOverlayEnabled &&
-      isMapCalendarModalOpenRequested();
+    const shouldShowLoading = hasLoadingDate && isLoadingCurrentView();
 
     body.classList.toggle("zzk-map-calendar-body-loading", shouldShowLoading);
     body.setAttribute("aria-busy", shouldShowLoading ? "true" : "false");
@@ -288,7 +298,6 @@ export function createRadarWorkflow(deps: Deps) {
     if (!(loadingOverlay instanceof HTMLElement)) {
       return;
     }
-
     loadingOverlay.setAttribute("aria-hidden", shouldShowLoading ? "false" : "true");
     updateLoadingText(loadingOverlay, hasLoadingDate);
   }
@@ -339,6 +348,27 @@ export function createRadarWorkflow(deps: Deps) {
     return true;
   }
 
+  /** 캐시가 살아 있으면 서버를 기다리지 않고 바로 그린다. */
+  function renderCachedSchedule(targetDate, activeTab, cachedSchedule) {
+    state.activeScheduleDate = targetDate;
+    state.activeScheduleTab = activeTab;
+    setScheduleLoadingDate(targetDate, false, activeTab);
+    renderMapCalendarOverlay(cachedSchedule);
+  }
+
+  /** 캐시가 있으면 바로 그리고, 없으면 받아온다. */
+  function showScheduleForDate(targetDate, activeTab) {
+    const cached = getFreshScheduleCacheForTab(targetDate, activeTab);
+    if (cached) {
+      renderCachedSchedule(targetDate, activeTab, cached);
+      return;
+    }
+    refreshDailySchedule(targetDate).catch(() => {
+      // 사용자에게 보이는 에러는 React 오버레이(renderRadarError)가 그린다.
+      updateMapCalendarLauncherState();
+    });
+  }
+
   function openMapCalendarModal() {
     if (!canOpenMapCalendarModal()) {
       return;
@@ -346,23 +376,8 @@ export function createRadarWorkflow(deps: Deps) {
 
     const activeTab = normalizeMapCalendarSpaceTab(state.mapCalendarSpaceTab);
     const targetDate = resolveTargetScheduleDate();
-    const targetDateCachedSchedule = targetDate
-      ? getFreshScheduleCacheForTab(targetDate, activeTab)
-      : null;
-
-    if (targetDate && targetDateCachedSchedule) {
-      state.activeScheduleDate = targetDate;
-      state.activeScheduleTab = activeTab;
-      setScheduleLoadingDate(targetDate, false, activeTab);
-      renderMapCalendarOverlay(targetDateCachedSchedule);
-      return;
-    }
-
     if (targetDate) {
-      refreshDailySchedule(targetDate).catch(() => {
-        // 사용자에게 보이는 에러는 React 오버레이(renderRadarError)가 그린다.
-        updateMapCalendarLauncherState();
-      });
+      showScheduleForDate(targetDate, activeTab);
       return;
     }
 

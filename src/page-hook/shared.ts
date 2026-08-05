@@ -580,6 +580,16 @@ export function extractReservationRequestContextFromEntries(
   return finalizeReservationRequestContext(context);
 }
 
+/** 객체의 키를 먼저 훑고, 그다음 각 값 안으로 한 단계 더 들어간다. */
+function mergeNestedContexts(value: object, depth: number, initialContext: unknown) {
+  const entries = Object.entries(value);
+  return entries.reduce(
+    (acc, [, nestedValue]) =>
+      extractReservationRequestContextFromObject(nestedValue, depth + 1, acc),
+    extractReservationRequestContextFromEntries(entries, initialContext),
+  );
+}
+
 export function extractReservationRequestContextFromObject(
   value,
   depth = 0,
@@ -595,18 +605,11 @@ export function extractReservationRequestContextFromObject(
       initialContext,
     );
   }
-
   if (typeof value !== "object") {
     return finalizeReservationRequestContext(initialContext);
   }
 
-  const entries = Object.entries(value);
-  const context = entries.reduce(
-    (acc, [, nestedValue]) =>
-      extractReservationRequestContextFromObject(nestedValue, depth + 1, acc),
-    extractReservationRequestContextFromEntries(entries, initialContext),
-  );
-  return finalizeReservationRequestContext(context);
+  return finalizeReservationRequestContext(mergeNestedContexts(value, depth, initialContext));
 }
 
 /** 문자열 본문에서 예약 문맥. 예약자 쪽과 같은 순서(JSON → form)로 본다. */
@@ -776,13 +779,12 @@ function resolveAttemptId(options: Record<string, unknown> | undefined): string 
   return readReservationAttemptId();
 }
 
-export function buildReservationMutationEventPayload(
+/** 항상 실리는 필드들. attemptId·responseBody 는 있을 때만 뒤에서 붙인다. */
+function buildBasePayload(
   options: Record<string, unknown>,
+  eventUrl: string,
 ): ReservationEventPayload {
-  const eventUrl = toDisplayString(options?.url);
-  const reservationAttemptId = resolveAttemptId(options);
-
-  const payload: ReservationEventPayload = {
+  return {
     via: options && typeof options.via === "string" ? options.via : "fetch",
     url: eventUrl,
     method: options ? options.method : "",
@@ -795,6 +797,15 @@ export function buildReservationMutationEventPayload(
       options && options.requestContext != null ? options.requestContext : null,
     ),
   };
+}
+
+export function buildReservationMutationEventPayload(
+  options: Record<string, unknown>,
+): ReservationEventPayload {
+  const eventUrl = toDisplayString(options?.url);
+  const reservationAttemptId = resolveAttemptId(options);
+
+  const payload = buildBasePayload(options, eventUrl);
 
   if (reservationAttemptId) {
     payload.reservationAttemptId = reservationAttemptId;
