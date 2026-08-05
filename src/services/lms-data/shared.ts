@@ -48,11 +48,11 @@ function getRoomTypeForRoomName(roomName: string): SpaceTab {
 }
 
 const lmsDataNormalizers = createLmsDataNormalizers({
-  getProperty(source, key) {
+  getProperty(source: unknown, key: string): unknown {
     if (source == null || (typeof source !== "object" && typeof source !== "function")) {
       return undefined;
     }
-    return source[key];
+    return (source as Record<string, unknown>)[key];
   },
   normalizeRoomType: normalizeFetchRoomType,
   getRoomTypeForRoomName,
@@ -77,8 +77,13 @@ export async function loadSpaceContext(roomType: SpaceTab | null = null): Promis
 // /api/space-reservations?date=&spaceId= 를 부른다(전자는 겹침 여부만 계산).
 // 레이더를 한 번 열거나 타임블록을 누를 때마다 회의실 수 x 2 만큼 요청이 나가므로,
 // 짧은 TTL 로 같은 요청을 합친다. inflight 도 함께 묶어 응답 전 중복 호출을 막는다.
-const reservationCache = new Map();
-const reservationInflight = new Map();
+interface ReservationCacheEntry {
+  reservations: Reservation[];
+  fetchedAt: number;
+}
+
+const reservationCache = new Map<string, ReservationCacheEntry>();
+const reservationInflight = new Map<string, Promise<Reservation[]>>();
 
 // 예약이 생성/변경되면 캐시가 곧바로 낡는다. TTL(3초)을 기다리지 않고 비운다.
 export function clearReservationCache(): void {

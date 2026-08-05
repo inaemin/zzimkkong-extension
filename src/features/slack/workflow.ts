@@ -111,14 +111,14 @@ export function createSlackWorkflow(deps: Deps) {
       channelHistory: Array.isArray(state.slackChannelHistory)
         ? [...state.slackChannelHistory]
         : [],
-      onChannelCommitted: (channel) => {
+      onChannelCommitted: (channel: string) => {
         state.slackChannelMention = channel;
         writeStoredText(SLACK_CHANNEL_MENTION_STORAGE_KEY, channel);
         if (channel) {
           rememberSlackChannelMention(channel);
         }
       },
-      onChannelRemovedFromHistory: (channel) => {
+      onChannelRemovedFromHistory: (channel: string) => {
         forgetSlackChannelMention(channel);
       },
     };
@@ -130,7 +130,7 @@ export function createSlackWorkflow(deps: Deps) {
       initialReminderLeadMinutes: normalizeSlackReminderLeadMinutes(state.slackReminderLeadMinutes),
       reminderLeadOptions: [...SLACK_REMINDER_LEAD_TIME_OPTIONS],
       formatReminderLeadLabel: formatSlackReminderLeadOptionLabel,
-      onReminderLeadCommitted: (minutes) => {
+      onReminderLeadCommitted: (minutes: number) => {
         state.slackReminderLeadMinutes = minutes;
         writeStoredText(SLACK_REMINDER_LEAD_TIME_STORAGE_KEY, String(minutes));
       },

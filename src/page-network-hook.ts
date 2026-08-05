@@ -117,8 +117,8 @@ declare global {
       return null;
     }
     try {
-      const parsed = JSON.parse(text);
-      return parsed && typeof parsed === "object" ? parsed : null;
+      const parsed: unknown = JSON.parse(text);
+      return parsed && typeof parsed === "object" ? (parsed as Record<string, unknown>) : null;
     } catch {
       return null;
     }

@@ -297,7 +297,7 @@ export function extractOwnerCandidateFromBody(body: unknown): string {
  */
 async function readRequestBodies(input: Request): Promise<unknown[]> {
   const formData = await attemptAsync(() => input.clone().formData());
-  const json = await attemptAsync(() => input.clone().json());
+  const json = await attemptAsync<unknown>(() => input.clone().json());
   const text = await attemptAsync(() => input.clone().text());
   return [formData, json, text].filter((body) => body !== null);
 }
@@ -581,7 +581,11 @@ export function extractReservationRequestContextFromEntries(
 }
 
 /** 객체의 키를 먼저 훑고, 그다음 각 값 안으로 한 단계 더 들어간다. */
-function mergeNestedContexts(value: object, depth: number, initialContext: unknown) {
+function mergeNestedContexts(
+  value: object,
+  depth: number,
+  initialContext: ReservationRequestContext | null,
+): ReservationRequestContext | null {
   const entries = Object.entries(value);
   return entries.reduce(
     (acc, [, nestedValue]) =>
@@ -591,16 +595,16 @@ function mergeNestedContexts(value: object, depth: number, initialContext: unkno
 }
 
 export function extractReservationRequestContextFromObject(
-  value,
+  value: unknown,
   depth = 0,
-  initialContext = null,
-) {
+  initialContext: ReservationRequestContext | null = null,
+): ReservationRequestContext | null {
   if (value == null || depth > 4) {
     return finalizeReservationRequestContext(initialContext);
   }
 
   if (Array.isArray(value)) {
-    return value.reduce(
+    return value.reduce<ReservationRequestContext | null>(
       (acc, item) => extractReservationRequestContextFromObject(item, depth + 1, acc),
       initialContext,
     );

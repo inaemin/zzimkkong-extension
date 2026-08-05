@@ -2,6 +2,13 @@ import type { RadarState } from "../state.js";
 import { debugLog, pushDebugEvent } from "../../utils/shared.js";
 
 /** 타임블록에서 고른 예약 구간. 그리드가 만들어 넘긴다. */
+/** 패널 입력에 적어 넣은 구간. */
+interface PanelWindow {
+  normalizedDate: string;
+  startTime: string;
+  endTime: string;
+}
+
 interface TimelineSelection {
   date: string;
   startMinute: number;
@@ -154,7 +161,7 @@ export function createRadarFormSync(deps: Deps) {
   }
 
   /** 고른 구간을 패널 입력에 적어 넣고, 정규화된 값을 돌려준다. */
-  function writeSelectionToPanel(selection: TimelineSelection) {
+  function writeSelectionToPanel(selection: TimelineSelection): PanelWindow {
     const normalizedDate = clampDateToMin(selection.date, getTodayDateInKST());
     const startTime = minuteToHourMinute(selection.startMinute);
     const endTime = minuteToHourMinute(selection.endMinute);
@@ -176,7 +183,7 @@ export function createRadarFormSync(deps: Deps) {
   }
 
   /** 캐시가 살아 있으면 서버 응답을 기다리지 않고 먼저 그린다. */
-  function renderCachedOverlayForDate(normalizedDate) {
+  function renderCachedOverlayForDate(normalizedDate: string) {
     const cached = state.scheduleOverlayEnabled ? getFreshScheduleCache(normalizedDate) : null;
     if (!cached) {
       return;
