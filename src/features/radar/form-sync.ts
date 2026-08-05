@@ -19,30 +19,26 @@ export function createRadarFormSync(deps: Deps) {
     syncLmsReservationForm,
   } = deps;
 
-  function handleHostDateChange(event) {
-    if (!state.elements) {
-      ensurePanel();
+  /** 사용자가 직접 바꾼 호스트 날짜 입력이면 그 요소를, 아니면 null. */
+  function readHostDateChangeTarget(event) {
+    if (!event.isTrusted || isHandlingInternalHostDateSync()) {
+      return null;
     }
-    if (!state.elements) {
-      return;
-    }
-
-    if (!event.isTrusted) {
-      return;
-    }
-
     const target = event.target;
-    if (!(target instanceof HTMLInputElement)) {
-      return;
+    if (!(target instanceof HTMLInputElement) || !target.value) {
+      return null;
     }
-
     // lms+ 의 날짜 입력에는 name 이 없어 type="date" 만으로 호스트 날짜 입력으로 인정한다.
-    const isDateField = target.name === "date" || target.type === "date";
-    if (!isDateField || !target.value) {
+    return target.name === "date" || target.type === "date" ? target : null;
+  }
+
+  function handleHostDateChange(event) {
+    if (!ensurePanelElements()) {
       return;
     }
 
-    if (isHandlingInternalHostDateSync()) {
+    const target = readHostDateChangeTarget(event);
+    if (!target) {
       return;
     }
 

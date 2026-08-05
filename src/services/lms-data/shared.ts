@@ -342,6 +342,18 @@ function authErrorMessage(hasToken: boolean): string {
     : "로그인이 필요해요. 회의실 예약 페이지에 로그인한 뒤 다시 시도해 주세요.";
 }
 
+/** 실패 응답을 에러로 바꾼다. 본문에 message 가 있으면 그걸 쓴다. */
+function throwApiError(status: number, data: unknown, hasToken: boolean): never {
+  if (isAuthStatus(status)) {
+    throw new Error(authErrorMessage(hasToken));
+  }
+  const serverMessage =
+    data && typeof data === "object" && "message" in data && typeof data.message === "string"
+      ? data.message
+      : null;
+  throw new Error(serverMessage ?? `요청 실패 (${status})`);
+}
+
 export async function fetchApiJson(url: string): Promise<unknown> {
   const headers: Record<string, string> = {
     accept: "application/json",
@@ -360,17 +372,8 @@ export async function fetchApiJson(url: string): Promise<unknown> {
   const text = await response.text();
   const data: unknown = text ? safely(() => JSON.parse(text) as unknown, null) : null;
 
-  if (!response.ok && isAuthStatus(response.status)) {
-    throw new Error(authErrorMessage(Boolean(token)));
-  }
-
   if (!response.ok) {
-    // 에러 본문의 message 는 있을 수도 없을 수도 있다. 좁혀서 읽는다.
-    const serverMessage =
-      data && typeof data === "object" && "message" in data && typeof data.message === "string"
-        ? data.message
-        : null;
-    throw new Error(serverMessage ?? `요청 실패 (${response.status})`);
+    throwApiError(response.status, data, Boolean(token));
   }
 
   if (data == null || typeof data !== "object") {

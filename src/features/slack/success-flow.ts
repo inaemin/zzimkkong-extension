@@ -53,8 +53,11 @@ export function createSlackSuccessFlow(deps: Deps) {
       return;
     }
     context.mutationMethod = method;
+    openSlackModalUnlessDuplicate(context, payload, responseBody);
+  }
 
-    // 같은 예약에 대해 모달이 중복으로 뜨지 않게 지문으로 디듀프한다.
+  /** 같은 예약에 대해 모달이 중복으로 뜨지 않게 지문으로 디듀프한다. */
+  function openSlackModalUnlessDuplicate(context, payload, responseBody) {
     const fingerprint = createSlackMessageFingerprint(context, payload);
     if (shouldSkipSlackCopyModal(fingerprint)) {
       pushDebugEvent("slack-success", "lms-deduped-success", { fingerprint });

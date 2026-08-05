@@ -187,9 +187,9 @@ export default defineConfig([
       "src/page-network-hook.ts",
     ],
     rules: {
-      // TODO(5단계 잔여): 목표는 20. 남은 위반은 21~35줄이고 각각 쪼갤 자리가
-      // 다르다. 한 번에 몰아 바꾸면 회귀 시 범위를 못 좁히므로 나눠 진행한다.
-      "max-lines-per-function": ["error", { max: 32, skipBlankLines: true, skipComments: true }],
+      // TODO(5단계 잔여): 목표는 20. 지금 26 이고 여기서 0건이다. 20 까지는
+      // 27건이 더 남아 있는데 대부분 21~25줄이라, 계속 조여 내려간다.
+      "max-lines-per-function": ["error", { max: 26, skipBlankLines: true, skipComments: true }],
     },
   },
   {

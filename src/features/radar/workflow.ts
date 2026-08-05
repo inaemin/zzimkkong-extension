@@ -115,6 +115,19 @@ export function createRadarWorkflow(deps: Deps) {
     trigger.style.pointerEvents = "auto";
   }
 
+  /** 런처를 눌렀을 때. 열면 오버레이를 띄우고 닫으면 걷는다. */
+  function toggleMapCalendar(nextOpen) {
+    enableScheduleOverlayOnce();
+    state.mapCalendarVisible = nextOpen;
+    if (nextOpen) {
+      openMapCalendarModal();
+    }
+    if (!nextOpen) {
+      removeMapCalendarOverlay();
+    }
+    updateMapCalendarLauncherState();
+  }
+
   function ensureMapCalendarLauncher() {
     if (!isRadarSupportedPage() || !(document.body instanceof HTMLBodyElement)) {
       return;
@@ -133,23 +146,24 @@ export function createRadarWorkflow(deps: Deps) {
       isMapCalendarModalOpenRequested() &&
       state.scheduleOverlayEnabled;
 
-    const launcher = renderRadarLauncher({
-      open: isOpen,
-      onOpenChange: (nextOpen) => {
-        enableScheduleOverlayOnce();
-
-        state.mapCalendarVisible = nextOpen;
-        if (nextOpen) {
-          openMapCalendarModal();
-        }
-        if (!nextOpen) {
-          removeMapCalendarOverlay();
-        }
-        updateMapCalendarLauncherState();
-      },
-    });
+    const launcher = renderRadarLauncher({ open: isOpen, onOpenChange: toggleMapCalendar });
 
     scheduleAutoOpenMapCalendarLauncher(launcher);
+  }
+
+  /** 자동 열기를 시도할 상황인지. 아니면 상태를 정리하고 false. */
+  function shouldConsiderAutoOpen() {
+    if (state.mapCalendarSuppressedBySlack) {
+      state.lastAutoOpenPath = null;
+      return false;
+    }
+    if (shouldDelayGuestMapCalendarUi()) {
+      state.mapCalendarVisible = false;
+      state.lastAutoOpenPath = null;
+      return false;
+    }
+    // "항상 열기" 설정이 꺼져 있으면 사용자가 직접 눌러야 한다.
+    return readStoredBoolean(MAP_CALENDAR_ALWAYS_OPEN_STORAGE_KEY, true);
   }
 
   function scheduleAutoOpenMapCalendarLauncher(launcher) {
@@ -157,18 +171,7 @@ export function createRadarWorkflow(deps: Deps) {
       return;
     }
 
-    if (state.mapCalendarSuppressedBySlack) {
-      state.lastAutoOpenPath = null;
-      return;
-    }
-
-    if (shouldDelayGuestMapCalendarUi()) {
-      state.mapCalendarVisible = false;
-      state.lastAutoOpenPath = null;
-      return;
-    }
-
-    if (!readStoredBoolean(MAP_CALENDAR_ALWAYS_OPEN_STORAGE_KEY, true)) {
+    if (!shouldConsiderAutoOpen()) {
       return;
     }
 
@@ -282,15 +285,21 @@ export function createRadarWorkflow(deps: Deps) {
     }
 
     loadingOverlay.setAttribute("aria-hidden", shouldShowLoading ? "false" : "true");
+    updateLoadingText(loadingOverlay, hasLoadingDate);
+  }
+
+  /** 로딩 문구에 날짜를 붙인다(날짜를 알 때만). */
+  function updateLoadingText(loadingOverlay, hasLoadingDate) {
     const loadingText = loadingOverlay.querySelector(".zzk-map-calendar-loading-text");
-    if (loadingText instanceof HTMLElement) {
-      const loadingDateLabel = hasLoadingDate
-        ? formatDateSelectorText(state.scheduleLoadingDate)
-        : "";
-      loadingText.textContent = loadingDateLabel
-        ? `${loadingDateLabel} 예약 현황 로딩 중...`
-        : "예약 현황 로딩 중...";
+    if (!(loadingText instanceof HTMLElement)) {
+      return;
     }
+    const loadingDateLabel = hasLoadingDate
+      ? formatDateSelectorText(state.scheduleLoadingDate)
+      : "";
+    loadingText.textContent = loadingDateLabel
+      ? `${loadingDateLabel} 예약 현황 로딩 중...`
+      : "예약 현황 로딩 중...";
   }
 
   /** 지금 그려야 할 날짜. 패널 입력이 있으면 그쪽이 우선이다. */

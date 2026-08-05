@@ -133,6 +133,22 @@ const OWNER_FIELD_KEYS = new Set([
   "신청자명",
 ]);
 
+/** `xxx.name` 앞부분이 사람을 가리키는지 판단할 때 쓰는 조각들. */
+const OWNER_CONTEXT_TOKENS = [
+  "owner",
+  "requester",
+  "booker",
+  "guest",
+  "applicant",
+  "reservation",
+  "user",
+  "예약자",
+  "신청자",
+];
+
+/** 같은 자리에서 공간을 가리키면 예약자 필드가 아니다. */
+const ROOM_CONTEXT_TOKENS = ["room", "space", "map", "resource", "회의실", "공간", "장소"];
+
 export function isOwnerFieldKey(key: unknown): boolean {
   const normalized = normalizeText(toDisplayString(key)).replace(/\s+/g, "").toLowerCase();
   if (!normalized) {
@@ -149,20 +165,9 @@ export function isOwnerFieldKey(key: unknown): boolean {
     return false;
   }
 
-  const hasOwnerContext = [
-    "owner",
-    "requester",
-    "booker",
-    "guest",
-    "applicant",
-    "reservation",
-    "user",
-    "예약자",
-    "신청자",
-  ].some((token) => normalized.includes(token));
-  const hasRoomContext = ["room", "space", "map", "resource", "회의실", "공간", "장소"].some(
-    (token) => normalized.includes(token),
-  );
+  // xxx.name 형태는 앞부분이 사람인지 공간인지에 따라 갈린다.
+  const hasOwnerContext = OWNER_CONTEXT_TOKENS.some((token) => normalized.includes(token));
+  const hasRoomContext = ROOM_CONTEXT_TOKENS.some((token) => normalized.includes(token));
   return hasOwnerContext && !hasRoomContext;
 }
 
