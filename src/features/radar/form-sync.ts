@@ -1,6 +1,14 @@
 import type { RadarState } from "../state.js";
 import { debugLog, pushDebugEvent } from "../../utils/shared.js";
 
+/** 타임블록에서 고른 예약 구간. 그리드가 만들어 넘긴다. */
+interface TimelineSelection {
+  date: string;
+  startMinute: number;
+  endMinute: number;
+  room: { id: number; name: string };
+}
+
 // DI 팩토리 래퍼: 길이가 곧 복잡도가 아니다(안쪽 함수는 개별 측정된다).
 // eslint-disable-next-line max-lines-per-function
 export function createRadarFormSync(deps: Deps) {
@@ -21,7 +29,7 @@ export function createRadarFormSync(deps: Deps) {
   } = deps;
 
   /** 사용자가 직접 바꾼 호스트 날짜 입력이면 그 요소를, 아니면 null. */
-  function readHostDateChangeTarget(event) {
+  function readHostDateChangeTarget(event: Event) {
     if (!event.isTrusted || isHandlingInternalHostDateSync()) {
       return null;
     }
@@ -33,7 +41,7 @@ export function createRadarFormSync(deps: Deps) {
     return target.name === "date" || target.type === "date" ? target : null;
   }
 
-  function handleHostDateChange(event) {
+  function handleHostDateChange(event: Event) {
     if (!ensurePanelElements()) {
       return;
     }
@@ -71,7 +79,7 @@ export function createRadarFormSync(deps: Deps) {
   }
 
   /** 대기 중이던 선택 반영을 실행한다. 그 사이 새 선택이 왔으면 버린다. */
-  function runQueuedSelectionApply(selection, requestId) {
+  function runQueuedSelectionApply(selection: TimelineSelection, requestId: number) {
     state.timelineSelectionApplyTimer = null;
     if (!isLatestTimelineSelectionRequest(requestId)) {
       return;
@@ -81,7 +89,7 @@ export function createRadarFormSync(deps: Deps) {
     });
   }
 
-  function queueTimelineSelectionApply(selection) {
+  function queueTimelineSelectionApply(selection: TimelineSelection | null) {
     if (!selection) {
       return;
     }
@@ -129,7 +137,7 @@ export function createRadarFormSync(deps: Deps) {
   }
 
   /** 로그에 남길 선택 요약. */
-  function describeSelection(selection) {
+  function describeSelection(selection: TimelineSelection | null) {
     return {
       date: selection?.date,
       roomId: selection?.room?.id,
@@ -146,7 +154,7 @@ export function createRadarFormSync(deps: Deps) {
   }
 
   /** 고른 구간을 패널 입력에 적어 넣고, 정규화된 값을 돌려준다. */
-  function writeSelectionToPanel(selection) {
+  function writeSelectionToPanel(selection: TimelineSelection) {
     const normalizedDate = clampDateToMin(selection.date, getTodayDateInKST());
     const startTime = minuteToHourMinute(selection.startMinute);
     const endTime = minuteToHourMinute(selection.endMinute);
@@ -201,7 +209,11 @@ export function createRadarFormSync(deps: Deps) {
   }
 
   /** 호스트 예약 폼에 반영하고 결과를 기록한다. */
-  async function syncHostFormAndReport(selection, requestId, window) {
+  async function syncHostFormAndReport(
+    selection: TimelineSelection,
+    requestId: number,
+    window: { date: string; startTime: string; endTime: string },
+  ) {
     const hostSynced = await syncLmsReservationForm(
       { ...window, roomId: selection.room.id, roomName: selection.room.name },
       requestId,
@@ -212,12 +224,15 @@ export function createRadarFormSync(deps: Deps) {
       return;
     }
 
-    const outcome = { requestId, ...describeSelection(selection), ...window };
+    reportSyncOutcome(hostSynced, { requestId, ...describeSelection(selection), ...window });
+  }
+
+  /** 동기화 결과를 남기고, 성공했으면 예약 현황을 다시 받는다. */
+  function reportSyncOutcome(hostSynced: boolean, outcome: Record<string, unknown>) {
     if (!hostSynced) {
       pushDebugEvent("radar-form-sync", "sync-failed", outcome);
       return;
     }
-
     clearTimeout(state.inputRefreshTimer);
     pushDebugEvent("radar-form-sync", "sync-succeeded", outcome);
     refreshAvailability();

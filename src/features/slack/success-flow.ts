@@ -1,6 +1,14 @@
 import type { RadarState } from "../state.js";
 import { pushDebugEvent } from "../../utils/shared.js";
 
+/** MAIN world 훅이 보내는 예약 이벤트 페이로드. */
+interface ReservationEventPayload {
+  ok?: boolean;
+  status?: number;
+  method?: unknown;
+  responseBody?: Record<string, unknown> | null;
+}
+
 // DI 팩토리 래퍼: 길이가 곧 복잡도가 아니다(안쪽 함수는 개별 측정된다).
 // eslint-disable-next-line max-lines-per-function
 export function createSlackSuccessFlow(deps: Deps) {
@@ -19,15 +27,16 @@ export function createSlackSuccessFlow(deps: Deps) {
 
   // 개편 서비스(lms+) 예약 생성 성공 처리: 응답 body 로 Slack 모달을 띄운다.
   /** 2xx 로 끝난 예약 응답인지. */
-  function isSuccessfulReservationPayload(payload) {
+  function isSuccessfulReservationPayload(payload: unknown): payload is ReservationEventPayload {
     if (!payload || typeof payload !== "object") {
       return false;
     }
-    const status = Number(payload.status);
-    return payload.ok === true && Number.isInteger(status) && status >= 200 && status < 300;
+    const candidate = payload as ReservationEventPayload;
+    const status = Number(candidate.status);
+    return candidate.ok === true && Number.isInteger(status) && status >= 200 && status < 300;
   }
 
-  function handleLmsReservationSuccess(payload) {
+  function handleLmsReservationSuccess(payload: ReservationEventPayload) {
     if (!isSuccessfulReservationPayload(payload)) {
       return;
     }
@@ -55,7 +64,11 @@ export function createSlackSuccessFlow(deps: Deps) {
   }
 
   /** 같은 예약에 대해 모달이 중복으로 뜨지 않게 지문으로 디듀프한다. */
-  function openSlackModalUnlessDuplicate(context, payload, responseBody) {
+  function openSlackModalUnlessDuplicate(
+    context: Record<string, unknown>,
+    payload: unknown,
+    responseBody: Record<string, unknown>,
+  ) {
     const fingerprint = createSlackMessageFingerprint(context, payload);
     if (shouldSkipSlackCopyModal(fingerprint)) {
       pushDebugEvent("slack-success", "lms-deduped-success", { fingerprint });
@@ -70,7 +83,7 @@ export function createSlackSuccessFlow(deps: Deps) {
   }
 
   /** 우리 MAIN world 훅이 보낸 예약 이벤트인지. */
-  function isReservationHookMessage(event) {
+  function isReservationHookMessage(event: MessageEvent) {
     const data = event.data;
     return (
       event.source === window &&
@@ -81,7 +94,7 @@ export function createSlackSuccessFlow(deps: Deps) {
     );
   }
 
-  function handleReservationNetworkMessage(event) {
+  function handleReservationNetworkMessage(event: MessageEvent) {
     if (!isReservationHookMessage(event)) {
       return;
     }
@@ -267,7 +280,7 @@ export function createSlackSuccessFlow(deps: Deps) {
   // content.js 가 여전히 호출하므로 진입점만 남겨 둔다.
   function queueSlackModalFromPersistedEditSubmitIfNeeded() {}
 
-  function isTrustedReservationNetworkMessage(event, payload) {
+  function isTrustedReservationNetworkMessage(event: MessageEvent, payload: unknown) {
     if (!(event instanceof MessageEvent)) {
       return false;
     }
@@ -280,7 +293,7 @@ export function createSlackSuccessFlow(deps: Deps) {
       return false;
     }
 
-    const parsedUrl = parseUrlSafely(payload.url);
+    const parsedUrl = parseUrlSafely((payload as { url?: unknown }).url);
     if (!parsedUrl) {
       return false;
     }
