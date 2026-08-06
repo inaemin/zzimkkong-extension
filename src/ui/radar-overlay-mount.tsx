@@ -93,11 +93,17 @@ export function ensureRadarOverlayMount(): OverlayMount {
   return mount;
 }
 
-/** 오버레이 안에 컴포넌트를 그린다. 포털도 이 shadow root 안에 갇힌다. */
+/**
+ * 오버레이 안에 컴포넌트를 그린다. 포털도 이 shadow root 안에 갇힌다.
+ *
+ * 포털 컨테이너로 카드가 아니라 포털 층을 준다. 카드 안에 렌더하면 팝오버·달력이
+ * 카드의 scrollHeight 를 늘려 레이아웃이 밀린다(카드가 position: relative +
+ * overflow: hidden 이다). 포털 층은 position: fixed 라 카드 크기에 영향이 없다.
+ */
 export function renderRadarOverlay(node: React.ReactNode): HTMLElement {
   const current = ensureRadarOverlayMount();
   current.root.render(
-    <ShadowRootProvider container={current.container}>{node}</ShadowRootProvider>,
+    <ShadowRootProvider container={current.portalLayer}>{node}</ShadowRootProvider>,
   );
   return current.host;
 }
@@ -105,8 +111,8 @@ export function renderRadarOverlay(node: React.ReactNode): HTMLElement {
 /**
  * 팝오버·달력을 띄울 층. 카드 바깥이라 카드 크기에 영향을 주지 않는다.
  *
- * 헤더는 자체 React 루트라 오버레이의 컨텍스트가 이어지지 않는다. 그래서
- * 헤더 안의 포털은 기본값으로 두면 헤더(=카드 안)에 렌더돼 레이아웃을 민다.
+ * renderRadarOverlay 가 이 층을 포털 컨테이너로 넘긴다. 테스트에서 팝오버가
+ * 어디에 떴는지 확인할 때도 쓴다.
  */
 export function getRadarPortalLayer(): HTMLElement | null {
   return mount && mount.host.isConnected ? mount.portalLayer : null;

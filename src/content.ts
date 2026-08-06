@@ -59,14 +59,15 @@ import type { PanelElements, RadarState } from "./features/state.js";
 import type { DailyScheduleResult, RoomSchedule } from "./services/lms-data/types.js";
 import { closeFloorMapZoom, openFloorMapZoom } from "./ui/floor-map-zoom-modal.js";
 import { RadarShell } from "./ui/components/radar-shell.js";
+import { RadarHeader, type RadarHeaderProps } from "./ui/components/radar-header.js";
+import { RadarGrid, type RadarGridProps } from "./ui/components/radar-grid.js";
+import { TooltipProvider } from "./ui/components/ui/tooltip.js";
 import {
   ensureRadarOverlayMount,
   queryAllRadarOverlay,
   queryRadarOverlay,
   renderRadarOverlay,
 } from "./ui/radar-overlay-mount.js";
-import { renderRadarHeader } from "./ui/radar-header-mount.js";
-import { renderRadarGrid } from "./ui/radar-grid-mount.js";
 import { renderRadarError } from "./ui/radar-error-mount.js";
 import {
   getRadarLauncherHost,
@@ -154,6 +155,13 @@ import { createSlackWorkflow } from "./features/slack/workflow.js";
 import { createSlackSuccessFlow } from "./features/slack/success-flow.js";
 
 // 같은 페이지에 두 번 주입되는 걸 막는 표식.
+/** 렌더 뒤에 채워지는 노드들. 드래그·리사이즈를 붙일 때 쓴다. */
+interface ShellRefs {
+  card?: HTMLElement | null;
+  header?: HTMLElement | null;
+  resizeHandle?: HTMLElement | null;
+}
+
 declare global {
   interface Window {
     __zzkAvailabilityLensLoaded?: boolean;
@@ -995,6 +1003,60 @@ declare global {
     }
   }
 
+  /** 껍데기 안에 헤더와(있으면) 그리드를 담은 엘리먼트. 루트 하나로 그린다. */
+  function buildShellElement(
+    headerProps: RadarHeaderProps,
+    gridProps: RadarGridProps | null,
+    shellRefs: ShellRefs,
+  ) {
+    return createElement(RadarShell, {
+      spaceTab: normalizeMapCalendarSpaceTab(state.mapCalendarSpaceTab),
+      collapsed: state.mapCalendarCollapsed,
+      onSpaceTabChange: (tab) => {
+        setMapCalendarSpaceTab(tab);
+      },
+      cardRef: (node) => {
+        shellRefs.card = node;
+      },
+      headerRef: (node) => {
+        shellRefs.header = node;
+      },
+      resizeHandleRef: (node) => {
+        shellRefs.resizeHandle = node;
+      },
+      header: createElement(RadarHeader, headerProps),
+      // 툴팁 delay 기본값이 0 이라 hover 즉시 뜬다. 슬롯은 훑어보는 대상이라
+      // 기다렸다 뜨면 정보를 못 읽는다.
+      body: gridProps
+        ? createElement(TooltipProvider, null, createElement(RadarGrid, gridProps))
+        : null,
+    });
+  }
+
+  /** 렌더로 채워진 노드에 드래그·리사이즈를 붙인다. */
+  function bindShellInteractions(shellRefs: ShellRefs, overlay: HTMLElement) {
+    const { card, header, resizeHandle } = shellRefs;
+    if (!(card instanceof HTMLElement) || !(header instanceof HTMLElement)) {
+      return;
+    }
+    if (resizeHandle instanceof HTMLElement) {
+      bindMapCalendarResizeHandle(resizeHandle, card);
+    }
+    syncOpenMapCalendarSpaceTabButtons();
+    bindDraggableHeader({
+      header,
+      element: overlay,
+      getOffset: () => state.mapCalendarOffset ?? { x: 0, y: 0 },
+      setOffset: (nextOffset: { x: number; y: number }) => {
+        state.mapCalendarOffset = nextOffset;
+        persistMapCalendarOffset(nextOffset);
+      },
+      applyOffset: () => {
+        applyMapCalendarOverlayOffset(overlay);
+      },
+    });
+  }
+
   function renderMapCalendarOverlay(scheduleData: DailyScheduleResult | null) {
     if (state.mapCalendarSuppressedBySlack) {
       state.mapCalendarVisible = false;
@@ -1075,61 +1137,9 @@ declare global {
 
     // 껍데기(탭/카드/헤더 자리/리사이즈 손잡이)는 React 가 그린다. 아직 명령형인
     // 헤더 컨트롤과 본문은 React 가 내준 자리(ref)에 그대로 붙인다.
-    const shellRefs: {
-      card?: HTMLElement | null;
-      header?: HTMLElement | null;
-      resizeHandle?: HTMLElement | null;
-      body?: HTMLElement | null;
-    } = {};
-    // ref 가 채워진 상태로 아래 명령형 코드가 이어져야 하므로 이번 렌더를 동기로
-    // 밀어낸다. flushSync(() => {}) 처럼 빈 콜백을 주면 대기 중인 렌더는 밀려나지
-    // 않는다 — render 호출 자체가 안에 들어가야 한다.
-    flushSync(() => {
-      renderRadarOverlay(
-        createElement(RadarShell, {
-          spaceTab: normalizeMapCalendarSpaceTab(state.mapCalendarSpaceTab),
-          collapsed: state.mapCalendarCollapsed,
-          onSpaceTabChange: (tab) => {
-            setMapCalendarSpaceTab(tab);
-          },
-          cardRef: (node) => {
-            shellRefs.card = node;
-          },
-          headerRef: (node) => {
-            shellRefs.header = node;
-          },
-          resizeHandleRef: (node) => {
-            shellRefs.resizeHandle = node;
-          },
-          bodyRef: (node) => {
-            shellRefs.body = node;
-          },
-        }),
-      );
-    });
-
-    const card = shellRefs.card;
-    const header = shellRefs.header;
-    if (!(card instanceof HTMLElement) || !(header instanceof HTMLElement)) {
-      return;
-    }
-    if (shellRefs.resizeHandle instanceof HTMLElement) {
-      bindMapCalendarResizeHandle(shellRefs.resizeHandle, card);
-    }
-    syncOpenMapCalendarSpaceTabButtons();
-
-    bindDraggableHeader({
-      header,
-      element: overlay,
-      getOffset: () => state.mapCalendarOffset ?? { x: 0, y: 0 },
-      setOffset: (nextOffset: { x: number; y: number }) => {
-        state.mapCalendarOffset = nextOffset;
-        persistMapCalendarOffset(nextOffset);
-      },
-      applyOffset: () => {
-        applyMapCalendarOverlayOffset(overlay);
-      },
-    });
+    // 카드·헤더·손잡이는 드래그와 리사이즈를 붙일 때 실제 노드가 필요하다.
+    // 렌더가 끝난 뒤 채워지므로 flushSync 로 동기로 밀어낸다.
+    const shellRefs: ShellRefs = {};
 
     // 헤더는 React 가 그린다. 날짜 선택은 손으로 만든 팝오버 대신 shadcn DatePicker
     // 를 쓰므로, 달력 그리기·위치 계산·바깥 클릭 감지 코드가 전부 빠졌다.
@@ -1145,53 +1155,48 @@ declare global {
       headerDateInput.value = clampedHeaderDate;
     }
 
-    flushSync(() => {
-      renderRadarHeader(header, {
-        date: clampedHeaderDate,
-        minDate: headerMinDate,
-        todayDate: getTodayDateInKST(),
-        onDateChange: (nextDate) => {
-          applyPanelDateChange(nextDate);
-        },
-        onShiftDate: (dayOffset) => {
-          shiftPanelDateBy(dayOffset);
-        },
-        collapsed: state.mapCalendarCollapsed,
-        onToggleCollapsed: () => {
-          state.mapCalendarCollapsed = !state.mapCalendarCollapsed;
-          renderMapCalendarOverlay(scheduleData);
-        },
-        alwaysOpen: state.mapCalendarAlwaysOpen,
-        onAlwaysOpenChange: (nextAlwaysOpen) => {
-          state.mapCalendarAlwaysOpen = nextAlwaysOpen;
-          writeStoredBoolean(MAP_CALENDAR_ALWAYS_OPEN_STORAGE_KEY, nextAlwaysOpen);
-          if (nextAlwaysOpen) {
-            state.mapCalendarVisible = true;
-            openMapCalendarModal();
-            return;
-          }
-          if (!state.mapCalendarVisible) {
-            removeMapCalendarOverlay();
-            return;
-          }
-          updateMapCalendarLauncherState();
-          // 끈 뒤에도 오버레이가 열려 있으면(직접 열어둔 경우) 헤더를 다시 그려야
-          // 스위치가 꺼진 상태로 보인다. 안 그리면 값만 바뀌고 화면은 그대로다.
-          renderMapCalendarOverlay(scheduleData);
-        },
-      });
-    });
+    const headerProps: RadarHeaderProps = {
+      date: clampedHeaderDate,
+      minDate: headerMinDate,
+      todayDate: getTodayDateInKST(),
+      onDateChange: (nextDate) => {
+        applyPanelDateChange(nextDate);
+      },
+      onShiftDate: (dayOffset) => {
+        shiftPanelDateBy(dayOffset);
+      },
+      collapsed: state.mapCalendarCollapsed,
+      onToggleCollapsed: () => {
+        state.mapCalendarCollapsed = !state.mapCalendarCollapsed;
+        renderMapCalendarOverlay(scheduleData);
+      },
+      alwaysOpen: state.mapCalendarAlwaysOpen,
+      onAlwaysOpenChange: (nextAlwaysOpen) => {
+        state.mapCalendarAlwaysOpen = nextAlwaysOpen;
+        writeStoredBoolean(MAP_CALENDAR_ALWAYS_OPEN_STORAGE_KEY, nextAlwaysOpen);
+        if (nextAlwaysOpen) {
+          state.mapCalendarVisible = true;
+          openMapCalendarModal();
+          return;
+        }
+        if (!state.mapCalendarVisible) {
+          removeMapCalendarOverlay();
+          return;
+        }
+        updateMapCalendarLauncherState();
+        // 끈 뒤에도 오버레이가 열려 있으면(직접 열어둔 경우) 헤더를 다시 그려야
+        // 스위치가 꺼진 상태로 보인다. 안 그리면 값만 바뀌고 화면은 그대로다.
+        renderMapCalendarOverlay(scheduleData);
+      },
+    };
 
-    // 본문 엘리먼트는 React 가 그린다(카드의 직계 자식이어야 CSS 높이 배분이 맞다).
-    // 그리드와 평면도가 모두 컴포넌트라 본문 전체를 React 루트가 소유한다.
-    const body = shellRefs.body;
-    if (!(body instanceof HTMLElement)) {
-      return;
-    }
-    syncMapCalendarBodyLoadingState();
-
+    // 접혀 있으면 본문을 그리지 않는다. 껍데기만 렌더하고 너비만 맞춘다.
     if (state.mapCalendarCollapsed) {
-      // 접힘 표시는 RadarShell 이 클래스로 그린다. 너비만 맞추고 본문은 건너뛴다.
+      flushSync(() => {
+        renderRadarOverlay(buildShellElement(headerProps, null, shellRefs));
+      });
+      bindShellInteractions(shellRefs, overlay);
+      syncMapCalendarBodyLoadingState();
       applyMapCalendarWidth(overlay);
       return;
     }
@@ -1220,47 +1225,59 @@ declare global {
       resolveFloor: resolveMapCalendarRoomFloor,
     });
 
-    flushSync(() => {
-      renderRadarGrid(body, {
-        timeline,
-        floorGroups: gridRoomsByFloor,
-        layout: timelineLayout,
-        roomColumnLabel: tabLabel,
-        emptyMessage,
-        minTrackWidth: Math.max(320, timelineLayout.trackWidth + CALENDAR_SIDE_MARGIN),
-        defaultReservationMinutes: LMS_DEFAULT_RESERVATION_MINUTES,
-        renderRoomLabel: (container, room) => {
-          if (!(container instanceof HTMLElement)) {
-            return;
-          }
-          renderRoomLabel(container, room);
-        },
-        floorMaps: {
-          floors: getAvailableFloorMapFloors(),
-          getFloorMapDataUri,
-          open: isFloorMapSectionOpen(),
-          onOpenChange: (nextOpen) => {
-            persistFloorMapSectionOpen(nextOpen);
-            // 평면도를 펼치면 모달이 세로로 길어진다. 뷰포트를 벗어났으면
-            // 화면 안으로 다시 끌어들인다(새 높이가 반영된 뒤 측정).
-            window.requestAnimationFrame(() => {
-              reclampMapCalendarOffsetToViewport();
-            });
-            renderMapCalendarOverlay(scheduleData);
-          },
-          onZoomStart: openFloorMapZoom,
-          onZoomEnd: closeFloorMapZoom,
-        },
-        onSlotClick: (room, startIndex, endIndex) => {
-          queueTimelineSelectionApply({
-            date: selectionDate,
-            startMinute: timeline[startIndex].startMinute,
-            endMinute: timeline[endIndex].endMinute,
-            room,
+    const gridProps: RadarGridProps = {
+      timeline,
+      floorGroups: gridRoomsByFloor,
+      layout: timelineLayout,
+      roomColumnLabel: tabLabel,
+      emptyMessage,
+      minTrackWidth: Math.max(320, timelineLayout.trackWidth + CALENDAR_SIDE_MARGIN),
+      defaultReservationMinutes: LMS_DEFAULT_RESERVATION_MINUTES,
+      renderRoomLabel: (container, room) => {
+        if (!(container instanceof HTMLElement)) {
+          return;
+        }
+        renderRoomLabel(container, room);
+      },
+      floorMaps: {
+        floors: getAvailableFloorMapFloors(),
+        getFloorMapDataUri,
+        open: isFloorMapSectionOpen(),
+        onOpenChange: (nextOpen) => {
+          persistFloorMapSectionOpen(nextOpen);
+          // 평면도를 펼치면 모달이 세로로 길어진다. 뷰포트를 벗어났으면
+          // 화면 안으로 다시 끌어들인다(새 높이가 반영된 뒤 측정).
+          window.requestAnimationFrame(() => {
+            reclampMapCalendarOffsetToViewport();
           });
+          renderMapCalendarOverlay(scheduleData);
         },
-      });
+        onZoomStart: openFloorMapZoom,
+        onZoomEnd: closeFloorMapZoom,
+      },
+      onSlotClick: (room, startIndex, endIndex) => {
+        queueTimelineSelectionApply({
+          date: selectionDate,
+          startMinute: timeline[startIndex].startMinute,
+          endMinute: timeline[endIndex].endMinute,
+          room,
+        });
+      },
+    };
+
+    // 껍데기·헤더·그리드를 한 루트로 그린다. ref 가 채워진 상태로 아래 명령형
+    // 코드가 이어져야 하므로 동기로 밀어낸다(flushSync 에 render 호출 자체가
+    // 들어가야 한다 — 빈 콜백은 대기 중인 렌더를 밀어내지 않는다).
+    flushSync(() => {
+      renderRadarOverlay(buildShellElement(headerProps, gridProps, shellRefs));
     });
+    bindShellInteractions(shellRefs, overlay);
+    syncMapCalendarBodyLoadingState();
+
+    const body = queryRadarOverlay('[data-testid="radar-body"]');
+    if (!(body instanceof HTMLElement)) {
+      return;
+    }
 
     const scrollEl = getMapCalendarScrollElement(overlay);
     syncMapCalendarBodyScrollState(body);

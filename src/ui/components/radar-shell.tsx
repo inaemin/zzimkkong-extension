@@ -8,11 +8,12 @@ import {
   type SpaceTab,
 } from "@/constants/runtime";
 
-// 레이더 오버레이의 껍데기. 공간 유형 탭 + 카드(헤더/본문 자리)까지만 담당하고,
-// 안쪽 내용(헤더 컨트롤·슬롯 그리드·평면도)은 children 으로 받는다.
+// 레이더 오버레이의 껍데기. 공간 유형 탭 + 카드를 그리고, 헤더와 본문은
+// 자식 노드로 받아 같은 렌더 트리에 담는다.
 //
-// 전환 중에는 children 이 아직 명령형으로 만들어진 DOM 이다. 그래서 이 컴포넌트는
-// 자식 트리를 직접 그리지 않고 붙일 자리(bodyRef)만 내준다.
+// 예전에는 헤더·그리드가 각자 createRoot 를 잡고 ref 로 받은 자리에 따로
+// 그렸다. 본문에 명령형 DOM 이 남아 있던 시절의 구조인데, 그게 전부 컴포넌트가
+// 된 뒤로도 남아 있었다. 지금은 루트 하나로 그린다.
 
 export interface RadarShellProps {
   spaceTab: SpaceTab;
@@ -25,14 +26,16 @@ export interface RadarShellProps {
   /** 접힌 상태. 접히면 본문을 감추고 헤더만 남긴다(CSS 가 처리). */
   collapsed?: boolean;
   cardRef?: React.Ref<HTMLDivElement>;
+  /** 헤더 안에 그릴 내용(날짜 컨트롤 등). */
+  header?: React.ReactNode;
   /**
-   * 본문(.zzk-map-calendar-body). 아직 내용은 명령형으로 채워진다.
+   * 본문 안에 그릴 내용(슬롯 그리드·평면도).
    *
    * 감싸는 div 를 하나 더 두면 안 된다. 카드 CSS 가 본문을 카드의 직계 flex
    * 자식으로 보고 높이를 배분해서, 중간에 래퍼가 끼면 라벨 pane 이 마지막 행까지
    * 닿지 못한다.
    */
-  bodyRef?: React.Ref<HTMLDivElement>;
+  body?: React.ReactNode;
 }
 
 /**
@@ -70,7 +73,8 @@ export function RadarShell({
   resizeHandleRef,
   collapsed = false,
   cardRef,
-  bodyRef,
+  header,
+  body,
 }: RadarShellProps) {
   const stopProps = useStopPropagationProps();
   const localCardRef = React.useRef<HTMLDivElement | null>(null);
@@ -143,8 +147,12 @@ export function RadarShell({
           aria-label="레이더 너비 조절"
           ref={resizeHandleRef}
         />
-        <div className="zzk-map-calendar-header" data-testid="radar-header" ref={headerRef} />
-        <div className="zzk-map-calendar-body" data-testid="radar-body" ref={bodyRef} />
+        <div className="zzk-map-calendar-header" data-testid="radar-header" ref={headerRef}>
+          {header}
+        </div>
+        <div className="zzk-map-calendar-body" data-testid="radar-body">
+          {body}
+        </div>
       </div>
     </div>
   );

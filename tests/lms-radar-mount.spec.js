@@ -669,6 +669,40 @@ test("지난 예약 칸은 더 진하고 예약 내용을 알려준다", async (
 //
 // 카드 안(헤더)에 렌더하면 카드가 position: relative + overflow: hidden 이라
 // 팝오버 높이만큼 scrollHeight 가 늘어 레이아웃이 밀린다(155 → 218px).
+// 팝오버·달력은 카드가 아니라 포털 층(position: fixed)에 떠야 한다. 카드 안에
+// 렌더하면 카드가 overflow: hidden + relative 라 scrollHeight 가 늘고 레이아웃이 밀린다.
+test("날짜 달력은 카드 밖 포털 층에 뜬다", async ({ page }) => {
+  await mountServicePage(page);
+  await page.waitForSelector(`#${MAP_CALENDAR_OVERLAY_ID} [aria-label="지도 날짜 선택"]`, {
+    timeout: 4000,
+  });
+
+  const measure = () =>
+    page.evaluate(() => {
+      const card = window.__zzkQuery('[data-testid="radar-card"]');
+      return { scrollHeight: card.scrollHeight, scrollWidth: card.scrollWidth };
+    });
+  const before = await measure();
+
+  await page.click(`#${MAP_CALENDAR_OVERLAY_ID} [aria-label="지도 날짜 선택"]`);
+  await page.locator('[data-slot="calendar"]').waitFor({ state: "visible" });
+
+  // 달력이 카드 안에 들어갔으면 여기서 크기가 달라진다.
+  expect(await measure()).toEqual(before);
+
+  const inPortalLayer = await page.evaluate(() => {
+    const calendar = window.__zzkQuery('[data-slot="calendar"]');
+    const card = window.__zzkQuery('[data-testid="radar-card"]');
+    return {
+      hasPortalLayerAncestor: Boolean(calendar?.closest("[data-zzk-portal-layer]")),
+      insideCard: Boolean(card?.contains(calendar)),
+    };
+  });
+
+  expect(inPortalLayer.hasPortalLayerAncestor).toBe(true);
+  expect(inPortalLayer.insideCard).toBe(false);
+});
+
 test("범례 팝오버가 카드 크기를 바꾸지 않는다", async ({ page }) => {
   await mountServicePage(page);
   await page.waitForSelector(`#${MAP_CALENDAR_OVERLAY_ID} .zzk-map-calendar-slot`, {
