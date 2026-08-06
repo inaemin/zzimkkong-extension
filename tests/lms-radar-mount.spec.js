@@ -957,4 +957,18 @@ test("공간 유형 탭을 바꾸면 표시와 목록이 함께 바뀐다", asyn
     { text: "회의실", active: false, filled: false },
     { text: "페어룸", active: true, filled: true },
   ]);
+
+  // 탭은 모달 카드 안, 날짜 컨트롤 왼쪽에 같은 줄로 선다.
+  const placement = await page.evaluate(() => {
+    const list = window.__zzkQuery('[data-slot="tabs-list"]').getBoundingClientRect();
+    const picker = window.__zzkQuery('[aria-label="지도 날짜 선택"]').getBoundingClientRect();
+    const card = window.__zzkQuery('[data-testid="radar-card"]').getBoundingClientRect();
+    return {
+      insideCard: list.top >= card.top && list.bottom <= card.bottom,
+      leftOfPicker: list.right <= picker.left + 2,
+      sameRow: Math.abs(list.top - picker.top) < 20,
+    };
+  });
+
+  expect(placement).toEqual({ insideCard: true, leftOfPicker: true, sameRow: true });
 });

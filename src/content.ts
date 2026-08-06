@@ -1010,11 +1010,7 @@ declare global {
     shellRefs: ShellRefs,
   ) {
     return createElement(RadarShell, {
-      spaceTab: normalizeMapCalendarSpaceTab(state.mapCalendarSpaceTab),
       collapsed: state.mapCalendarCollapsed,
-      onSpaceTabChange: (tab) => {
-        setMapCalendarSpaceTab(tab);
-      },
       cardRef: (node) => {
         shellRefs.card = node;
       },
@@ -1156,6 +1152,11 @@ declare global {
     }
 
     const headerProps: RadarHeaderProps = {
+      // 공간 유형 탭은 헤더(날짜 컨트롤 왼쪽)에 있다.
+      spaceTab: normalizeMapCalendarSpaceTab(state.mapCalendarSpaceTab),
+      onSpaceTabChange: (tab) => {
+        setMapCalendarSpaceTab(tab);
+      },
       date: clampedHeaderDate,
       minDate: headerMinDate,
       todayDate: getTodayDateInKST(),

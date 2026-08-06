@@ -1,15 +1,6 @@
 import * as React from "react";
 
-import { Tabs, TabsList, TabsTrigger } from "@/ui/components/ui/tabs";
-import {
-  MAP_CALENDAR_OVERLAY_TAB_MEETING_ID,
-  MAP_CALENDAR_OVERLAY_TAB_PAIR_ID,
-  MAP_CALENDAR_SPACE_TAB_MEETING,
-  MAP_CALENDAR_SPACE_TAB_PAIR,
-  type SpaceTab,
-} from "@/constants/runtime";
-
-// 레이더 오버레이의 껍데기. 공간 유형 탭 + 카드를 그리고, 헤더와 본문은
+// 레이더 오버레이의 껍데기. 카드를 그리고, 헤더와 본문은
 // 자식 노드로 받아 같은 렌더 트리에 담는다.
 //
 // 예전에는 헤더·그리드가 각자 createRoot 를 잡고 ref 로 받은 자리에 따로
@@ -17,9 +8,6 @@ import {
 // 된 뒤로도 남아 있었다. 지금은 루트 하나로 그린다.
 
 export interface RadarShellProps {
-  spaceTab: SpaceTab;
-  onSpaceTabChange: (tab: SpaceTab) => void;
-
   /** 드래그 대상이 되는 헤더. content.js 의 bindDraggableHeader 가 잡는다. */
   headerRef?: React.Ref<HTMLDivElement>;
   /** 너비 조절 손잡이. bindMapCalendarResizeHandle 이 잡는다. */
@@ -68,8 +56,6 @@ function useStopPropagationProps() {
 }
 
 export function RadarShell({
-  spaceTab,
-  onSpaceTabChange,
   headerRef,
   resizeHandleRef,
   collapsed = false,
@@ -111,28 +97,6 @@ export function RadarShell({
 
   return (
     <div className="zzk-map-calendar-shell">
-      {/*
-        공간 유형 전환. 손으로 만든 파일 폴더 탭(전용 CSS 75줄)을 shadcn Tabs 로
-        바꿨다. 값·전환은 바깥에서 준다(제어 컴포넌트).
-      */}
-      <Tabs
-        className="zzk-map-calendar-space-tabs"
-        value={spaceTab}
-        onValueChange={(next) => onSpaceTabChange(next as SpaceTab)}
-      >
-        <TabsList aria-label="공간 유형 선택">
-          <TabsTrigger
-            id={MAP_CALENDAR_OVERLAY_TAB_MEETING_ID}
-            value={MAP_CALENDAR_SPACE_TAB_MEETING}
-          >
-            회의실
-          </TabsTrigger>
-          <TabsTrigger id={MAP_CALENDAR_OVERLAY_TAB_PAIR_ID} value={MAP_CALENDAR_SPACE_TAB_PAIR}>
-            페어룸
-          </TabsTrigger>
-        </TabsList>
-      </Tabs>
-
       <div
         className={collapsed ? "zzk-map-calendar-card collapsed" : "zzk-map-calendar-card"}
         data-testid="radar-card"

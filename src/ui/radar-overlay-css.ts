@@ -59,13 +59,6 @@ export const RADAR_OVERLAY_CSS = `
   pointer-events: auto;
 }
 
-/* 공간 유형 탭. 모양은 shadcn Tabs 가 내고 여기서는 자리만 잡는다.
-   (예전에는 카드에 이어 붙는 파일 폴더 모양이라 CSS 가 75줄이었다.) */
-:host .zzk-map-calendar-space-tabs {
-  margin: 0 0 6px 2px;
-  pointer-events: auto;
-}
-
 :host .zzk-map-calendar-card {
   --zzk-floor-col-width: ${CALENDAR_FLOOR_COL_WIDTH}px;
   --zzk-room-col-width: ${CALENDAR_ROOM_COL_WIDTH}px;
