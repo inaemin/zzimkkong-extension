@@ -26,7 +26,6 @@ export interface RadarState {
   loading: boolean;
 
   // 예약 현황 조회 캐시. 같은 조건이면 TTL 안에서 재사용한다.
-  availabilityInflightToken: string | null;
   availabilityCache: Map<string, unknown>;
   availabilityCacheFetchedAt: Map<string, number>;
   availabilityInflightByToken: Map<string, Promise<unknown>>;
@@ -62,15 +61,11 @@ export interface RadarState {
     startMinute: number;
     endMinute: number;
   } | null;
-  timelineSelectionRequestId: number;
-  timelineSelectionApplyTimer: number | null;
   currentSharingMapId: string | null;
   inputRefreshTimer: number | null;
-  autoScheduleRefreshTimer: number | null;
   mutationGuestUiSyncTimer: number | null;
 
   // 호스트 페이지 감시·우회.
-  hostDateSyncDepth: number;
   lastGuestRouteChangeAt: number;
   lastObservedRouteKey: string;
   lastAutoOpenPath: string | null;
@@ -83,11 +78,6 @@ export interface RadarState {
   lastKnownReservationOwnerName: string;
 
   // Slack 복사 모달.
-  lastSlackModalFingerprint: string;
-  lastSlackModalShownAt: number;
-  pendingSlackModalContext: unknown;
-  pendingSlackModalRequiresNonEditPage: boolean;
-  pendingSlackModalReloadAttempted: boolean;
   pendingSlackModalTimer: number | null;
   slackModalVisible: boolean;
   slackChannelMention: string;

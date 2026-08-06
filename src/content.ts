@@ -204,10 +204,17 @@ declare global {
   let historyHookInstalled = false;
   // 예약 시도마다 붙이는 일련번호.
   let reservationAttemptSequence = 0;
+  // 직전에 띄운 Slack 모달의 지문과 시각. 같은 예약으로 15초 안에 두 번
+  // 뜨는 걸 막는 데만 쓴다(shouldSkipSlackCopyModal).
+  let lastSlackModalFingerprint = "";
+  let lastSlackModalShownAt = 0;
+  // 진행 중인 예약현황 조회 토큰. refreshAvailability 안에서만 오간다.
+  let availabilityInflightToken: string | null = null;
+  // 예약이 바뀐 뒤 레이더를 다시 그리는 예약 타이머. 여기서만 걸고 푼다.
+  let autoScheduleRefreshTimer: number | null = null;
 
   const state: RadarState = {
     loading: false,
-    availabilityInflightToken: null,
     // 같은 조건(날짜·시간·탭)으로 다시 조회할 때 재사용할 마지막 응답.
     // 타임블록을 연속으로 누르면 매번 회의실 수만큼 요청이 나가므로 TTL 로 막는다.
     availabilityCache: new Map(),
@@ -237,13 +244,9 @@ declare global {
     // 드래그로 옮긴 모달 위치를 저장소에서 복원한다.
     mapCalendarOffset: readStoredMapCalendarOffset(),
     appliedSelection: null,
-    timelineSelectionRequestId: 0,
-    timelineSelectionApplyTimer: null,
     currentSharingMapId: null,
     inputRefreshTimer: null,
-    autoScheduleRefreshTimer: null,
     mutationGuestUiSyncTimer: null,
-    hostDateSyncDepth: 0,
     lastGuestRouteChangeAt: 0,
     lastObservedRouteKey: getCurrentRouteKey(),
     lastAutoOpenPath: null,
@@ -252,11 +255,6 @@ declare global {
     lastReservationContext: null,
     pendingReservationAttempts: new Map(),
     lastKnownReservationOwnerName: "",
-    lastSlackModalFingerprint: "",
-    lastSlackModalShownAt: 0,
-    pendingSlackModalContext: null,
-    pendingSlackModalRequiresNonEditPage: false,
-    pendingSlackModalReloadAttempted: false,
     pendingSlackModalTimer: null,
     slackModalVisible: false,
     mapCalendarSuppressedBySlack: false,
@@ -580,7 +578,7 @@ declare global {
     if (previousSharingMapId !== sharingMapId) {
       const isSharingMapSwitch = Boolean(previousSharingMapId);
       state.currentSharingMapId = sharingMapId;
-      state.availabilityInflightToken = null;
+      availabilityInflightToken = null;
       state.latestRoomsBySpaceTab.clear();
       if (isSharingMapSwitch) {
         state.scheduleCache.clear();
@@ -655,7 +653,7 @@ declare global {
     state.availabilityInflightByToken.set(availabilityToken, inflight);
 
     try {
-      state.availabilityInflightToken = availabilityToken;
+      availabilityInflightToken = availabilityToken;
       const response = await inflight;
 
       if (!response?.ok) {
@@ -663,7 +661,7 @@ declare global {
       }
 
       const data = response.data;
-      if (state.availabilityInflightToken !== availabilityToken) {
+      if (availabilityInflightToken !== availabilityToken) {
         return;
       }
       if (state.currentSharingMapId !== sharingMapId) {
@@ -687,8 +685,8 @@ declare global {
       if (state.availabilityInflightByToken.get(availabilityToken) === inflight) {
         state.availabilityInflightByToken.delete(availabilityToken);
       }
-      if (state.availabilityInflightToken === availabilityToken) {
-        state.availabilityInflightToken = null;
+      if (availabilityInflightToken === availabilityToken) {
+        availabilityInflightToken = null;
       }
       state.loading = false;
     }
@@ -2528,8 +2526,8 @@ declare global {
   }
 
   function scheduleCalendarOverlayRefresh() {
-    cancelTimer(state.autoScheduleRefreshTimer);
-    state.autoScheduleRefreshTimer = window.setTimeout(() => {
+    cancelTimer(autoScheduleRefreshTimer);
+    autoScheduleRefreshTimer = window.setTimeout(() => {
       if (!isMapCalendarModalOpenRequested() || !state.activeScheduleDate) {
         return;
       }
@@ -3017,11 +3015,10 @@ declare global {
 
     const now = Date.now();
     const isDuplicate =
-      state.lastSlackModalFingerprint === fingerprint &&
-      now - (state.lastSlackModalShownAt || 0) < 15000;
+      lastSlackModalFingerprint === fingerprint && now - (lastSlackModalShownAt || 0) < 15000;
 
-    state.lastSlackModalFingerprint = fingerprint;
-    state.lastSlackModalShownAt = now;
+    lastSlackModalFingerprint = fingerprint;
+    lastSlackModalShownAt = now;
     return isDuplicate;
   }
 
@@ -3907,12 +3904,10 @@ declare global {
           pendingReservationAttemptCount: state.pendingReservationAttempts.size,
           pendingReservationAttemptIds: Array.from(state.pendingReservationAttempts.keys()),
           lastKnownReservationOwnerName: state.lastKnownReservationOwnerName,
-          pendingSlackModalContext: state.pendingSlackModalContext,
-          pendingSlackModalRequiresNonEditPage: state.pendingSlackModalRequiresNonEditPage,
-          pendingSlackModalReloadAttempted: state.pendingSlackModalReloadAttempted,
+          ...slackSuccessFlow.getPendingSlackModalSnapshot(),
           slackModalVisible: state.slackModalVisible,
-          lastSlackModalFingerprint: state.lastSlackModalFingerprint,
-          lastSlackModalShownAt: state.lastSlackModalShownAt,
+          lastSlackModalFingerprint: lastSlackModalFingerprint,
+          lastSlackModalShownAt: lastSlackModalShownAt,
           debugMode: DEBUG_MODE,
         };
       },

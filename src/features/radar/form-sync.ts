@@ -37,6 +37,17 @@ export function createRadarFormSync(deps: Deps) {
     syncLmsReservationForm,
   } = deps;
 
+  // 이 팩토리 안에서만 오가는 상태. content 의 공유 state 에 둘 이유가 없다.
+  // (let 은 규칙상 금지라 한 덩어리로 묶어 둔다.)
+  const local = {
+    /** 우리가 호스트 날짜를 프로그램적으로 바꾸는 중인지(재진입 방지 카운터). */
+    hostDateSyncDepth: 0,
+    /** 타임블록 선택 요청 일련번호. 늦은 응답이 최신 선택을 덮지 않게 한다. */
+    timelineSelectionRequestId: 0,
+    /** 연속 클릭을 묶는 반영 타이머. */
+    timelineSelectionApplyTimer: null as number | null,
+  };
+
   /** 사용자가 직접 바꾼 호스트 날짜 입력이면 그 요소를, 아니면 null. */
   function readHostDateChangeTarget(event: Event) {
     if (!event.isTrusted || isHandlingInternalHostDateSync()) {
@@ -70,26 +81,26 @@ export function createRadarFormSync(deps: Deps) {
   }
 
   function isHandlingInternalHostDateSync() {
-    return Number.isInteger(state.hostDateSyncDepth) && state.hostDateSyncDepth > 0;
+    return Number.isInteger(local.hostDateSyncDepth) && local.hostDateSyncDepth > 0;
   }
 
   function createTimelineSelectionRequestId() {
-    state.timelineSelectionRequestId = Number.isInteger(state.timelineSelectionRequestId)
-      ? state.timelineSelectionRequestId + 1
+    local.timelineSelectionRequestId = Number.isInteger(local.timelineSelectionRequestId)
+      ? local.timelineSelectionRequestId + 1
       : 1;
-    return state.timelineSelectionRequestId;
+    return local.timelineSelectionRequestId;
   }
 
   function isLatestTimelineSelectionRequest(requestId: number) {
     if (!Number.isInteger(requestId)) {
       return true;
     }
-    return requestId === state.timelineSelectionRequestId;
+    return requestId === local.timelineSelectionRequestId;
   }
 
   /** 대기 중이던 선택 반영을 실행한다. 그 사이 새 선택이 왔으면 버린다. */
   function runQueuedSelectionApply(selection: TimelineSelection, requestId: number) {
-    state.timelineSelectionApplyTimer = null;
+    local.timelineSelectionApplyTimer = null;
     if (!isLatestTimelineSelectionRequest(requestId)) {
       return;
     }
@@ -112,32 +123,32 @@ export function createRadarFormSync(deps: Deps) {
     }
 
     const requestId = createTimelineSelectionRequestId();
-    const hadPendingApply = state.timelineSelectionApplyTimer != null;
-    cancelTimer(state.timelineSelectionApplyTimer);
+    const hadPendingApply = local.timelineSelectionApplyTimer != null;
+    cancelTimer(local.timelineSelectionApplyTimer);
     // 브라우저에서 setTimeout 은 number 를 준다. @types/node 가 섞여 Timeout 으로
     // 추론되므로 명시한다.
-    state.timelineSelectionApplyTimer = window.setTimeout(
+    local.timelineSelectionApplyTimer = window.setTimeout(
       () => runQueuedSelectionApply(selection, requestId),
       hadPendingApply ? 80 : 0,
     );
   }
 
   function withInternalHostDateSync<T>(task: () => T): T {
-    state.hostDateSyncDepth = Number.isInteger(state.hostDateSyncDepth)
-      ? state.hostDateSyncDepth + 1
+    local.hostDateSyncDepth = Number.isInteger(local.hostDateSyncDepth)
+      ? local.hostDateSyncDepth + 1
       : 1;
 
     try {
       return task();
     } finally {
-      state.hostDateSyncDepth = Math.max(0, (state.hostDateSyncDepth || 1) - 1);
+      local.hostDateSyncDepth = Math.max(0, (local.hostDateSyncDepth || 1) - 1);
     }
   }
 
   function resetTimelineSelectionState() {
     state.appliedSelection = null;
-    cancelTimer(state.timelineSelectionApplyTimer);
-    state.timelineSelectionApplyTimer = null;
+    cancelTimer(local.timelineSelectionApplyTimer);
+    local.timelineSelectionApplyTimer = null;
     createTimelineSelectionRequestId();
   }
 
@@ -202,7 +213,7 @@ export function createRadarFormSync(deps: Deps) {
 
   async function applyTimelineReservationSelection(
     selection: TimelineSelection,
-    requestId: number = state.timelineSelectionRequestId,
+    requestId: number = local.timelineSelectionRequestId,
   ) {
     debugLog("radar-form-sync", "apply:start", { requestId, ...describeSelection(selection) });
     const elements = isLatestTimelineSelectionRequest(requestId) ? ensurePanelElements() : null;

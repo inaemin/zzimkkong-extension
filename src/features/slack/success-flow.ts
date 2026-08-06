@@ -32,6 +32,17 @@ export function createSlackSuccessFlow(deps: Deps) {
     onReservationMutated,
   } = deps;
 
+  // 예약 성공 직후 띄울 Slack 모달을 잠시 붙들어 두는 자리. 이 파일 안에서만
+  // 오간다 — content 의 공유 state 에 둘 이유가 없다.
+  // (let 은 규칙상 금지라 한 덩어리로 묶어 둔다.)
+  const pending = {
+    context: null as unknown,
+    /** 편집 페이지를 벗어난 뒤에 띄워야 하는지. */
+    requiresNonEditPage: false,
+    /** 새로고침을 이미 한 번 시도했는지(무한 새로고침 방지). */
+    reloadAttempted: false,
+  };
+
   // 개편 서비스(lms+) 예약 생성 성공 처리: 응답 body 로 Slack 모달을 띄운다.
   /** 2xx 로 끝난 예약 응답인지. */
   function isSuccessfulReservationPayload(payload: unknown): payload is ReservationEventPayload {
@@ -128,13 +139,13 @@ export function createSlackSuccessFlow(deps: Deps) {
     options: { requireNonEditPage?: boolean } = {},
   ) {
     cancelPendingSlackModalTimer();
-    state.pendingSlackModalContext = context && typeof context === "object" ? { ...context } : null;
-    state.pendingSlackModalRequiresNonEditPage = options?.requireNonEditPage === true;
-    state.pendingSlackModalReloadAttempted = false;
+    pending.context = context && typeof context === "object" ? { ...context } : null;
+    pending.requiresNonEditPage = options?.requireNonEditPage === true;
+    pending.reloadAttempted = false;
     persistPendingSlackModalState();
     pushDebugEvent("slack-success", "pending-modal-saved", {
-      requireNonEditPage: state.pendingSlackModalRequiresNonEditPage,
-      hasContext: state.pendingSlackModalContext != null,
+      requireNonEditPage: pending.requiresNonEditPage,
+      hasContext: pending.context != null,
     });
   }
 
@@ -166,7 +177,7 @@ export function createSlackSuccessFlow(deps: Deps) {
   }
 
   function persistPendingSlackModalState() {
-    if (!state.pendingSlackModalContext) {
+    if (!pending.context) {
       removePendingSlackModalStorage("write-failed");
       return;
     }
@@ -175,9 +186,9 @@ export function createSlackSuccessFlow(deps: Deps) {
       window.sessionStorage.setItem(
         PENDING_SLACK_MODAL_STORAGE_KEY,
         JSON.stringify({
-          context: state.pendingSlackModalContext,
-          requireNonEditPage: state.pendingSlackModalRequiresNonEditPage === true,
-          reloadAttempted: state.pendingSlackModalReloadAttempted === true,
+          context: pending.context,
+          requireNonEditPage: pending.requiresNonEditPage === true,
+          reloadAttempted: pending.reloadAttempted === true,
         }),
       );
     } catch (error) {
@@ -207,16 +218,16 @@ export function createSlackSuccessFlow(deps: Deps) {
       return;
     }
 
-    state.pendingSlackModalContext = { ...parsed.context };
-    state.pendingSlackModalRequiresNonEditPage = parsed.requireNonEditPage === true;
-    state.pendingSlackModalReloadAttempted = parsed.reloadAttempted === true;
+    pending.context = { ...parsed.context };
+    pending.requiresNonEditPage = parsed.requireNonEditPage === true;
+    pending.reloadAttempted = parsed.reloadAttempted === true;
   }
 
   function clearPendingSlackModalState() {
     cancelPendingSlackModalTimer();
-    state.pendingSlackModalContext = null;
-    state.pendingSlackModalRequiresNonEditPage = false;
-    state.pendingSlackModalReloadAttempted = false;
+    pending.context = null;
+    pending.requiresNonEditPage = false;
+    pending.reloadAttempted = false;
     removePendingSlackModalStorage("remove-failed");
   }
 
@@ -229,11 +240,11 @@ export function createSlackSuccessFlow(deps: Deps) {
    */
   function openPendingModalIfStillReady() {
     state.pendingSlackModalTimer = null;
-    if (!state.pendingSlackModalContext || state.slackModalVisible) {
+    if (!pending.context || state.slackModalVisible) {
       return;
     }
 
-    const pendingContext = state.pendingSlackModalContext;
+    const pendingContext = pending.context;
     clearPendingSlackModalState();
     window.requestAnimationFrame(() => {
       if (state.slackModalVisible) {
@@ -245,7 +256,7 @@ export function createSlackSuccessFlow(deps: Deps) {
   }
 
   function tryOpenPendingSlackCopyModal() {
-    if (!state.pendingSlackModalContext || state.slackModalVisible) {
+    if (!pending.context || state.slackModalVisible) {
       return false;
     }
 
@@ -312,6 +323,12 @@ export function createSlackSuccessFlow(deps: Deps) {
     clearPendingSlackModalState,
     tryOpenPendingSlackCopyModal,
     queueSlackModalFromPersistedEditSubmitIfNeeded,
+    /** 디버그 스냅샷용. content 가 state 대신 여기서 읽는다. */
+    getPendingSlackModalSnapshot: () => ({
+      pendingSlackModalContext: pending.context,
+      pendingSlackModalRequiresNonEditPage: pending.requiresNonEditPage,
+      pendingSlackModalReloadAttempted: pending.reloadAttempted,
+    }),
   };
 }
 
