@@ -643,3 +643,30 @@ test("기록 삭제는 저장소와 목록에서만 지우고 고른 칩은 남�
   // 고른 칩은 그대로다.
   await expect(chips).toHaveText(["#공지"]);
 });
+
+// 아무것도 입력하지 않았으면 저장된 채널이 전부 보여야 한다. 필터를 직접
+// 걸다 보니 빈 문자열을 잘못 다루면 목록이 통째로 사라질 수 있다.
+test("입력이 비어 있으면 저장된 채널이 모두 나온다", async ({ page }) => {
+  await openSlackModalWithHistory(page, "#공지\n#개발\n#8기-poudy");
+
+  const input = page.locator('[data-slot="combobox-chip-input"]');
+  const items = page.locator('[data-slot="combobox-item"]');
+
+  // 1) 처음 열었을 때
+  await input.click();
+  await expect(items).toHaveCount(3);
+
+  // 2) 쳤다가 다 지웠을 때도 되돌아와야 한다.
+  await input.pressSequentially("개발");
+  await expect(items).toHaveCount(1);
+  await input.press("Backspace");
+  await input.press("Backspace");
+  await expect(input).toHaveValue("");
+  await expect(items).toHaveCount(3);
+
+  // 3) 채널을 고른 뒤에도 목록은 그대로다(고른 것도 계속 보인다).
+  await items.first().click();
+  await expect(page.locator('[data-slot="combobox-chip"]')).toHaveCount(1);
+  await input.click();
+  await expect(items).toHaveCount(3);
+});
