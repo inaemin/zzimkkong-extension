@@ -3,6 +3,7 @@ import path from "node:path";
 import { expect, test } from "@playwright/test";
 import {
   WEB_ORIGIN,
+  enableTestHooks,
   ensureExtensionBuild,
   loadContentBundle,
   stubServiceDocument,
@@ -15,54 +16,19 @@ test("playwright local setup works", async ({ page }) => {
   await expect(page).toHaveTitle(/Example Domain/);
 });
 
-test("content bundle import order preserves global bootstrap dependencies", async () => {
-  // 소스가 전역(globalThis.__zzk*) 기반 IIFE 라 로드 순서가 곧 의존성 순서다.
-  // manifest 는 이제 빌드가 생성하므로, 순서 계약은 번들 진입점이 들고 있다.
-  const bundleSource = fs.readFileSync(
-    path.resolve(process.cwd(), "src/content-bundle.js"),
-    "utf8",
-  );
-  const importedPaths = Array.from(bundleSource.matchAll(/^import "(\.\/[^"]+)";$/gm)).map(
-    (match) => match[1].replace(/^\.\//, "src/"),
-  );
-
-  expect(importedPaths).toEqual([
-    "src/constants/debug.js",
-    "src/utils/shared.js",
-    "src/utils/storage.js",
-    "src/constants/runtime.js",
-    "src/utils/date-time.js",
-    "src/utils/routes.js",
-    "src/features/slack/shared.js",
-    "src/features/slack/workflow.js",
-    "src/features/slack/success-flow.js",
-    "src/features/form-fields/shared.js",
-    "src/services/lms-data/normalizers.js",
-    "src/services/lms-data/shared.js",
-    "src/features/radar/floor-maps.js",
-    "src/features/radar/shared.js",
-    "src/features/radar/workflow.js",
-    "src/features/radar/form-sync.js",
-    "src/content.js",
-  ]);
-});
-
-test("MAIN world 번들도 의존 순서를 지킨다", async () => {
-  const bundleSource = fs.readFileSync(
-    path.resolve(process.cwd(), "src/page-hook-bundle.js"),
-    "utf8",
-  );
-  const importedPaths = Array.from(bundleSource.matchAll(/^import "(\.\/[^"]+)";$/gm)).map(
-    (match) => match[1].replace(/^\.\//, "src/"),
-  );
-
-  // shared 가 globalThis.__zzkPageHookShared 를 올리고 hook 이 그걸 읽는다.
-  expect(importedPaths).toEqual(["src/page-hook/shared.js", "src/page-network-hook.js"]);
+test("번들 진입점은 모듈 그래프에 맡기고 수동 나열을 하지 않는다", async () => {
+  // 2.5-A 이전에는 전역 기반이라 진입점이 17개를 순서대로 import 했다.
+  // 모듈 그래프로 바뀐 뒤로는 번들러가 순서를 판단하므로 나열이 되살아나면 안 된다.
+  for (const entry of ["src/content-bundle.ts", "src/page-hook-bundle.ts"]) {
+    const source = fs.readFileSync(path.resolve(process.cwd(), entry), "utf8");
+    const imports = Array.from(source.matchAll(/^import "(\.\/[^"]+)";$/gm));
+    expect(imports, `${entry} 는 진입점 하나만 import 해야 한다`).toHaveLength(1);
+  }
 });
 
 test("background service worker reuses shared room policy constants", async () => {
   const backgroundSource = fs.readFileSync(
-    path.resolve(process.cwd(), "src/background.js"),
+    path.resolve(process.cwd(), "src/background.ts"),
     "utf8",
   );
 
@@ -70,7 +36,8 @@ test("background service worker reuses shared room policy constants", async () =
   // (쓰면 "Module scripts don't support importScripts()" 로 부팅이 통째로 깨진다)
   // 주석에 단어가 등장할 수 있으므로 실제 호출 형태만 본다.
   expect(backgroundSource).not.toMatch(/^\s*importScripts\s*\(/m);
-  expect(backgroundSource).toContain('import "./constants/runtime.js"');
+  // 상수는 직접 정의하지 않고 constants/runtime.js 에서 가져다 쓴다.
+  expect(backgroundSource).toMatch(/from "\.\/constants\/runtime\.js"/);
   expect(backgroundSource).not.toMatch(/const\s+TARGET_ROOM_NAMES\s*=\s*\[/);
 });
 
@@ -99,6 +66,7 @@ test("레이더를 띄울 수 없는 페이지에서는 부팅해도 UI 를 만�
 test("storage helpers report debug events when browser storage throws", async ({ page }) => {
   // 브라우저가 저장소를 막는 건 런타임에 실제로 일어난다(모듈 전환과 무관).
   // 던지지 않고 디버그 이벤트로 남기는지 확인한다.
+  await enableTestHooks(page);
   await page.addInitScript(() => {
     window.__ZZK_DEBUG_MODE__ = true;
   });
@@ -121,15 +89,14 @@ test("storage helpers report debug events when browser storage throws", async ({
     };
 
     try {
-      window.__zzkSharedUtils.clearDebugEvents();
-      const boolValue = window.__zzkStorageUtils.readStoredBoolean("zzk-test-bool", true);
-      window.__zzkStorageUtils.writeStoredBoolean("zzk-test-bool", false);
-      window.__zzkStorageUtils.writeStoredText("zzk-test-text", "");
+      const api = window.__zzkTestApi;
+      api.clearDebugEvents();
+      const boolValue = api.storage.readStoredBoolean("zzk-test-bool", true);
+      api.storage.writeStoredBoolean("zzk-test-bool", false);
+      api.storage.writeStoredText("zzk-test-text", "");
       return {
         boolValue,
-        events: window.__zzkSharedUtils
-          .getDebugEvents()
-          .filter((entry) => entry.scope === "storage"),
+        events: api.getDebugEvents().filter((entry) => entry.scope === "storage"),
       };
     } finally {
       Storage.prototype.getItem = originalGetItem;

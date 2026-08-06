@@ -1,64 +1,62 @@
+import {
+  MESSAGE_SOURCE,
+  MESSAGE_TYPE,
+  buildReservationMutationEventPayload,
+  emitReservationEvent,
+  extractDateTimeParts,
+  extractOwnerCandidateFromBody,
+  extractOwnerCandidateFromEntries,
+  extractOwnerCandidateFromFetchRequest,
+  extractOwnerCandidateFromObject,
+  extractReservationContextFromUrl,
+  extractReservationRequestContextFromBody,
+  extractReservationRequestContextFromEntries,
+  extractReservationRequestContextFromFetchRequest,
+  extractReservationRequestContextFromObject,
+  finalizeReservationRequestContext,
+  isDateFieldKey,
+  isDescriptionFieldKey,
+  isEndDateTimeFieldKey,
+  isOwnerFieldKey,
+  isReservationMutationRequest,
+  isRoomNameFieldKey,
+  isStartDateTimeFieldKey,
+  mergeReservationRequestContext,
+  normalizeDateCandidate,
+  normalizeDescriptionCandidate,
+  normalizeFieldKey,
+  normalizeMethod,
+  normalizeOwnerCandidate,
+  normalizeText,
+  normalizeTimeCandidate,
+  parseUrl,
+  readReservationAttemptId,
+  resolveReservationRequestContextForEmit,
+  shouldEmitReservationMutationEvent,
+} from "./page-hook/shared.js";
+import type { ReservationRequestContext } from "./page-hook/shared.js";
+
+// 이 파일은 MAIN world 에서 페이지의 fetch/XHR 을 패치한다.
+// 패치 상태와 XHR 인스턴스에 붙이는 정보를 타입으로 선언한다.
+declare global {
+  interface Window {
+    __zzkReservationHookLoaded?: boolean;
+    __zzkReservationHookRestore?: () => boolean;
+  }
+  interface XMLHttpRequest {
+    __zzkReservationMethod?: string;
+    __zzkReservationUrl?: string;
+    __zzkReservationAttemptId?: string;
+    __zzkReservationOwnerNameCandidate?: string;
+    __zzkReservationRequestContext?: ReservationRequestContext | null;
+    __zzkReservationListenerBound?: boolean;
+  }
+}
+
 (() => {
   if (window.__zzkReservationHookLoaded) {
     return;
   }
-
-  function reportMissingBootstrapDependencies(missing) {
-    if (!Array.isArray(globalThis.__zzkBootstrapLoadErrors)) {
-      globalThis.__zzkBootstrapLoadErrors = [];
-    }
-    globalThis.__zzkBootstrapLoadErrors.push({
-      script: "src/page-network-hook.js",
-      reason: "missing-bootstrap-dependencies",
-      missing,
-    });
-  }
-
-  const missingBootstrapDependencies = [["__zzkPageHookShared", globalThis.__zzkPageHookShared]]
-    .filter(([, value]) => !value)
-    .map(([name]) => name);
-
-  if (missingBootstrapDependencies.length > 0) {
-    reportMissingBootstrapDependencies(missingBootstrapDependencies);
-    return;
-  }
-
-  const {
-    MESSAGE_SOURCE,
-    MESSAGE_TYPE,
-    normalizeMethod,
-    parseUrl,
-    normalizeText,
-    normalizeOwnerCandidate,
-    isOwnerFieldKey,
-    extractOwnerCandidateFromEntries,
-    extractOwnerCandidateFromObject,
-    extractOwnerCandidateFromBody,
-    extractOwnerCandidateFromFetchRequest,
-    normalizeFieldKey,
-    normalizeDateCandidate,
-    normalizeTimeCandidate,
-    extractDateTimeParts,
-    normalizeDescriptionCandidate,
-    isStartDateTimeFieldKey,
-    isEndDateTimeFieldKey,
-    isDateFieldKey,
-    isDescriptionFieldKey,
-    isRoomNameFieldKey,
-    mergeReservationRequestContext,
-    finalizeReservationRequestContext,
-    extractReservationRequestContextFromEntries,
-    extractReservationRequestContextFromObject,
-    extractReservationRequestContextFromBody,
-    extractReservationContextFromUrl,
-    resolveReservationRequestContextForEmit,
-    extractReservationRequestContextFromFetchRequest,
-    isReservationMutationRequest,
-    shouldEmitReservationMutationEvent,
-    emitReservationEvent,
-    buildReservationMutationEventPayload,
-    readReservationAttemptId,
-  } = globalThis.__zzkPageHookShared;
 
   const originalFetch = window.fetch;
   const originalXhrOpen = XMLHttpRequest.prototype.open;
@@ -159,14 +157,8 @@
         Promise.all([ownerNamePromise, requestContextPromise, responseBodyPromise])
           .then(([ownerNameCandidate, requestContext, responseBody]) => {
             const shouldEmit =
-              shouldEmitReservationMutationEvent(url, method, {
-                reservationAttemptId,
-                requestContext,
-              }) ||
-              shouldEmitReservationMutationEvent(eventUrl, method, {
-                reservationAttemptId,
-                requestContext,
-              });
+              shouldEmitReservationMutationEvent(url, method) ||
+              shouldEmitReservationMutationEvent(eventUrl, method);
             if (!shouldEmit) {
               return;
             }
@@ -229,10 +221,7 @@
           Number.isInteger(status) &&
           status >= 200 &&
           status < 300 &&
-          shouldEmitReservationMutationEvent(url, method, {
-            reservationAttemptId: this.__zzkReservationAttemptId,
-            requestContext: this.__zzkReservationRequestContext,
-          })
+          shouldEmitReservationMutationEvent(url, method)
         ) {
           emitReservationEvent(
             buildReservationMutationEventPayload({

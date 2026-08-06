@@ -2,6 +2,7 @@ import { expect, test } from "@playwright/test";
 import {
   API_ORIGIN,
   WEB_ORIGIN,
+  enableTestHooks,
   ensureExtensionBuild,
   loadContentBundle,
   stubServiceDocument,
@@ -14,10 +15,11 @@ const FAKE_JWT =
   "eyJhbGciOiJIUzUxMiJ9.eyJzdWIiOiI1NyIsInJvbGVzIjpbIlJPTEVfVVNFUiJdfQ.AAAABBBBCCCCDDDDEEEEFFFF";
 
 async function stubDocument(page) {
+  await enableTestHooks(page);
   await stubServiceDocument(page, "<html><body></body></html>");
 }
 
-// 데이터 계층(__zzkLmsDataShared)만 필요하지만, 번들이 한 덩어리라 content 번들을 쓴다.
+// 데이터 계층(__zzkTestApi.lmsData)만 필요하지만, 번들이 한 덩어리라 content 번들을 쓴다.
 async function loadScripts(page) {
   await loadContentBundle(page);
 }
@@ -58,7 +60,7 @@ test("attaches Authorization: Bearer from a JWT in localStorage", async ({ page 
   }, FAKE_JWT);
   await loadScripts(page);
 
-  const context = await page.evaluate(() => window.__zzkLmsDataShared.loadSpaceContext(null));
+  const context = await page.evaluate(() => window.__zzkTestApi.lmsData.loadSpaceContext(null));
   expect(context.targetRooms.length).toBe(1);
   expect(seenAuth).toBe(`Bearer ${FAKE_JWT}`);
 });
@@ -84,7 +86,7 @@ test("reads a bare JWT stored directly under a key", async ({ page }) => {
   await page.evaluate((jwt) => localStorage.setItem("accessToken", jwt), FAKE_JWT);
   await loadScripts(page);
 
-  await page.evaluate(() => window.__zzkLmsDataShared.loadSpaceContext(null));
+  await page.evaluate(() => window.__zzkTestApi.lmsData.loadSpaceContext(null));
   expect(seenAuth).toBe(`Bearer ${FAKE_JWT}`);
 });
 
@@ -107,7 +109,7 @@ test("403 surfaces a friendly login error instead of a raw status", async ({ pag
 
   const result = await page.evaluate(async () => {
     try {
-      await window.__zzkLmsDataShared.fetchDailySchedule({ date: "2099-01-02", roomType: null });
+      await window.__zzkTestApi.lmsData.fetchDailySchedule({ date: "2099-01-02", roomType: null });
       return { threw: false };
     } catch (error) {
       return { threw: true, message: error instanceof Error ? error.message : String(error) };

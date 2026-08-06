@@ -1,173 +1,168 @@
+import {
+  normalizeTextForMatch,
+  getErrorMessage,
+  pushDebugEvent,
+  debugLog,
+  getDebugEvents,
+  clearDebugEvents,
+} from "./utils/shared.js";
+import {
+  readStoredBoolean,
+  writeStoredBoolean,
+  readStoredText,
+  writeStoredText,
+  readStoredNumber,
+  writeStoredNumber,
+} from "./utils/storage.js";
+import {
+  normalizeDateString,
+  isDateString,
+  parseHourMinute,
+  minuteToHourMinute,
+  parseLocalizedHourMinute,
+  extractHourMinute,
+  normalizeHourMinute,
+  normalizeToTenMinute,
+  isTenMinuteAligned,
+  formatDate,
+  getTodayDateInKST,
+  getCurrentMinuteOfDayInKST,
+  sanitizeDateForApi,
+  sanitizeTimeForApi,
+  getNextHourRange,
+  getEarliestSelectableMinuteForDate,
+  addDaysToDateString,
+  formatUTCDateString,
+  parseDateStringAsUTC,
+  addMonthsToDateString,
+  getMonthStartDateString,
+  formatMonthTitle,
+  formatKSTWeekday,
+  formatDateSelectorText,
+} from "./utils/date-time.js";
+import {
+  getSharingMapId,
+  isLmsSpaceReservationPage,
+  isRadarSupportedPage,
+} from "./utils/routes.js";
+import {
+  normalizeSlackFieldText,
+  normalizeSlackChannelToken,
+  normalizeSlackReminderLeadMinutes,
+  formatSlackReminderLeadOptionLabel,
+  computeSlackReminderDateTime,
+} from "./features/slack/shared.js";
+import {
+  getInputAssociatedLabelText,
+  buildHostInputDescriptor,
+  normalizeHostReservationOwnerCandidate,
+  normalizeHostRoomCandidate,
+  extractKnownRoomName,
+  getControlAssociatedLabelText,
+  buildHostFieldDescriptor,
+  readHostFieldDisplayValue,
+} from "./features/form-fields/shared.js";
+import {
+  MAP_CALENDAR_OVERLAY_ID,
+  MAP_CALENDAR_LAUNCHER_ID,
+  SLACK_MODAL_TRIGGER_ID,
+  DEBUG_MODE,
+  MAP_CALENDAR_STYLE_ID,
+  MAP_CALENDAR_OVERLAY_TAB_MEETING_ID,
+  MAP_CALENDAR_OVERLAY_TAB_PAIR_ID,
+  PAGE_RESERVATION_EVENT_TYPE,
+  SLACK_COPY_MODAL_ID,
+  FLOOR_MAP_ZOOM_ID,
+  SLACK_COPY_MODAL_STYLE_ID,
+  SLACK_COPY_MODAL_BASECOAT_STYLE_ID,
+  SLACK_COPY_MODAL_BASECOAT_STYLE_PATH,
+  X_ICON_SVG,
+  CHEVRON_LEFT_ICON_SVG,
+  CHEVRON_RIGHT_ICON_SVG,
+  SLACK_CHANNEL_MENTION_STORAGE_KEY,
+  SLACK_CHANNEL_HISTORY_STORAGE_KEY,
+  SLACK_REMINDER_LEAD_TIME_STORAGE_KEY,
+  PENDING_SLACK_MODAL_STORAGE_KEY,
+  MAP_CALENDAR_ALWAYS_OPEN_STORAGE_KEY,
+  MAP_CALENDAR_SPACE_TAB_STORAGE_KEY,
+  MAP_CALENDAR_WIDTH_STORAGE_KEY,
+  MAP_CALENDAR_OFFSET_STORAGE_KEY,
+  MAP_CALENDAR_FLOORMAP_OPEN_STORAGE_KEY,
+  MAP_CALENDAR_MIN_WIDTH,
+  MAP_CALENDAR_VIEWPORT_MARGIN,
+  MAP_CALENDAR_CURRENT_TIME_SCROLL_LEAD_MINUTES,
+  MAP_CALENDAR_SPACE_TAB_MEETING,
+  MAP_CALENDAR_SPACE_TAB_PAIR,
+  RUNTIME_MESSAGE_TIMEOUT_MS,
+  RESERVATION_SCHEDULE_STALE_MS,
+  SEOUL_TIMEZONE,
+  KST_DATE_PARTS_FORMATTER,
+  KST_TIME_PARTS_FORMATTER,
+  KST_WEEKDAY_FORMATTER,
+  DEFAULT_SLACK_REMINDER_LEAD_TIME_MINUTES,
+  SLACK_REMINDER_LEAD_TIME_OPTIONS,
+  TIME_STEP_MINUTES,
+  LMS_DEFAULT_RESERVATION_MINUTES,
+  CALENDAR_SLOT_MIN_WIDTH,
+  LMS_CALENDAR_SLOT_MIN_WIDTH,
+  CALENDAR_SLOT_GAP,
+  CALENDAR_HOUR_BOUNDARY_LINE_WIDTH,
+  CALENDAR_HOUR_BOUNDARY_SIDE_GAP,
+  MAX_RESERVATION_BLOCKS,
+  CALENDAR_FLOOR_COL_WIDTH,
+  CALENDAR_ROOM_COL_WIDTH,
+  CALENDAR_ROW_GAP,
+  CALENDAR_SIDE_MARGIN,
+  DRAG_SAFE_TOP,
+  NAV_SAFE_Z_INDEX,
+  ROOM_TAG_METADATA,
+  ROOM_TAG_METADATA_BY_KEY,
+  TARGET_ROOM_METADATA,
+  TARGET_ROOM_METADATA_BY_NORMALIZED_NAME,
+  MAP_CALENDAR_ROOM_FLOOR_BY_NAME,
+  TARGET_ROOM_NAMES,
+  TARGET_ROOM_SET,
+  TARGET_ROOM_ORDER,
+  normalizeRoomTagKey,
+  normalizeTargetRoomName,
+  normalizeMapCalendarSpaceTab,
+  normalizeFetchRoomType,
+} from "./constants/runtime.js";
+import {
+  clearReservationCache as clearLmsReservationCache,
+  fetchAvailability as fetchLmsAvailability,
+  fetchDailySchedule as fetchLmsDailySchedule,
+  fetchQuota as fetchLmsQuota,
+  loadSpaceContext as loadLmsSpaceContext,
+} from "./services/lms-data/shared.js";
+import { getAvailableFloorMapFloors, getFloorMapDataUri } from "./features/radar/floor-maps.js";
+import {
+  findGuestReservationTabContainer as radarFindGuestReservationTabContainer,
+  findGuestReservationTabStyleSource as radarFindGuestReservationTabStyleSource,
+} from "./features/radar/shared.js";
+import { createRadarWorkflow } from "./features/radar/workflow.js";
+import { createRadarFormSync } from "./features/radar/form-sync.js";
+import { createSlackWorkflow } from "./features/slack/workflow.js";
+import { createSlackSuccessFlow } from "./features/slack/success-flow.js";
+
+// 이 파일은 3단계에서 React 컴포넌트로 다시 쓴다. 지금은 전역 소비만 import 로 옮긴다.
 (() => {
   if (window.__zzkAvailabilityLensLoaded) {
     return;
   }
 
-  const requiredBootstrapGlobals = [
-    "__zzkSharedUtils",
-    "__zzkStorageUtils",
-    "__zzkDateTimeUtils",
-    "__zzkRouteUtils",
-    "__zzkSlackShared",
-    "__zzkRadarShared",
-    "__zzkSharedConstants",
-    "__zzkRadarWorkflow",
-    "__zzkRadarFormSync",
-    "__zzkSlackWorkflow",
-    "__zzkSlackSuccessFlow",
-    "__zzkFormFieldUtils",
-    "__zzkLmsDataShared",
-  ];
-  const missingBootstrapGlobals = requiredBootstrapGlobals.filter((globalName) => {
-    return !globalThis[globalName] || typeof globalThis[globalName] !== "object";
-  });
-  if (missingBootstrapGlobals.length > 0) {
-    window.__zzkAvailabilityLensLoadError = {
-      reason: "missing-bootstrap-dependencies",
-      missing: missingBootstrapGlobals,
-    };
-    return;
-  }
-
   window.__zzkAvailabilityLensLoaded = true;
 
-  const {
-    normalizeTextForMatch,
-    getErrorMessage,
-    pushDebugEvent,
-    debugLog,
-    getDebugEvents,
-    clearDebugEvents,
-  } = globalThis.__zzkSharedUtils;
-  const {
-    readStoredBoolean,
-    writeStoredBoolean,
-    readStoredText,
-    writeStoredText,
-    readStoredNumber,
-    writeStoredNumber,
-  } = globalThis.__zzkStorageUtils;
-  const {
-    normalizeDateString,
-    isDateString,
-    parseHourMinute,
-    minuteToHourMinute,
-    parseLocalizedHourMinute,
-    extractHourMinute,
-    normalizeHourMinute,
-    normalizeToTenMinute,
-    isTenMinuteAligned,
-    formatDate,
-    getTodayDateInKST,
-    getCurrentMinuteOfDayInKST,
-    sanitizeDateForApi,
-    sanitizeTimeForApi,
-    getNextHourRange,
-    getEarliestSelectableMinuteForDate,
-    addDaysToDateString,
-    formatUTCDateString,
-    parseDateStringAsUTC,
-    addMonthsToDateString,
-    getMonthStartDateString,
-    formatMonthTitle,
-    formatKSTWeekday,
-    formatDateSelectorText,
-  } = globalThis.__zzkDateTimeUtils;
-  const { getSharingMapId, isRadarSupportedPage } = globalThis.__zzkRouteUtils;
-  const {
-    normalizeSlackFieldText,
-    normalizeSlackChannelToken,
-    normalizeSlackReminderLeadMinutes,
-    formatSlackReminderLeadOptionLabel,
-    computeSlackReminderDateTime,
-  } = globalThis.__zzkSlackShared;
   const findGuestReservationTabContainer = () =>
-    globalThis.__zzkRadarShared.findGuestReservationTabContainer({
+    radarFindGuestReservationTabContainer({
       isInsideExtensionSurface,
       isElementVisible,
     });
   const findGuestReservationTabStyleSource = () =>
-    globalThis.__zzkRadarShared.findGuestReservationTabStyleSource({
+    radarFindGuestReservationTabStyleSource({
       isInsideExtensionSurface,
       isElementVisible,
     });
-  const {
-    getInputAssociatedLabelText,
-    buildHostInputDescriptor,
-    normalizeHostReservationOwnerCandidate,
-    normalizeHostRoomCandidate,
-    extractKnownRoomName,
-    getControlAssociatedLabelText,
-    buildHostFieldDescriptor,
-    readHostFieldDisplayValue,
-  } = globalThis.__zzkFormFieldUtils;
-
-  const {
-    MAP_CALENDAR_OVERLAY_ID,
-    MAP_CALENDAR_LAUNCHER_ID,
-    SLACK_MODAL_TRIGGER_ID,
-    DEBUG_MODE,
-    MAP_CALENDAR_STYLE_ID,
-    MAP_CALENDAR_OVERLAY_TAB_MEETING_ID,
-    MAP_CALENDAR_OVERLAY_TAB_PAIR_ID,
-    PAGE_RESERVATION_EVENT_TYPE,
-    SLACK_COPY_MODAL_ID,
-    FLOOR_MAP_ZOOM_ID,
-    SLACK_COPY_MODAL_STYLE_ID,
-    SLACK_COPY_MODAL_BASECOAT_STYLE_ID,
-    SLACK_COPY_MODAL_BASECOAT_STYLE_PATH,
-    X_ICON_SVG,
-    CHEVRON_LEFT_ICON_SVG,
-    CHEVRON_RIGHT_ICON_SVG,
-    SLACK_CHANNEL_MENTION_STORAGE_KEY,
-    SLACK_CHANNEL_HISTORY_STORAGE_KEY,
-    SLACK_REMINDER_LEAD_TIME_STORAGE_KEY,
-    PENDING_SLACK_MODAL_STORAGE_KEY,
-    MAP_CALENDAR_ALWAYS_OPEN_STORAGE_KEY,
-    MAP_CALENDAR_SPACE_TAB_STORAGE_KEY,
-    MAP_CALENDAR_WIDTH_STORAGE_KEY,
-    MAP_CALENDAR_OFFSET_STORAGE_KEY,
-    MAP_CALENDAR_FLOORMAP_OPEN_STORAGE_KEY,
-    MAP_CALENDAR_MIN_WIDTH,
-    MAP_CALENDAR_VIEWPORT_MARGIN,
-    MAP_CALENDAR_CURRENT_TIME_SCROLL_LEAD_MINUTES,
-    MAP_CALENDAR_SPACE_TAB_MEETING,
-    MAP_CALENDAR_SPACE_TAB_PAIR,
-    RUNTIME_MESSAGE_TIMEOUT_MS,
-    RESERVATION_SCHEDULE_STALE_MS,
-    SEOUL_TIMEZONE,
-    KST_DATE_PARTS_FORMATTER,
-    KST_TIME_PARTS_FORMATTER,
-    KST_WEEKDAY_FORMATTER,
-    DEFAULT_SLACK_REMINDER_LEAD_TIME_MINUTES,
-    SLACK_REMINDER_LEAD_TIME_OPTIONS,
-    TIME_STEP_MINUTES,
-    LMS_DEFAULT_RESERVATION_MINUTES,
-    CALENDAR_SLOT_MIN_WIDTH,
-    LMS_CALENDAR_SLOT_MIN_WIDTH,
-    CALENDAR_SLOT_GAP,
-    CALENDAR_HOUR_BOUNDARY_LINE_WIDTH,
-    CALENDAR_HOUR_BOUNDARY_SIDE_GAP,
-    MAX_RESERVATION_BLOCKS,
-    CALENDAR_FLOOR_COL_WIDTH,
-    CALENDAR_ROOM_COL_WIDTH,
-    CALENDAR_ROW_GAP,
-    CALENDAR_SIDE_MARGIN,
-    DRAG_SAFE_TOP,
-    NAV_SAFE_Z_INDEX,
-    ROOM_TAG_METADATA,
-    ROOM_TAG_METADATA_BY_KEY,
-    TARGET_ROOM_METADATA,
-    TARGET_ROOM_METADATA_BY_NORMALIZED_NAME,
-    MAP_CALENDAR_ROOM_FLOOR_BY_NAME,
-    TARGET_ROOM_NAMES,
-    TARGET_ROOM_SET,
-    TARGET_ROOM_ORDER,
-    normalizeRoomTagKey,
-    normalizeTargetRoomName,
-    normalizeMapCalendarSpaceTab,
-    normalizeFetchRoomType,
-  } = globalThis.__zzkSharedConstants;
 
   // 드래그로 옮긴 모달 위치({x,y})를 저장소에 JSON 으로 보관한다.
   function readStoredMapCalendarOffset() {
@@ -265,7 +260,7 @@
     if (!(body instanceof HTMLElement)) {
       return;
     }
-    const floorMaps = globalThis.__zzkFloorMaps;
+    const floorMaps = { getAvailableFloorMapFloors, getFloorMapDataUri };
     if (!floorMaps || typeof floorMaps.getAvailableFloorMapFloors !== "function") {
       return;
     }
@@ -4102,7 +4097,7 @@
     updateMapCalendarLauncherState,
     openMapCalendarModal,
     removeMapCalendarOverlay,
-  } = globalThis.__zzkRadarWorkflow.createRadarWorkflow({
+  } = createRadarWorkflow({
     state,
     MAP_CALENDAR_OVERLAY_ID,
     MAP_CALENDAR_LAUNCHER_ID,
@@ -4141,7 +4136,7 @@
     renderMapCalendarOverlay,
   });
 
-  const radarFormSync = globalThis.__zzkRadarFormSync.createRadarFormSync({
+  const radarFormSync = createRadarFormSync({
     state,
     ensurePanel,
     setStatus,
@@ -7982,7 +7977,7 @@
     showSlackCopyModal,
     closeSlackCopyModal,
     copyTextToClipboard,
-  } = globalThis.__zzkSlackWorkflow.createSlackWorkflow({
+  } = createSlackWorkflow({
     state,
     SLACK_COPY_MODAL_ID,
     SLACK_COPY_MODAL_STYLE_ID,
@@ -8005,7 +8000,7 @@
     writeStoredText,
   });
 
-  const slackSuccessFlow = globalThis.__zzkSlackSuccessFlow.createSlackSuccessFlow({
+  const slackSuccessFlow = createSlackSuccessFlow({
     state,
     PAGE_RESERVATION_EVENT_TYPE,
     PENDING_SLACK_MODAL_STORAGE_KEY,
@@ -8303,12 +8298,6 @@
     }
   }
 
-  const {
-    fetchAvailability: fetchLmsAvailability,
-    fetchDailySchedule: fetchLmsDailySchedule,
-    clearReservationCache: clearLmsReservationCache,
-  } = globalThis.__zzkLmsDataShared;
-
   function normalizeDateInput(inputElement) {
     if (!(inputElement instanceof HTMLInputElement)) {
       return "";
@@ -8599,6 +8588,25 @@
       // availability 캐시(TTL) 동작 검증용.
       async refreshAvailability() {
         return refreshAvailability();
+      },
+      // 라우트 판별. 전역 배럴을 걷어낸 뒤 테스트가 쓰던 진입점을 대체한다.
+      routes: {
+        isLmsSpaceReservationPage,
+        isRadarSupportedPage,
+        getSharingMapId,
+      },
+      // 데이터 계층 직접 호출(백그라운드 경유 결과와 비교할 때 쓴다).
+      lmsData: {
+        loadSpaceContext: loadLmsSpaceContext,
+        fetchAvailability: fetchLmsAvailability,
+        fetchDailySchedule: fetchLmsDailySchedule,
+        fetchQuota: fetchLmsQuota,
+      },
+      // 저장소 차단 시 디버그 이벤트를 남기는지 검증할 때 쓴다.
+      storage: {
+        readStoredBoolean,
+        writeStoredBoolean,
+        writeStoredText,
       },
       getDebugEvents() {
         return getDebugEvents();

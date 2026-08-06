@@ -1,18 +1,12 @@
-import path from "node:path";
 import { expect, test } from "@playwright/test";
-import { ensureExtensionBuild, loadBackgroundBundle } from "./helpers/extension.js";
+import {
+  enableTestHooks,
+  ensureExtensionBuild,
+  loadBackgroundBundle,
+  loadContentBundle,
+} from "./helpers/extension.js";
 
 test.beforeAll(ensureExtensionBuild);
-
-// background.js 는 서비스워커 밖에서는 importScripts 가 없어 전역이 미리 올라와 있어야 한다.
-const SCRIPT_ORDER_FOR_LMS_DATA = [
-  "src/utils/shared.js",
-  "src/constants/runtime.js",
-  "src/utils/date-time.js",
-  "src/utils/routes.js",
-  "src/services/lms-data/normalizers.js",
-  "src/services/lms-data/shared.js",
-];
 
 const API_ORIGIN = "https://techcourse-lms-plus-api.woowahan.com";
 const WEB_ORIGIN = "https://techcourse-lms-plus-web.woowahan.com";
@@ -163,10 +157,9 @@ async function routeLmsApi(page) {
   });
 }
 
+// 데이터 계층(__zzkTestApi.lmsData / .routes)은 content 번들에 들어있다.
 async function loadLmsDataScripts(page) {
-  for (const scriptPath of SCRIPT_ORDER_FOR_LMS_DATA) {
-    await page.addScriptTag({ path: path.resolve(process.cwd(), scriptPath) });
-  }
+  await loadContentBundle(page);
 }
 
 async function loadBackgroundScript(page) {
@@ -201,6 +194,7 @@ async function sendBackgroundMessage(page, message) {
 }
 
 test.beforeEach(async ({ page }) => {
+  await enableTestHooks(page);
   await stubServiceDocument(page);
   await page.goto("https://techcourse-lms-plus-web.woowahan.com/space-reservations", {
     waitUntil: "domcontentloaded",
@@ -212,9 +206,9 @@ test.beforeEach(async ({ page }) => {
 
 test("route utils treat the lms+ reservation page as radar-supported", async ({ page }) => {
   const snapshot = await page.evaluate(() => ({
-    isReservationPage: window.__zzkRouteUtils.isLmsSpaceReservationPage(),
-    supported: window.__zzkRouteUtils.isRadarSupportedPage(),
-    sharingMapId: window.__zzkRouteUtils.getSharingMapId(),
+    isReservationPage: window.__zzkTestApi.routes.isLmsSpaceReservationPage(),
+    supported: window.__zzkTestApi.routes.isRadarSupportedPage(),
+    sharingMapId: window.__zzkTestApi.routes.getSharingMapId(),
   }));
 
   expect(snapshot).toEqual({
@@ -236,7 +230,7 @@ test("lms daily schedule normalizes reservations and sorts rooms by server floor
   const [backgroundResponse, directData] = await Promise.all([
     sendBackgroundMessage(page, { type: "ZZK_FETCH_DAILY_SCHEDULE", payload }),
     page.evaluate((directPayload) => {
-      return window.__zzkLmsDataShared.fetchDailySchedule(directPayload);
+      return window.__zzkTestApi.lmsData.fetchDailySchedule(directPayload);
     }, payload),
   ]);
 
@@ -313,7 +307,7 @@ test("lms availability is derived from overlapping reservations", async ({ page 
   const [backgroundResponse, directData] = await Promise.all([
     sendBackgroundMessage(page, { type: "ZZK_FETCH_AVAILABILITY", payload }),
     page.evaluate((directPayload) => {
-      return window.__zzkLmsDataShared.fetchAvailability(directPayload);
+      return window.__zzkTestApi.lmsData.fetchAvailability(directPayload);
     }, payload),
   ]);
 
@@ -326,7 +320,7 @@ test("lms availability is derived from overlapping reservations", async ({ page 
 test("lms availability treats a window touching a reservation edge as free", async ({ page }) => {
   // 11:30~12:00 은 10:30~11:30 예약과 경계만 맞닿으므로 겹치지 않는다.
   const directData = await page.evaluate(() => {
-    return window.__zzkLmsDataShared.fetchAvailability({
+    return window.__zzkTestApi.lmsData.fetchAvailability({
       serviceKind: "lms",
       date: "2099-01-02",
       startTime: "11:30",
@@ -341,7 +335,7 @@ test("lms availability treats a window touching a reservation edge as free", asy
 
 test("lms quota response is normalized", async ({ page }) => {
   const quota = await page.evaluate(() => {
-    return window.__zzkLmsDataShared.fetchQuota({ date: "2099-01-02" });
+    return window.__zzkTestApi.lmsData.fetchQuota({ date: "2099-01-02" });
   });
 
   expect(quota).toEqual({

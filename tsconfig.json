@@ -1,0 +1,29 @@
+{
+  "compilerOptions": {
+    // Vite(esbuild)가 트랜스파일하므로 tsc 는 타입 검사만 한다.
+    "noEmit": true,
+
+    "target": "ES2022",
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "lib": ["ES2022", "DOM", "DOM.Iterable", "WebWorker"],
+
+    // 점진 전환용. .js 와 .ts 가 공존해야 하고,
+    // 아직 타입이 없는 .js 는 검사하지 않는다(checkJs 미설정).
+    "allowJs": true,
+
+    // 초기에는 느슨하게. 전부 .ts 로 옮긴 뒤 5단계에서 조인다.
+    "strict": false,
+
+    "esModuleInterop": true,
+    "resolveJsonModule": true,
+    "skipLibCheck": true,
+    "isolatedModules": true,
+    "forceConsistentCasingInFileNames": true,
+
+    // 크롬 확장 API 타입.
+    "types": ["chrome"]
+  },
+  "include": ["src/**/*", "tests/**/*", "scripts/**/*", "*.config.js", "*.config.ts"],
+  "exclude": ["node_modules", "dist", "src-backup"]
+}
