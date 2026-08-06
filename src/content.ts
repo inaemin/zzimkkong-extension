@@ -3806,6 +3806,25 @@ declare global {
         queryHostDateInput(root, isInsideExtensionSurface),
       queryHostTimeInput: (nameKeywords: string[], root: Document | HTMLElement = document) =>
         queryHostTimeInput(nameKeywords, { root, isInsideExtensionSurface }),
+      // 호스트 예약 폼에서 값을 읽어오는 함수들. 실제 lms+ 마크업 없이
+      // 우리가 만든 폼으로 규칙만 검증한다.
+      readHostReservationTimeValues: (root: Document | HTMLElement = document) =>
+        readHostReservationTimeValues(root),
+      readHostRoomName: (root: Document | HTMLElement = document) => readHostRoomName(root),
+      readHostReservationOwnerName: (root: Document | HTMLElement = document) =>
+        readHostReservationOwnerName(root),
+      getHostReservationRoot: () => getHostReservationRoot(),
+      findHostRoomDropdownButton: (root: Document | HTMLElement = document) =>
+        findHostRoomDropdownButton(root),
+      findHostTimePickerButton: (buttonLabel: string, root: Document | HTMLElement = document) =>
+        findHostTimePickerButton(buttonLabel, root),
+      isMeaningfulSlackContextValue,
+      isRuntimeMessageTimeoutError,
+      createRuntimeMessageTimeoutError,
+      shouldUseDirectApiFallback,
+      createSlackMessageFingerprint,
+      createReservationAttemptId,
+      getLatestKnownRooms,
       // lms+ 예약 폼 반영 로직을 슬롯 클릭 없이 직접 검증할 때 쓴다.
       syncLmsReservationForm(payload: Record<string, unknown>) {
         return syncLmsReservationForm(payload);
