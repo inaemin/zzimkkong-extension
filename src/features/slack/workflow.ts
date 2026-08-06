@@ -33,7 +33,8 @@ type Deps = {
   ) => Record<string, unknown>;
   buildSlackReservationMessage: (context: Record<string, unknown>) => string;
   rememberSlackChannelMention: (channel: string) => void;
-  forgetSlackChannelMention: (channel: string) => void;
+  /** 기록에서 지우고 남은 목록을 돌려준다. */
+  forgetSlackChannelMention: (channel: string) => string[];
 };
 
 /** 클립보드 API 로 복사. 권한이 없거나 막히면 false. */
@@ -124,7 +125,8 @@ export function createSlackWorkflow(deps: Deps) {
         }
       },
       onChannelRemovedFromHistory: (channel: string) => {
-        forgetSlackChannelMention(channel);
+        // 저장소에서 지우고 남은 목록을 돌려준다. 모달이 이걸로 목록을 갱신한다.
+        return forgetSlackChannelMention(channel);
       },
     };
   }

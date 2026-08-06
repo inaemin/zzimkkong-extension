@@ -88,7 +88,11 @@ function ComboboxItem({ className, children, ...props }: ComboboxPrimitive.Item.
       <ComboboxPrimitive.ItemIndicator className="flex size-4 shrink-0 items-center justify-center">
         <CheckIcon className="size-4" />
       </ComboboxPrimitive.ItemIndicator>
-      <span className="flex-1">{children}</span>
+      {/*
+        children 을 감싸는 이 span 이 남는 폭을 다 갖는다. 안쪽도 flex 로 펴서,
+        항목이 [이름][버튼] 처럼 여러 조각이면 버튼이 오른쪽 끝으로 간다.
+      */}
+      <span className="flex flex-1 items-center gap-2">{children}</span>
     </ComboboxPrimitive.Item>
   );
 }

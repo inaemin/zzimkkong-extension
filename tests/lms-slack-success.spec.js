@@ -546,3 +546,100 @@ test("리마인드 시점 팝업이 트리거에 맞춰 뜨고 애니메이션�
   // 트리거 아래에 붙는다(alignItemWithTrigger=false).
   expect(layout.popupTop).toBeGreaterThan(layout.triggerTop);
 });
+
+// 기록 삭제 버튼은 채널명 바로 옆이 아니라 줄 오른쪽 끝에 붙어야 한다.
+// 채널명 길이에 따라 버튼 위치가 들쭉날쭉하면 누르기 어렵다.
+test("기록 삭제 버튼이 줄 오른쪽 끝에 붙는다", async ({ page }) => {
+  await openSlackModalWithHistory(page, "#공지\n#8기-poudy");
+
+  await page.locator('[data-slot="combobox-chip-input"]').click();
+  await page.locator('[data-slot="combobox-item"]').first().waitFor({ state: "visible" });
+
+  const rows = await page.evaluate(() => {
+    const findDeep = (selector) => {
+      const walk = (node) => {
+        const hit = node.querySelector?.(selector);
+        if (hit) return hit;
+        for (const element of node.querySelectorAll?.("*") ?? []) {
+          if (element.shadowRoot) {
+            const found = walk(element.shadowRoot);
+            if (found) return found;
+          }
+        }
+        return null;
+      };
+      return walk(document);
+    };
+    const popup = findDeep('[data-slot="combobox-content"]');
+    return [...popup.querySelectorAll('[data-slot="combobox-item"]')]
+      .map((item) => {
+        const button = item.querySelector("button");
+        if (!button) return null;
+        const itemRect = item.getBoundingClientRect();
+        const buttonRect = button.getBoundingClientRect();
+        return {
+          // 줄 오른쪽 끝에서 얼마나 떨어져 있는지(항목 padding 만큼만 떨어져야 한다)
+          gapFromRight: Math.round(itemRect.right - buttonRect.right),
+          label: (item.textContent || "").trim(),
+        };
+      })
+      .filter(Boolean);
+  });
+
+  expect(rows.length).toBeGreaterThan(1);
+  // 채널명 길이가 달라도 오른쪽 여백은 같아야 한다.
+  const gaps = new Set(rows.map((row) => row.gapFromRight));
+  expect(gaps.size).toBe(1);
+  expect([...gaps][0]).toBeLessThanOrEqual(12);
+});
+
+// 목록의 "삭제"는 칩을 빼는 게 아니라 최근 사용 기록에서 지우는 버튼이다.
+// 저장소에서 지우고 목록에서도 사라져야 하며, 고른 칩은 건드리면 안 된다.
+test("기록 삭제는 저장소와 목록에서만 지우고 고른 칩은 남긴다", async ({ page }) => {
+  await openSlackModalWithHistory(page, "#공지\n#개발");
+
+  const input = page.locator('[data-slot="combobox-chip-input"]');
+  const chips = page.locator('[data-slot="combobox-chip"]');
+  const items = page.locator('[data-slot="combobox-item"]');
+
+  // #공지 를 골라 칩으로 만든다.
+  await input.click();
+  await input.pressSequentially("공지");
+  await items.first().click();
+  await expect(chips).toHaveText(["#공지"]);
+
+  // 목록을 열어 #개발 의 삭제를 누른다.
+  await input.click();
+  await expect(items).toHaveCount(2);
+  await page.evaluate(() => {
+    const findDeep = (selector) => {
+      const walk = (node) => {
+        const hit = node.querySelector?.(selector);
+        if (hit) return hit;
+        for (const element of node.querySelectorAll?.("*") ?? []) {
+          if (element.shadowRoot) {
+            const found = walk(element.shadowRoot);
+            if (found) return found;
+          }
+        }
+        return null;
+      };
+      return walk(document);
+    };
+    const popup = findDeep('[data-slot="combobox-content"]');
+    const row = [...popup.querySelectorAll('[data-slot="combobox-item"]')].find((item) =>
+      (item.textContent || "").includes("개발"),
+    );
+    // 이 버튼은 pointerdown 에서 처리한다(선택으로 번지지 않게).
+    row?.querySelector("button")?.dispatchEvent(new PointerEvent("pointerdown", { bubbles: true }));
+  });
+
+  // 목록에서 사라진다.
+  await expect(items).toHaveCount(1);
+  // 저장소에서도 사라진다(다음에 열 때 다시 나오면 안 된다).
+  await expect
+    .poll(() => page.evaluate(() => localStorage.getItem("zzk-slack-channel-history-v1")))
+    .toBe("#공지");
+  // 고른 칩은 그대로다.
+  await expect(chips).toHaveText(["#공지"]);
+});
