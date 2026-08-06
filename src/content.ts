@@ -3819,6 +3819,14 @@ declare global {
       findHostTimePickerButton: (buttonLabel: string, root: Document | HTMLElement = document) =>
         findHostTimePickerButton(buttonLabel, root),
       isMeaningfulSlackContextValue,
+      rememberSlackChannelMention,
+      forgetSlackChannelMention,
+      shiftPanelDateBy,
+      applyPanelDateChange,
+      setScheduleLoadingDate,
+      getFreshScheduleCacheForTab,
+      syncScheduleOverlayToDate,
+      teardownGuestUi,
       isRuntimeMessageTimeoutError,
       createRuntimeMessageTimeoutError,
       shouldUseDirectApiFallback,
@@ -3909,6 +3917,8 @@ declare global {
             ? [...state.slackChannelHistory]
             : [],
           slackChannelMention: state.slackChannelMention,
+          scheduleLoadingDate: state.scheduleLoadingDate,
+          activeScheduleDate: state.activeScheduleDate,
           lastReservationActionAt: state.lastReservationActionAt,
           lastReservationContext: state.lastReservationContext,
           pendingReservationAttemptCount: state.pendingReservationAttempts.size,
