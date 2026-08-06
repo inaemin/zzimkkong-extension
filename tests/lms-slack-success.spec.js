@@ -220,6 +220,29 @@ test("Slack 모달이 shadcn 기본 구성을 따른다", async ({ page }) => {
   const footerButtons = page.locator('[data-slot="dialog-footer"] button');
   await expect(footerButtons).toHaveText(["취소", "복사하기"]);
 
+  // 푸터는 배치만 잡는다. 공식(base-ui) 에는 없는 구분선·회색 배경을 두지 않는다.
+  const footerStyle = await page.evaluate(() => {
+    const findDeep = (selector) => {
+      const walk = (node) => {
+        const hit = node.querySelector?.(selector);
+        if (hit) return hit;
+        for (const element of node.querySelectorAll?.("*") ?? []) {
+          if (element.shadowRoot) {
+            const found = walk(element.shadowRoot);
+            if (found) return found;
+          }
+        }
+        return null;
+      };
+      return walk(document);
+    };
+    const footer = findDeep('[data-slot="dialog-footer"]');
+    const style = getComputedStyle(footer);
+    return { borderTopWidth: style.borderTopWidth, backgroundColor: style.backgroundColor };
+  });
+  expect(footerStyle.borderTopWidth).toBe("0px");
+  expect(footerStyle.backgroundColor).toBe("rgba(0, 0, 0, 0)");
+
   await page.getByRole("button", { name: "취소" }).click();
   await expect(dialog).toBeHidden();
 });
