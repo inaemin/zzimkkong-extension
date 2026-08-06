@@ -393,9 +393,6 @@ declare global {
     if (sharingMapId && state.currentSharingMapId !== sharingMapId) {
       syncMapCalendarAlwaysOpenPreference();
       if (state.mapCalendarAlwaysOpen) {
-        if (state.elements?.scheduleToggle instanceof HTMLInputElement) {
-          state.elements.scheduleToggle.checked = true;
-        }
         state.mapCalendarVisible = true;
         if (!openedPendingSlackModal) {
           openMapCalendarModal();
@@ -432,9 +429,6 @@ declare global {
     if (sharingMapId && state.currentSharingMapId !== sharingMapId) {
       syncMapCalendarAlwaysOpenPreference();
       if (state.mapCalendarAlwaysOpen) {
-        if (state.elements?.scheduleToggle instanceof HTMLInputElement) {
-          state.elements.scheduleToggle.checked = true;
-        }
         state.mapCalendarVisible = true;
       }
     }
@@ -452,14 +446,10 @@ declare global {
     const dateInput = document.createElement("input");
     dateInput.type = "date";
 
-    const scheduleToggle = document.createElement("input");
-    scheduleToggle.type = "checkbox";
-
     return {
       dateInput,
       startInput: createTimeInput(),
       endInput: createTimeInput(),
-      scheduleToggle,
     };
   }
 
@@ -1869,7 +1859,6 @@ declare global {
     elements.endInput.value = range.endTime;
     normalizeTimeInput(elements.startInput);
     normalizeTimeInput(elements.endInput);
-    elements.scheduleToggle.checked = true;
   }
 
   function applyPanelDateChange(nextDate: unknown) {
@@ -2561,9 +2550,6 @@ declare global {
     ensureMapCalendarLauncher();
     const openedPendingSlackModal = tryOpenPendingSlackCopyModal();
     if (state.mapCalendarAlwaysOpen) {
-      if (state.elements?.scheduleToggle instanceof HTMLInputElement) {
-        state.elements.scheduleToggle.checked = true;
-      }
       state.mapCalendarVisible = true;
       if (!openedPendingSlackModal) {
         openMapCalendarModal();
@@ -3717,23 +3703,23 @@ declare global {
     return inputElement.value;
   }
 
+  /**
+   * 패널 시각이 10분 단위인지. 호출부가 normalizeTimeInput 으로 이미 스냅한
+   * 뒤라 정상 흐름에서는 항상 참이고, 그래도 어긋나면 조회를 멈추는 안전망이다.
+   *
+   * setCustomValidity/reportValidity 는 쓰지 않는다 — 이 input 들은 DOM 에
+   * 붙지 않는 값 보관용이라(createRuntimePanelStateElements) 말풍선이 뜨지 않는다.
+   */
   function validateTenMinuteField(inputElement: Element | null) {
     if (!(inputElement instanceof HTMLInputElement)) {
       return false;
     }
 
-    const valid =
+    return (
       inputElement.value !== "" &&
       !inputElement.validity.stepMismatch &&
-      isTenMinuteAligned(inputElement.value);
-
-    inputElement.setCustomValidity(valid ? "" : "시간은 10분 단위로 입력해 주세요.");
-
-    if (!valid) {
-      inputElement.reportValidity();
-    }
-
-    return valid;
+      isTenMinuteAligned(inputElement.value)
+    );
   }
 
   function getLatestKnownRooms() {
@@ -3841,9 +3827,6 @@ declare global {
         ) {
           state.elements.dateInput.value = hostDateInput.value;
         }
-        if (state.elements?.scheduleToggle instanceof HTMLInputElement) {
-          state.elements.scheduleToggle.checked = true;
-        }
         state.mapCalendarVisible = true;
         openMapCalendarModal();
         return true;
@@ -3859,9 +3842,6 @@ declare global {
           hostDateInput.value
         ) {
           state.elements.dateInput.value = hostDateInput.value;
-        }
-        if (state.elements?.scheduleToggle instanceof HTMLInputElement) {
-          state.elements.scheduleToggle.checked = true;
         }
         state.mapCalendarVisible = true;
         const targetDate =

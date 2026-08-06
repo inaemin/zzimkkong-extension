@@ -19,7 +19,6 @@ export interface PanelElements {
   dateInput: HTMLInputElement;
   startInput: HTMLInputElement;
   endInput: HTMLInputElement;
-  scheduleToggle: HTMLInputElement;
 }
 
 export interface RadarState {
