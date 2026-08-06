@@ -3,32 +3,16 @@ import fs from "node:fs";
 import path from "node:path";
 import process from "node:process";
 
+// Vite 빌드 산출물(dist/extension)을 웹스토어 업로드용 zip 으로 묶는다.
+// 소스를 직접 압축하던 예전 방식과 달리, 번들된 결과만 담는다.
+
 const rootDir = process.cwd();
-const manifestPath = path.join(rootDir, "manifest.json");
-
-const manifest = JSON.parse(fs.readFileSync(manifestPath, "utf8"));
-const version = typeof manifest.version === "string" ? manifest.version : "0.0.0";
+const buildDir = path.join(rootDir, "dist", "extension");
 const distDir = path.join(rootDir, "dist");
-const outputPath = path.join(distDir, `zzimkkong-radar-${version}-webstore.zip`);
 
-const includePaths = ["manifest.json", "src", "assets", "icons", "README.md"];
-const excludePatterns = [
-  "*.DS_Store",
-  "__MACOSX/*",
-  "src/ISSUE.md",
-  "src-backup/*",
-  "test-results/*",
-  "artifacts/*",
-  "dist/*",
-  "node_modules/*",
-  "tests/*",
-  ".env*",
-  "crews.csv",
-];
-
-function run(command, args) {
+function run(command, args, options = {}) {
   const result = spawnSync(command, args, {
-    cwd: rootDir,
+    cwd: options.cwd || rootDir,
     stdio: "inherit",
   });
 
@@ -40,22 +24,47 @@ function run(command, args) {
   }
 }
 
-for (const relativePath of includePaths) {
-  if (!fs.existsSync(path.join(rootDir, relativePath))) {
-    throw new Error(`Missing required package input: ${relativePath}`);
+// 항상 새로 빌드해서 오래된 산출물이 배포되는 일을 막는다.
+run("npx", ["vite", "build"]);
+
+const manifestPath = path.join(buildDir, "manifest.json");
+if (!fs.existsSync(manifestPath)) {
+  throw new Error(`Build did not produce a manifest: ${path.relative(rootDir, manifestPath)}`);
+}
+
+const manifest = JSON.parse(fs.readFileSync(manifestPath, "utf8"));
+const version = typeof manifest.version === "string" ? manifest.version : "0.0.0";
+const outputPath = path.join(distDir, `zzimkkong-radar-${version}-webstore.zip`);
+
+// content script 청크가 실제로 존재하는지 확인한다. 이게 비면 확장이 아무 일도 안 한다.
+const contentScripts = manifest.content_scripts?.[0]?.js ?? [];
+if (contentScripts.length === 0) {
+  throw new Error("Build produced a manifest with no content script");
+}
+for (const relativePath of contentScripts) {
+  if (!fs.existsSync(path.join(buildDir, relativePath))) {
+    throw new Error(`Missing content script in build output: ${relativePath}`);
   }
 }
 
-fs.mkdirSync(distDir, { recursive: true });
+// 런타임에 chrome.runtime.getURL 로 직접 부르는 파일들.
+// 번들러가 경로를 바꾸면 예약 훅과 Slack 모달 스타일이 조용히 깨지므로 여기서 막는다.
+const runtimeLoadedPaths = [
+  "src/page-hook/shared.js",
+  "src/page-network-hook.js",
+  "src/page-network-restore.js",
+  "assets/basecoat-dialog.css",
+];
+for (const relativePath of runtimeLoadedPaths) {
+  if (!fs.existsSync(path.join(buildDir, relativePath))) {
+    throw new Error(`Missing runtime-loaded resource in build output: ${relativePath}`);
+  }
+}
+
 fs.rmSync(outputPath, { force: true });
 
-run("zip", [
-  "-qr",
-  outputPath,
-  ...includePaths,
-  "-x",
-  ...excludePatterns,
-]);
+// buildDir 안에서 압축해야 zip 루트에 manifest.json 이 온다(웹스토어 요구사항).
+run("zip", ["-qr", outputPath, ".", "-x", "*.DS_Store", "__MACOSX/*"], { cwd: buildDir });
 run("unzip", ["-t", outputPath]);
 
 console.log(`Created ${path.relative(rootDir, outputPath)}`);

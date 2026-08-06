@@ -4,6 +4,8 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "build": "vite build",
+    "dev": "vite",
     "package": "node scripts/package-extension.mjs",
     "pw:install": "playwright install chromium chrome",
     "pw:test": "playwright test",
@@ -11,7 +13,9 @@
     "pw:test:list": "playwright test --list"
   },
   "devDependencies": {
+    "@crxjs/vite-plugin": "^2.7.1",
     "@playwright/test": "^1.61.1",
-    "playwright": "^1.61.1"
+    "playwright": "^1.61.1",
+    "vite": "^8.2.0"
   }
 }

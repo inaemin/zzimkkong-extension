@@ -7,11 +7,18 @@ test("playwright local setup works", async ({ page }) => {
   await expect(page).toHaveTitle(/Example Domain/);
 });
 
-test("manifest content script order preserves global bootstrap dependencies", async () => {
-  const manifest = JSON.parse(
-    fs.readFileSync(path.resolve(process.cwd(), "manifest.json"), "utf8"),
+test("content bundle import order preserves global bootstrap dependencies", async () => {
+  // 소스가 전역(globalThis.__zzk*) 기반 IIFE 라 로드 순서가 곧 의존성 순서다.
+  // manifest 는 이제 빌드가 생성하므로, 순서 계약은 번들 진입점이 들고 있다.
+  const bundleSource = fs.readFileSync(
+    path.resolve(process.cwd(), "src/content-bundle.js"),
+    "utf8",
   );
-  expect(manifest.content_scripts?.[0]?.js).toEqual([
+  const importedPaths = Array.from(
+    bundleSource.matchAll(/^import "(\.\/[^"]+)";$/gm),
+  ).map((match) => match[1].replace(/^\.\//, "src/"));
+
+  expect(importedPaths).toEqual([
     "src/constants/debug.js",
     "src/utils/shared.js",
     "src/utils/storage.js",
