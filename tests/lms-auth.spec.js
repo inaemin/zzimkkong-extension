@@ -13,7 +13,6 @@ const LMS_DATA_SCRIPTS = [
   "src/constants/runtime.js",
   "src/utils/date-time.js",
   "src/utils/routes.js",
-  "src/services/guest-data/normalizers.js",
   "src/services/lms-data/normalizers.js",
   "src/services/lms-data/shared.js",
 ];

@@ -30,7 +30,6 @@
   const {
     LMS_API_BASE_URL,
     LMS_TIME_STEP_MINUTES,
-    EXCLUDED_CREW_ROOM_SET,
     TARGET_ROOM_METADATA_BY_NORMALIZED_NAME,
     MAP_CALENDAR_SPACE_TAB_MEETING,
     normalizeTargetRoomName,
@@ -52,10 +51,8 @@
       }
       return source[key];
     },
-    normalizeTargetRoomName,
     normalizeRoomType: normalizeFetchRoomType,
     getRoomTypeForRoomName,
-    excludedRoomSet: EXCLUDED_CREW_ROOM_SET,
     timelineSlotMinutes: LMS_TIME_STEP_MINUTES,
     minuteToHourMinute,
   });

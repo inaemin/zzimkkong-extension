@@ -10,37 +10,13 @@
       state,
       PAGE_RESERVATION_EVENT_TYPE,
       PENDING_SLACK_MODAL_STORAGE_KEY,
-      BLANK_GUEST_RECOVERY_STORAGE_KEY,
-      isGuestReservationFlowPage,
-      isGuestSuccessPage,
-      isGuestReservationEditPage,
-      isGuestPage,
       isGuestUiReadyForActivation,
-      teardownGuestUi,
-      buildSlackReservationContext,
-      resolveReservationContextFromPayload,
-      readSuccessPageReservationContext,
-      buildMergedSlackReservationContext,
       normalizeReservationMutationMethod,
       createSlackMessageFingerprint,
       shouldSkipSlackCopyModal,
-      clearPendingEditSubmitState,
       showSlackCopyModal,
-      getHostReservationRoot,
-      queryHostDateInput,
-      findHostBookingSubmitButton,
-      rememberReservationOwnerName,
-      resolveReservationOwnerNameFromPayload,
-      isMeaningfulSlackContextValue,
-      getSharingMapId,
-      readPendingEditSubmitState,
-      resolveReservationAttemptForPayload,
-      shouldIgnoreAmbiguousReservationSuccess,
-      consumeReservationAttempt,
-      isLmsService,
       buildLmsSlackReservationContext,
     } = deps;
-    const BLANK_GUEST_RECOVERY_STABLE_DELAY_MS = 700;
 
     // 개편 서비스(lms+) 예약 생성 성공 처리: 응답 body 로 Slack 모달을 띄운다.
     function handleLmsReservationSuccess(payload) {
@@ -98,150 +74,14 @@
         return;
       }
 
-      // 개편 서비스(lms+)는 legacy 게스트 페이지 흐름과 무관하게,
       // 예약 생성 응답 body 로 바로 Slack 모달을 띄운다.
-      if (typeof isLmsService === "function" && isLmsService()) {
-        if (isTrustedReservationNetworkMessage(event, data.payload)) {
-          handleLmsReservationSuccess(data.payload);
-        } else {
-          pushDebugEvent("slack-success", "lms-ignored-untrusted", {
-            origin: event.origin,
-          });
-        }
-        return;
-      }
-
-      if (!isGuestReservationFlowPage()) {
-        return;
-      }
-
-      const payload = data.payload;
-      if (!isTrustedReservationNetworkMessage(event, payload)) {
-        pushDebugEvent("slack-success", "ignored-untrusted-message", {
+      if (isTrustedReservationNetworkMessage(event, data.payload)) {
+        handleLmsReservationSuccess(data.payload);
+      } else {
+        pushDebugEvent("slack-success", "lms-ignored-untrusted", {
           origin: event.origin,
-          url: payload && typeof payload === "object" ? payload.url : "",
         });
-        return;
       }
-
-      const payloadContext = resolveReservationContextFromPayload(payload);
-      const matchedAttempt =
-        typeof resolveReservationAttemptForPayload === "function"
-          ? resolveReservationAttemptForPayload(payload)
-          : null;
-
-      if (
-        !isReservationMutationSuccessPayload(payload) &&
-        !isRecoverableReservationMutationSuccessPayload(payload, matchedAttempt, payloadContext)
-      ) {
-        return;
-      }
-
-      const elapsedSinceAction = Date.now() - (state.lastReservationActionAt || 0);
-      if (
-        (!matchedAttempt && !Number.isFinite(elapsedSinceAction)) ||
-        (!matchedAttempt && elapsedSinceAction < 0) ||
-        (!matchedAttempt && elapsedSinceAction > 20000)
-      ) {
-        pushDebugEvent("slack-success", "ignored-stale-success", {
-          elapsedSinceAction,
-          method: payload?.method,
-          url: payload?.url,
-        });
-        return;
-      }
-
-      const payloadOwnerName = resolveReservationOwnerNameFromPayload(payload);
-      if (isMeaningfulSlackContextValue(payloadOwnerName)) {
-        rememberReservationOwnerName(payloadOwnerName);
-      }
-
-      if (isGuestSuccessPage()) {
-        teardownGuestUi({ preserveReservationContext: true });
-      }
-
-      const liveContext = buildSlackReservationContext();
-      if (
-        typeof shouldIgnoreAmbiguousReservationSuccess === "function" &&
-        shouldIgnoreAmbiguousReservationSuccess(payload, payloadContext)
-      ) {
-        pushDebugEvent("slack-success", "ignored-ambiguous-success", {
-          method: payload?.method,
-          url: payload?.url,
-        });
-        return;
-      }
-      const successPageContext = readSuccessPageReservationContext();
-      const mergedContext = buildMergedSlackReservationContext({
-        liveContext,
-        snapshotContext:
-          matchedAttempt && matchedAttempt.context && typeof matchedAttempt.context === "object"
-            ? matchedAttempt.context
-            : state.lastReservationContext,
-        payloadContext,
-        successPageContext,
-        payloadOwnerName,
-      });
-      mergedContext.mutationMethod = normalizeReservationMutationMethod(payload.method);
-      const fingerprint = createSlackMessageFingerprint(mergedContext, payload);
-      if (shouldSkipSlackCopyModal(fingerprint)) {
-        pushDebugEvent("slack-success", "deduped-success", {
-          fingerprint,
-          method: payload?.method,
-          url: payload?.url,
-        });
-        return;
-      }
-
-      debugLog("slack-success", "accepted reservation success", {
-        fingerprint,
-        method: payload?.method,
-        url: payload?.url,
-        pathname: location.pathname,
-      });
-
-      clearPendingEditSubmitState();
-      if (typeof consumeReservationAttempt === "function") {
-        consumeReservationAttempt(matchedAttempt?.id || payload?.reservationAttemptId || "");
-      }
-
-      if (shouldDeferSlackCopyModalForCurrentPage(payload)) {
-        pushDebugEvent("slack-success", "queue-pending-after-edit", {
-          fingerprint,
-          pathname: location.pathname,
-        });
-        queuePendingSlackCopyModal(mergedContext, { requireNonEditPage: true });
-        navigateToGuestBookingPageAfterEditSuccess();
-        state.lastReservationContext = null;
-        return;
-      }
-
-      if (
-        (!isGuestPage() && !isGuestSuccessPage()) ||
-        shouldForceReloadBlankGuestPageForPendingSlackModal()
-      ) {
-        pushDebugEvent("slack-success", "queue-pending-unready", {
-          fingerprint,
-          pathname: location.pathname,
-          isGuestPage: isGuestPage(),
-          isGuestSuccessPage: isGuestSuccessPage(),
-        });
-        queuePendingSlackCopyModal(mergedContext);
-        state.lastReservationContext = null;
-        return;
-      }
-
-      pushDebugEvent("slack-success", "open-modal-now", {
-        fingerprint,
-        pathname: location.pathname,
-      });
-      showSlackCopyModal(mergedContext);
-      state.lastReservationContext = null;
-    }
-
-    function shouldDeferSlackCopyModalForCurrentPage(payload) {
-      const mutationMethod = normalizeReservationMutationMethod(payload?.method);
-      return isGuestReservationEditPage() && (mutationMethod === "PUT" || mutationMethod === "PATCH");
     }
 
     function queuePendingSlackCopyModal(context, options = {}) {
@@ -320,21 +160,7 @@
       if (!state.pendingSlackModalContext || state.slackModalVisible) {
         return false;
       }
-      if (state.pendingSlackModalRequiresNonEditPage === true && isGuestReservationEditPage()) {
-        return false;
-      }
-      if (
-        state.pendingSlackModalRequiresNonEditPage === true &&
-        !state.pendingSlackModalReloadAttempted &&
-        shouldForceReloadBlankGuestPageForPendingSlackModal()
-      ) {
-        state.pendingSlackModalReloadAttempted = true;
-        persistPendingSlackModalState();
-        window.location.reload();
-        return false;
-      }
-
-      if (!isGuestPage() || !isGuestUiReadyForActivation()) {
+      if (!isGuestUiReadyForActivation()) {
         return false;
       }
 
@@ -362,7 +188,6 @@
         if (
           !state.pendingSlackModalContext ||
           state.slackModalVisible ||
-          !isGuestPage() ||
           !isGuestUiReadyForActivation()
         ) {
           return;
@@ -382,116 +207,6 @@
       return true;
     }
 
-    function isBlankGuestPageState() {
-      if (!isGuestPage() || isGuestReservationEditPage()) {
-        return false;
-      }
-
-      const root = document.getElementById("root");
-      if (!(root instanceof HTMLElement)) {
-        return false;
-      }
-
-      const hostRoot = getHostReservationRoot();
-      const hasBookingForm = hostRoot instanceof HTMLElement;
-      const hasDateInput = queryHostDateInput(document) instanceof HTMLInputElement;
-      const hasBookingAction = findHostBookingSubmitButton(document) instanceof HTMLElement;
-
-      return !hasBookingForm && !hasDateInput && !hasBookingAction && root.innerHTML.trim() === "";
-    }
-
-    function buildBlankGuestRecoveryKey() {
-      return `${location.pathname}`;
-    }
-
-    function tryRecoverBlankGuestPage() {
-      if (!isBlankGuestPageStableForRecovery()) {
-        return false;
-      }
-
-      const recoveryKey = buildBlankGuestRecoveryKey();
-      try {
-        const existingKey = window.sessionStorage.getItem(BLANK_GUEST_RECOVERY_STORAGE_KEY) || "";
-        if (existingKey === recoveryKey) {
-          return false;
-        }
-        window.sessionStorage.setItem(BLANK_GUEST_RECOVERY_STORAGE_KEY, recoveryKey);
-      } catch (error) {
-        reportSessionStorageFailure("read-failed", BLANK_GUEST_RECOVERY_STORAGE_KEY, error);
-        return false;
-      }
-
-      window.location.reload();
-      return true;
-    }
-
-    function isBlankGuestPageStableForRecovery() {
-      if (!isBlankGuestPageState()) {
-        clearBlankGuestRecoveryPendingState();
-        return false;
-      }
-
-      const now = Date.now();
-      if (!Number.isFinite(state.blankGuestRecoveryFirstSeenAt)) {
-        state.blankGuestRecoveryFirstSeenAt = now;
-      }
-
-      const elapsedBlankMs = now - state.blankGuestRecoveryFirstSeenAt;
-      if (
-        Number.isFinite(elapsedBlankMs) &&
-        elapsedBlankMs >= 0 &&
-        elapsedBlankMs < BLANK_GUEST_RECOVERY_STABLE_DELAY_MS
-      ) {
-        scheduleBlankGuestRecoveryRetry(
-          BLANK_GUEST_RECOVERY_STABLE_DELAY_MS - elapsedBlankMs,
-        );
-        return false;
-      }
-
-      return true;
-    }
-
-    function scheduleBlankGuestRecoveryRetry(delayMs) {
-      if (Number.isInteger(state.blankGuestRecoveryTimer)) {
-        return;
-      }
-      const retryDelay = Math.max(0, Math.ceil(Number(delayMs) || 0));
-      state.blankGuestRecoveryTimer = window.setTimeout(() => {
-        state.blankGuestRecoveryTimer = null;
-        if (
-          state.pendingSlackModalContext &&
-          state.pendingSlackModalRequiresNonEditPage === true
-        ) {
-          tryOpenPendingSlackCopyModal();
-          return;
-        }
-        tryRecoverBlankGuestPage();
-      }, retryDelay);
-    }
-
-    function clearBlankGuestRecoveryPendingState() {
-      if (Number.isInteger(state.blankGuestRecoveryTimer)) {
-        window.clearTimeout(state.blankGuestRecoveryTimer);
-      }
-      state.blankGuestRecoveryTimer = null;
-      state.blankGuestRecoveryFirstSeenAt = null;
-    }
-
-    function clearBlankGuestRecoveryIfPageReady() {
-      if (isBlankGuestPageState()) {
-        return;
-      }
-
-      clearBlankGuestRecoveryPendingState();
-
-      try {
-        window.sessionStorage.removeItem(BLANK_GUEST_RECOVERY_STORAGE_KEY);
-      } catch (error) {
-        reportSessionStorageFailure("remove-failed", BLANK_GUEST_RECOVERY_STORAGE_KEY, error);
-        return;
-      }
-    }
-
     function reportSessionStorageFailure(event, storageKey, error) {
       pushDebugEvent("storage", event, {
         area: "sessionStorage",
@@ -507,111 +222,9 @@
       return String(error || "unknown storage error");
     }
 
-    function shouldForceReloadBlankGuestPageForPendingSlackModal() {
-      return isBlankGuestPageStableForRecovery();
-    }
-
-    function shouldQueueSlackModalFromPersistedEditSubmit() {
-      if (!isGuestPage() || isGuestReservationEditPage()) {
-        return false;
-      }
-      if (state.pendingSlackModalContext) {
-        return false;
-      }
-      const pendingEditSubmitState = readPendingEditSubmitState();
-      if (!pendingEditSubmitState || typeof pendingEditSubmitState.sharingMapId !== "string") {
-        return false;
-      }
-      if (pendingEditSubmitState.sharingMapId !== getSharingMapId()) {
-        return false;
-      }
-      const elapsedSinceAction = Date.now() - Number(pendingEditSubmitState.at || 0);
-      return Number.isFinite(elapsedSinceAction) && elapsedSinceAction >= 0 && elapsedSinceAction <= 20000;
-    }
-
-    function queueSlackModalFromPersistedEditSubmitIfNeeded() {
-      if (!shouldQueueSlackModalFromPersistedEditSubmit()) {
-        return;
-      }
-      const pendingContext = buildPendingSlackContextFromEditReturn();
-      if (!pendingContext) {
-        return;
-      }
-      pushDebugEvent("slack-success", "restore-from-persisted-edit", {
-        pathname: location.pathname,
-      });
-      queuePendingSlackCopyModal(pendingContext, { requireNonEditPage: false });
-      state.lastReservationContext = null;
-      clearPendingEditSubmitState();
-    }
-
-    function buildPendingSlackContextFromEditReturn() {
-      const pendingEditSubmitState = readPendingEditSubmitState();
-      const persistedContext =
-        pendingEditSubmitState &&
-        pendingEditSubmitState.context &&
-        typeof pendingEditSubmitState.context === "object"
-          ? { ...pendingEditSubmitState.context }
-          : null;
-      const snapshotContext =
-        persistedContext ||
-        (state.lastReservationContext && typeof state.lastReservationContext === "object"
-          ? { ...state.lastReservationContext }
-          : null);
-      if (!snapshotContext) {
-        return null;
-      }
-
-      snapshotContext.mutationMethod = "PUT";
-      return snapshotContext;
-    }
-
-    function navigateToGuestBookingPageAfterEditSuccess() {
-      const sharingMapId = getSharingMapId();
-      if (!sharingMapId) {
-        return;
-      }
-
-      const targetUrl = `${location.origin}/guest/${encodeURIComponent(sharingMapId)}`;
-      if (location.href === targetUrl) {
-        return;
-      }
-
-      window.location.assign(targetUrl);
-    }
-
-    function isReservationMutationSuccessPayload(payload) {
-      if (!payload || typeof payload !== "object") {
-        return false;
-      }
-
-      if (!isSuccessfulReservationNetworkPayload(payload)) {
-        return false;
-      }
-
-      return isReservationMutationRequest(payload.url, payload.method);
-    }
-
-    function isRecoverableReservationMutationSuccessPayload(payload, matchedAttempt, payloadContext) {
-      if (!isSuccessfulReservationNetworkPayload(payload)) {
-        return false;
-      }
-
-      if (!isReservationMutationMethod(payload.method)) {
-        return false;
-      }
-
-      const parsedUrl = parseUrlSafely(payload.url);
-      if (
-        !parsedUrl ||
-        !isAllowedReservationRequestOrigin(parsedUrl.origin) ||
-        !isRecoverableReservationMutationSignalPath(parsedUrl.pathname)
-      ) {
-        return false;
-      }
-
-      return Boolean(matchedAttempt || isCompleteReservationPayloadContext(payloadContext));
-    }
+    // lms+ 에는 예약 수정 페이지가 없어 "수정 제출 후 복귀" 흐름 자체가 존재하지 않는다.
+    // content.js 가 여전히 호출하므로 진입점만 남겨 둔다.
+    function queueSlackModalFromPersistedEditSubmitIfNeeded() {}
 
     function isSuccessfulReservationNetworkPayload(payload) {
       if (!payload || typeof payload !== "object") {
@@ -648,46 +261,7 @@
         return true;
       }
 
-      // legacy 찜꽁 API와 개편 서비스(techcourse-lms-plus) API를 모두 허용한다.
-      return (
-        origin === "https://k8s.zzimkkong.com" ||
-        origin === "https://techcourse-lms-plus-api.woowahan.com"
-      );
-    }
-
-    function isReservationMutationRequest(urlValue, methodValue) {
-      if (!isReservationMutationMethod(methodValue)) {
-        return false;
-      }
-
-      const parsedUrl = parseUrlSafely(urlValue);
-      if (!parsedUrl) {
-        return false;
-      }
-      if (!isAllowedReservationRequestOrigin(parsedUrl.origin)) {
-        return false;
-      }
-
-      if (!isReservationMutationPath(parsedUrl.pathname)) {
-        return false;
-      }
-
-      return true;
-    }
-
-    function isReservationMutationMethod(methodValue) {
-      const method = String(methodValue || "GET").toUpperCase();
-      return method !== "GET" && method !== "HEAD" && method !== "OPTIONS";
-    }
-
-    function isReservationMutationPath(pathname) {
-      return /\/api\/guests\/maps\/[^/]+(?:\/spaces\/[^/]+)?\/reservations(?:\/[^/]+)?\/?$/i.test(
-        String(pathname || "")
-      );
-    }
-
-    function isRecoverableReservationMutationSignalPath(pathname) {
-      return String(pathname || "").toLowerCase().includes("/bookings/complete");
+      return origin === "https://techcourse-lms-plus-api.woowahan.com";
     }
 
     function parseUrlSafely(urlValue) {
@@ -708,8 +282,6 @@
       restorePendingSlackModalState,
       clearPendingSlackModalState,
       tryOpenPendingSlackCopyModal,
-      tryRecoverBlankGuestPage,
-      clearBlankGuestRecoveryIfPageReady,
       queueSlackModalFromPersistedEditSubmitIfNeeded,
     };
   }

@@ -2,9 +2,43 @@ import path from "node:path";
 import fs from "node:fs";
 import { expect, test } from "@playwright/test";
 
+const WEB_ORIGIN = "https://techcourse-lms-plus-web.woowahan.com";
+const API_ORIGIN = "https://techcourse-lms-plus-api.woowahan.com";
+const RESERVATIONS_URL = `${API_ORIGIN}/api/space-reservations`;
+
 async function injectPageNetworkHookBundle(page) {
   await page.addScriptTag({ path: path.resolve(process.cwd(), "src/page-hook/shared.js") });
   await page.addScriptTag({ path: path.resolve(process.cwd(), "src/page-network-hook.js") });
+}
+
+// 실제 사이트는 미인증 요청을 로그인 페이지로 돌려보내므로 문서 응답을 고정한다.
+async function gotoReservationPage(page) {
+  await page.route(`${WEB_ORIGIN}/**`, async (route) => {
+    if (route.request().resourceType() !== "document") {
+      await route.continue();
+      return;
+    }
+    await route.fulfill({
+      status: 200,
+      contentType: "text/html",
+      body: "<html><body></body></html>",
+    });
+  });
+  await page.goto(`${WEB_ORIGIN}/space-reservations`, { waitUntil: "domcontentloaded" });
+}
+
+async function routeReservationApi(page, body = "{}", status = 200) {
+  await page.route(`${API_ORIGIN}/api/space-reservations**`, async (route) => {
+    await route.fulfill({
+      status,
+      headers: {
+        "access-control-allow-origin": WEB_ORIGIN,
+        "access-control-allow-credentials": "true",
+        "content-type": "application/json",
+      },
+      body,
+    });
+  });
 }
 
 async function collectReservationHookMessages(page, action, actionArgument = null) {
@@ -36,59 +70,27 @@ async function collectReservationHookMessages(page, action, actionArgument = nul
 }
 
 test("page network hook emits ownerNameCandidate from reservation request body", async ({ page }) => {
-  await page.goto("https://example.com/guest/test-map", { waitUntil: "domcontentloaded" });
-
-  await page.route("**/api/guests/**/reservations", async (route) => {
-    await route.fulfill({
-      status: 200,
-      contentType: "application/json",
-      body: "{}",
-    });
-  });
-
+  await gotoReservationPage(page);
+  await routeReservationApi(page);
   await injectPageNetworkHookBundle(page);
 
-  const payload = await page.evaluate(async () => {
-    return await new Promise((resolve, reject) => {
-      const timeout = window.setTimeout(() => {
-        window.removeEventListener("message", handleMessage);
-        reject(new Error("Timed out waiting for reservation hook message"));
-      }, 5000);
-
-      const handleMessage = (event) => {
-        const data = event.data;
-        if (
-          !data ||
-          typeof data !== "object" ||
-          data.source !== "zzk-page-reservation-hook" ||
-          data.type !== "ZZK_RESERVATION_NETWORK_EVENT"
-        ) {
-          return;
-        }
-
-        window.clearTimeout(timeout);
-        window.removeEventListener("message", handleMessage);
-        resolve(data.payload || {});
-      };
-
-      window.addEventListener("message", handleMessage);
-      void fetch("/api/guests/maps/234/spaces/263/reservations", {
-        method: "POST",
-        headers: {
-          "content-type": "application/json",
-        },
-        body: JSON.stringify({
-          name: "애니",
-          startDateTime: "2026-03-02T10:00:00+09:00",
-          endDateTime: "2026-03-02T10:30:00+09:00",
-          description: "연극연습",
-          roomName: "11층 금성",
-        }),
-      });
+  const messages = await collectReservationHookMessages(page, async (url) => {
+    await fetch(url, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        reserverName: "애니",
+        startDateTime: "2026-03-02T10:00:00+09:00",
+        endDateTime: "2026-03-02T10:30:00+09:00",
+        purpose: "연극연습",
+        spaceName: "11층 금성",
+        spaceId: 263,
+      }),
     });
-  });
+  }, RESERVATIONS_URL);
 
-  expect(payload).toMatchObject({
+  expect(messages).toHaveLength(1);
+  expect(messages[0]).toMatchObject({
     via: "fetch",
     ok: true,
     ownerNameCandidate: "애니",
@@ -98,39 +100,32 @@ test("page network hook emits ownerNameCandidate from reservation request body",
       endTime: "10:30",
       description: "연극연습",
       roomName: "11층 금성",
+      // lms+ 는 경로가 아니라 본문의 spaceId 로 방을 식별한다.
       roomId: 263,
     },
   });
 });
 
 test("page network hook includes reservationAttemptId from document dataset", async ({ page }) => {
-  await page.goto("https://example.com/guest/test-map", { waitUntil: "domcontentloaded" });
-
-  await page.route("**/api/guests/**/reservations", async (route) => {
-    await route.fulfill({
-      status: 200,
-      contentType: "application/json",
-      body: "{}",
-    });
-  });
-
+  await gotoReservationPage(page);
+  await routeReservationApi(page);
   await injectPageNetworkHookBundle(page);
 
-  const messages = await collectReservationHookMessages(page, async () => {
+  const messages = await collectReservationHookMessages(page, async (url) => {
     document.documentElement.dataset.zzkReservationAttemptId = "attempt-fetch-1";
-    await fetch("/api/guests/maps/234/spaces/263/reservations", {
+    await fetch(url, {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({
         startDateTime: "2026-03-02T10:00:00+09:00",
         endDateTime: "2026-03-02T10:30:00+09:00",
-        description: "attempt fetch",
+        purpose: "attempt fetch",
       }),
     });
 
     document.documentElement.dataset.zzkReservationAttemptId = "attempt-xhr-2";
     const xhr = new XMLHttpRequest();
-    xhr.open("POST", "/api/guests/maps/234/spaces/263/reservations");
+    xhr.open("POST", url);
     xhr.setRequestHeader("content-type", "application/json");
     await new Promise((resolve) => {
       xhr.addEventListener("loadend", resolve, { once: true });
@@ -138,11 +133,11 @@ test("page network hook includes reservationAttemptId from document dataset", as
         JSON.stringify({
           startDateTime: "2026-03-02T11:00:00+09:00",
           endDateTime: "2026-03-02T11:30:00+09:00",
-          description: "attempt xhr",
+          purpose: "attempt xhr",
         }),
       );
     });
-  });
+  }, RESERVATIONS_URL);
 
   expect(messages).toHaveLength(2);
   expect(messages[0]).toMatchObject({
@@ -175,28 +170,20 @@ const roomIdBodyCases = [
 
 for (const { name, bodyType, headers } of roomIdBodyCases) {
   test(`page network hook preserves room id from ${name} reservation body`, async ({ page }) => {
-    await page.goto("https://example.com/guest/test-map", { waitUntil: "domcontentloaded" });
-
-    await page.route("**/api/guests/maps/abc/reservations", async (route) => {
-      await route.fulfill({
-        status: 200,
-        contentType: "application/json",
-        body: "{}",
-      });
-    });
-
+    await gotoReservationPage(page);
+    await routeReservationApi(page);
     await injectPageNetworkHookBundle(page);
 
     const messages = await collectReservationHookMessages(
       page,
-      async ({ requestBodyType, requestHeaders }) => {
+      async ({ requestBodyType, requestHeaders, url }) => {
         let body;
         if (requestBodyType === "json-space-id") {
           body = JSON.stringify({
             date: "2026-03-02",
             startTime: "10:00",
             endTime: "10:30",
-            description: "space id json",
+            purpose: "space id json",
             spaceId: "263",
           });
         } else if (requestBodyType === "form-room-id") {
@@ -204,25 +191,25 @@ for (const { name, bodyType, headers } of roomIdBodyCases) {
           body.set("date", "2026-03-02");
           body.set("startTime", "10:00");
           body.set("endTime", "10:30");
-          body.set("description", "room id formdata");
+          body.set("purpose", "room id formdata");
           body.set("roomId", "263");
         } else {
           body = new URLSearchParams({
             date: "2026-03-02",
             startTime: "10:00",
             endTime: "10:30",
-            description: "space id params",
+            purpose: "space id params",
             space_id: "263",
           });
         }
 
-        await fetch("/api/guests/maps/abc/reservations", {
+        await fetch(url, {
           method: "POST",
           headers: requestHeaders,
           body,
         });
       },
-      { requestBodyType: bodyType, requestHeaders: headers },
+      { requestBodyType: bodyType, requestHeaders: headers, url: RESERVATIONS_URL },
     );
 
     expect(messages).toHaveLength(1);
@@ -236,143 +223,67 @@ for (const { name, bodyType, headers } of roomIdBodyCases) {
   });
 }
 
-test("page network hook emits changed guest API path when reservation attempt is present", async ({ page }) => {
-  await page.goto("https://example.com/guest/test-map", { waitUntil: "domcontentloaded" });
+test("page network hook ignores non-reservation API mutations even with an attempt id", async ({ page }) => {
+  await gotoReservationPage(page);
 
-  await page.route("**/api/guests/maps/abc/bookings/complete", async (route) => {
+  await page.route(`${API_ORIGIN}/api/notifications`, async (route) => {
     await route.fulfill({
       status: 200,
-      contentType: "application/json",
+      headers: {
+        "access-control-allow-origin": WEB_ORIGIN,
+        "access-control-allow-credentials": "true",
+        "content-type": "application/json",
+      },
       body: "{}",
     });
   });
 
   await injectPageNetworkHookBundle(page);
 
-  const messages = await collectReservationHookMessages(page, async () => {
-    document.documentElement.dataset.zzkReservationAttemptId = "attempt-changed-path";
-    await fetch("/api/guests/maps/abc/bookings/complete", {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({
-        date: "2026-03-02",
-        startTime: "09:30",
-        endTime: "10:30",
-        description: "느린 응답 매칭",
-        roomName: "11층 수성",
-      }),
-    });
-  });
-
-  expect(messages).toHaveLength(1);
-  expect(messages[0]).toMatchObject({
-    via: "fetch",
-    method: "POST",
-    reservationAttemptId: "attempt-changed-path",
-    requestContext: {
-      date: "2026-03-02",
-      startTime: "09:30",
-      endTime: "10:30",
-      description: "느린 응답 매칭",
-      roomName: "11층 수성",
-    },
-  });
-});
-
-test("page network hook ignores unrelated guest API mutations even with attempt or context", async ({ page }) => {
-  await page.goto("https://example.com/guest/test-map", { waitUntil: "domcontentloaded" });
-
-  await page.route("**/api/guests/maps/abc/notifications", async (route) => {
-    await route.fulfill({
-      status: 200,
-      contentType: "application/json",
-      body: "{}",
-    });
-  });
-
-  await injectPageNetworkHookBundle(page);
-
-  const messages = await collectReservationHookMessages(page, async () => {
+  const messages = await collectReservationHookMessages(page, async (origin) => {
     document.documentElement.dataset.zzkReservationAttemptId = "attempt-unrelated-path";
-    await fetch("/api/guests/maps/abc/notifications", {
+    await fetch(`${origin}/api/notifications`, {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ message: "not a reservation completion" }),
+      body: JSON.stringify({ message: "not a reservation" }),
     });
 
     delete document.documentElement.dataset.zzkReservationAttemptId;
-    await fetch("/api/guests/maps/abc/notifications", {
+    await fetch(`${origin}/api/notifications`, {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({
         date: "2026-03-02",
         startTime: "09:30",
         endTime: "10:30",
-        description: "완전하지만 예약 완료 API가 아님",
-        roomName: "11층 수성",
+        purpose: "필드는 완전하지만 예약 API 가 아님",
+        spaceName: "11층 수성",
       }),
     });
-  });
+  }, API_ORIGIN);
 
   expect(messages).toHaveLength(0);
 });
 
 test("page network hook extracts ownerNameCandidate from Request(FormData)", async ({ page }) => {
-  await page.goto("https://example.com/guest/test-map", { waitUntil: "domcontentloaded" });
-
-  await page.route("**/api/guests/**/reservations", async (route) => {
-    await route.fulfill({
-      status: 200,
-      contentType: "application/json",
-      body: "{}",
-    });
-  });
-
+  await gotoReservationPage(page);
+  await routeReservationApi(page);
   await injectPageNetworkHookBundle(page);
 
-  const payload = await page.evaluate(async () => {
-    return await new Promise((resolve, reject) => {
-      const timeout = window.setTimeout(() => {
-        window.removeEventListener("message", handleMessage);
-        reject(new Error("Timed out waiting for reservation hook message"));
-      }, 5000);
+  const messages = await collectReservationHookMessages(page, async (url) => {
+    const formData = new FormData();
+    formData.set("reserverName", "애니");
+    formData.set("startDateTime", "2026-03-02T15:20:00+09:00");
+    formData.set("endDateTime", "2026-03-02T15:50:00+09:00");
+    formData.set("purpose", "팀 미팅");
+    formData.set("spaceName", "12층 보이저");
+    formData.set("spaceId", "987");
 
-      const handleMessage = (event) => {
-        const data = event.data;
-        if (
-          !data ||
-          typeof data !== "object" ||
-          data.source !== "zzk-page-reservation-hook" ||
-          data.type !== "ZZK_RESERVATION_NETWORK_EVENT"
-        ) {
-          return;
-        }
+    await fetch(new Request(url, { method: "POST", body: formData }));
+  }, RESERVATIONS_URL);
 
-        window.clearTimeout(timeout);
-        window.removeEventListener("message", handleMessage);
-        resolve(data.payload || {});
-      };
-
-      window.addEventListener("message", handleMessage);
-
-      const formData = new FormData();
-      formData.set("name", "애니");
-      formData.set("password", "1234");
-      formData.set("startDateTime", "2026-03-02T15:20:00+09:00");
-      formData.set("endDateTime", "2026-03-02T15:50:00+09:00");
-      formData.set("purpose", "팀 미팅");
-      formData.set("roomName", "12층 보이저");
-
-      const request = new Request("/api/guests/maps/234/spaces/987/reservations", {
-        method: "POST",
-        body: formData,
-      });
-
-      void fetch(request);
-    });
-  });
-
-  expect(payload).toMatchObject({
+  expect(messages).toHaveLength(1);
+  expect(messages[0]).toMatchObject({
     via: "fetch",
     ok: true,
     ownerNameCandidate: "애니",
@@ -387,169 +298,23 @@ test("page network hook extracts ownerNameCandidate from Request(FormData)", asy
   });
 });
 
-test("page network hook emits success payload for PATCH reservation update", async ({ page }) => {
-  await page.goto("https://example.com/guest/test-map/reservation/edit", {
-    waitUntil: "domcontentloaded",
-  });
-
-  await page.route("**/api/guests/**/reservations/**", async (route) => {
-    await route.fulfill({
-      status: 200,
-      contentType: "application/json",
-      body: "{}",
-    });
-  });
-
-  await injectPageNetworkHookBundle(page);
-
-  const payload = await page.evaluate(async () => {
-    return await new Promise((resolve, reject) => {
-      const timeout = window.setTimeout(() => {
-        window.removeEventListener("message", handleMessage);
-        reject(new Error("Timed out waiting for reservation hook message"));
-      }, 5000);
-
-      const handleMessage = (event) => {
-        const data = event.data;
-        if (
-          !data ||
-          typeof data !== "object" ||
-          data.source !== "zzk-page-reservation-hook" ||
-          data.type !== "ZZK_RESERVATION_NETWORK_EVENT"
-        ) {
-          return;
-        }
-
-        window.clearTimeout(timeout);
-        window.removeEventListener("message", handleMessage);
-        resolve(data.payload || {});
-      };
-
-      window.addEventListener("message", handleMessage);
-      void fetch("/api/guests/maps/234/spaces/263/reservations/901", {
-        method: "PATCH",
-        headers: {
-          "content-type": "application/json",
-        },
-        body: JSON.stringify({
-          name: "애니",
-          startDateTime: "2026-03-02T14:00:00+09:00",
-          endDateTime: "2026-03-02T14:30:00+09:00",
-          description: "수정 회의",
-        }),
-      });
-    });
-  });
-
-  expect(payload).toMatchObject({
-    via: "fetch",
-    method: "PATCH",
-    ok: true,
-    ownerNameCandidate: "애니",
-    requestContext: {
-      date: "2026-03-02",
-      startTime: "14:00",
-      endTime: "14:30",
-      description: "수정 회의",
-      roomId: 263,
-    },
-  });
-});
-
-test("page network hook emits success payload for PUT reservation update", async ({ page }) => {
-  await page.goto("https://example.com/guest/test-map/reservation/edit", {
-    waitUntil: "domcontentloaded",
-  });
-
-  await page.route("**/api/guests/**/reservations/**", async (route) => {
-    await route.fulfill({
-      status: 200,
-      contentType: "application/json",
-      body: "{}",
-    });
-  });
-
-  await injectPageNetworkHookBundle(page);
-
-  const payload = await page.evaluate(async () => {
-    return await new Promise((resolve, reject) => {
-      const timeout = window.setTimeout(() => {
-        window.removeEventListener("message", handleMessage);
-        reject(new Error("Timed out waiting for reservation hook message"));
-      }, 5000);
-
-      const handleMessage = (event) => {
-        const data = event.data;
-        if (
-          !data ||
-          typeof data !== "object" ||
-          data.source !== "zzk-page-reservation-hook" ||
-          data.type !== "ZZK_RESERVATION_NETWORK_EVENT"
-        ) {
-          return;
-        }
-
-        window.clearTimeout(timeout);
-        window.removeEventListener("message", handleMessage);
-        resolve(data.payload || {});
-      };
-
-      window.addEventListener("message", handleMessage);
-      void fetch("/api/guests/maps/234/spaces/263/reservations/901", {
-        method: "PUT",
-        headers: {
-          "content-type": "application/json",
-        },
-        body: JSON.stringify({
-          name: "애니",
-          startDateTime: "2026-03-02T16:00:00+09:00",
-          endDateTime: "2026-03-02T16:30:00+09:00",
-          purpose: "수정 PUT",
-        }),
-      });
-    });
-  });
-
-  expect(payload).toMatchObject({
-    via: "fetch",
-    method: "PUT",
-    ok: true,
-    ownerNameCandidate: "애니",
-    requestContext: {
-      date: "2026-03-02",
-      startTime: "16:00",
-      endTime: "16:30",
-      description: "수정 PUT",
-      roomId: 263,
-    },
-  });
-});
-
 test("page network hook can restore original fetch and XHR patches", async ({ page }) => {
-  await page.goto("https://example.com/guest/test-map", { waitUntil: "domcontentloaded" });
-
-  await page.route("**/api/guests/**/reservations", async (route) => {
-    await route.fulfill({
-      status: 200,
-      contentType: "application/json",
-      body: "{}",
-    });
-  });
-
+  await gotoReservationPage(page);
+  await routeReservationApi(page);
   await injectPageNetworkHookBundle(page);
 
-  const beforeRestore = await collectReservationHookMessages(page, async () => {
-    await fetch("/api/guests/maps/234/spaces/263/reservations", {
+  const beforeRestore = await collectReservationHookMessages(page, async (url) => {
+    await fetch(url, {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({
-        name: "애니",
+        reserverName: "애니",
         startDateTime: "2026-03-02T10:00:00+09:00",
         endDateTime: "2026-03-02T10:30:00+09:00",
-        description: "복구 전",
+        purpose: "복구 전",
       }),
     });
-  });
+  }, RESERVATIONS_URL);
 
   expect(beforeRestore).toHaveLength(1);
   expect(beforeRestore[0]).toMatchObject({ via: "fetch", method: "POST" });
@@ -576,39 +341,39 @@ test("page network hook can restore original fetch and XHR patches", async ({ pa
     sendRestored: true,
   });
 
-  const afterRestore = await collectReservationHookMessages(page, async () => {
-    await fetch("/api/guests/maps/234/spaces/263/reservations", {
+  const afterRestore = await collectReservationHookMessages(page, async (url) => {
+    await fetch(url, {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({
-        name: "애니",
+        reserverName: "애니",
         startDateTime: "2026-03-02T11:00:00+09:00",
         endDateTime: "2026-03-02T11:30:00+09:00",
-        description: "복구 후",
+        purpose: "복구 후",
       }),
     });
 
     const xhr = new XMLHttpRequest();
-    xhr.open("POST", "/api/guests/maps/234/spaces/263/reservations");
+    xhr.open("POST", url);
     xhr.setRequestHeader("content-type", "application/json");
     await new Promise((resolve) => {
       xhr.addEventListener("loadend", resolve, { once: true });
       xhr.send(
         JSON.stringify({
-          name: "애니",
+          reserverName: "애니",
           startDateTime: "2026-03-02T12:00:00+09:00",
           endDateTime: "2026-03-02T12:30:00+09:00",
-          description: "XHR 복구 후",
+          purpose: "XHR 복구 후",
         }),
       );
     });
-  });
+  }, RESERVATIONS_URL);
 
   expect(afterRestore).toHaveLength(0);
 });
 
 test("page network hook registers restore before XHR patch failure can strand fetch", async ({ page }) => {
-  await page.goto("https://example.com/guest/test-map", { waitUntil: "domcontentloaded" });
+  await gotoReservationPage(page);
   await page.addScriptTag({ path: path.resolve(process.cwd(), "src/page-hook/shared.js") });
   const hookSource = fs.readFileSync(path.resolve(process.cwd(), "src/page-network-hook.js"), "utf8");
 
@@ -669,8 +434,7 @@ test("page network hook registers restore before XHR patch failure can strand fe
 });
 
 test("page network restore bridge restores page-context hook", async ({ page }) => {
-  await page.goto("https://example.com/guest/test-map", { waitUntil: "domcontentloaded" });
-
+  await gotoReservationPage(page);
   await injectPageNetworkHookBundle(page);
 
   const loadedBefore = await page.evaluate(() => {
@@ -707,9 +471,7 @@ test("page network restore bridge restores page-context hook", async ({ page }) 
 });
 
 test("lms+ 예약 생성 POST 성공 시 응답 body 를 이벤트에 담아 emit 한다", async ({ page }) => {
-  await page.goto("https://techcourse-lms-plus-web.woowahan.com/space-reservations", {
-    waitUntil: "domcontentloaded",
-  });
+  await gotoReservationPage(page);
 
   const reservationResponse = {
     date: "2099-01-02",
@@ -723,37 +485,25 @@ test("lms+ 예약 생성 POST 성공 시 응답 body 를 이벤트에 담아 emi
     spaceName: "보이저",
     startTime: "20:00:00",
   };
-  await page.route(
-    "https://techcourse-lms-plus-api.woowahan.com/api/space-reservations",
-    async (route) => {
-      await route.fulfill({
-        status: 201,
-        contentType: "application/json",
-        body: JSON.stringify(reservationResponse),
-      });
-    },
-  );
+  await routeReservationApi(page, JSON.stringify(reservationResponse), 201);
 
   await injectPageNetworkHookBundle(page);
 
-  const messages = await collectReservationHookMessages(page, async () => {
+  const messages = await collectReservationHookMessages(page, async (url) => {
     // 페이지 앱이 원본 응답을 소비할 수 있는지도 함께 확인한다.
-    const res = await fetch(
-      "https://techcourse-lms-plus-api.woowahan.com/api/space-reservations",
-      {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({
-          spaceId: 5,
-          date: "2099-01-02",
-          startTime: "20:00:00",
-          endTime: "21:00:00",
-          purpose: "학습",
-        }),
-      },
-    );
+    const res = await fetch(url, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        spaceId: 5,
+        date: "2099-01-02",
+        startTime: "20:00:00",
+        endTime: "21:00:00",
+        purpose: "학습",
+      }),
+    });
     window.__zzkConsumedBody = await res.json();
-  });
+  }, RESERVATIONS_URL);
 
   const withBody = messages.find((m) => m && m.responseBody);
   expect(withBody).toBeTruthy();

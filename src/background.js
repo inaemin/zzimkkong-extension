@@ -3,52 +3,26 @@ try {
 if (typeof importScripts === "function") {
   importScripts("constants/debug.js");
   importScripts("constants/runtime.js");
-  importScripts("services/guest-data/normalizers.js");
   importScripts("services/lms-data/normalizers.js");
 }
 const DEBUG_MODE = globalThis.__zzkDebugConfig?.DEBUG_MODE === true;
 const {
-  API_BASE_URL,
   LMS_API_BASE_URL,
-  TIME_STEP_MINUTES,
   LMS_TIME_STEP_MINUTES,
   KST_DATE_PARTS_FORMATTER,
-  KST_TIME_PARTS_FORMATTER,
-  TARGET_ROOM_SET,
-  TARGET_ROOM_ORDER,
-  EXCLUDED_CREW_ROOM_SET,
   normalizeTargetRoomName,
   normalizeFetchRoomType: normalizeRoomType,
 } = globalThis.__zzkSharedConstants;
-const SERVICE_KIND_LMS = "lms";
 const MESSAGE_TYPE_FETCH_AVAILABILITY = "ZZK_FETCH_AVAILABILITY";
 const MESSAGE_TYPE_FETCH_DAILY_SCHEDULE = "ZZK_FETCH_DAILY_SCHEDULE";
-const guestDataNormalizers = globalThis.__zzkGuestDataNormalizers.createGuestDataNormalizers({
-  getProperty,
-  normalizeTargetRoomName,
-  normalizeRoomType,
-  getRoomTypeForRoomName: getRoomTypeByName,
-  targetRoomSet: TARGET_ROOM_SET,
-  targetRoomOrder: TARGET_ROOM_ORDER,
-  excludedRoomSet: EXCLUDED_CREW_ROOM_SET,
-  timelineSlotMinutes: TIME_STEP_MINUTES,
-  minuteToHourMinute,
-  timePartsFormatter: KST_TIME_PARTS_FORMATTER,
-});
 const lmsDataNormalizers = globalThis.__zzkLmsDataNormalizers.createLmsDataNormalizers({
   getProperty,
   normalizeTargetRoomName,
   normalizeRoomType,
   getRoomTypeForRoomName: getRoomTypeByName,
-  excludedRoomSet: EXCLUDED_CREW_ROOM_SET,
   timelineSlotMinutes: LMS_TIME_STEP_MINUTES,
   minuteToHourMinute,
 });
-
-// 두 서비스가 동시에 운영 중이라, 요청한 탭이 어느 서비스인지 payload로 받아 분기한다.
-function isLmsPayload(payload) {
-  return getProperty(payload, "serviceKind") === SERVICE_KIND_LMS;
-}
 
 function debugLog(scope, message, detail) {
   if (!DEBUG_MODE || typeof console === "undefined" || typeof console.log !== "function") {
@@ -112,152 +86,12 @@ function getProperty(source, key) {
   return source[key];
 }
 
-async function loadAvailability(payload) {
-  if (isLmsPayload(payload)) {
-    return loadLmsAvailability(payload);
-  }
-
-  const date = sanitizeDate(getProperty(payload, "date"), {
-    allowPastDate: getProperty(payload, "allowPastDate") === true,
-  });
-  const startTime = sanitizeTime(getProperty(payload, "startTime"));
-  const endTime = sanitizeTime(getProperty(payload, "endTime"));
-
-  if (startTime >= endTime) {
-    throw new Error("종료 시간은 시작 시간보다 늦어야 합니다.");
-  }
-
-  const roomType = normalizeRoomType(getProperty(payload, "roomType"));
-  const mapContext = await loadMapContext(payload, roomType);
-
-  const startDateTime = `${date}T${startTime}:00+09:00`;
-  const endDateTime = `${date}T${endTime}:00+09:00`;
-
-  const availabilityResponse = await fetchJson(
-    `${API_BASE_URL}/api/guests/maps/${mapContext.mapId}/spaces/availability?${new URLSearchParams({
-      startDateTime,
-      endDateTime,
-    }).toString()}`
-  );
-
-  const availabilitySpaces = getProperty(availabilityResponse, "spaces");
-  const availabilityEntries = Array.isArray(availabilitySpaces)
-    ? availabilitySpaces
-    : [];
-
-  const availabilityBySpaceId = new Map(
-    availabilityEntries.map((entry) => [
-      Number(getProperty(entry, "spaceId")),
-      Boolean(getProperty(entry, "isAvailable")),
-    ])
-  );
-
-  const rooms = mapContext.targetRooms.map((room) => ({
-    id: room.id,
-    name: room.name,
-    color: room.color,
-    isAvailable: availabilityBySpaceId.get(room.id) === true,
-  }));
-
-  const availableCount = rooms.filter((room) => room.isAvailable).length;
-
-  return {
-    mapId: mapContext.mapId,
-    mapName: mapContext.mapName,
-    selectedWindow: {
-      date,
-      startTime,
-      endTime,
-    },
-    roomType,
-    counts: {
-      total: rooms.length,
-      available: availableCount,
-      occupied: rooms.length - availableCount,
-    },
-    rooms,
-  };
+function loadAvailability(payload) {
+  return loadLmsAvailability(payload);
 }
 
-async function loadDailySchedule(payload) {
-  if (isLmsPayload(payload)) {
-    return loadLmsDailySchedule(payload);
-  }
-
-  const date = sanitizeDate(getProperty(payload, "date"), {
-    allowPastDate: getProperty(payload, "allowPastDate") === true,
-  });
-  const roomType = normalizeRoomType(getProperty(payload, "roomType"));
-  const mapContext = await loadMapContext(payload, roomType);
-
-  const rooms = await Promise.all(
-    mapContext.targetRooms.map(async (room) => {
-      const reservationsResponse = await fetchJson(
-        `${API_BASE_URL}/api/guests/maps/${mapContext.mapId}/spaces/${room.id}/reservations?date=${encodeURIComponent(
-          date
-        )}`
-      );
-
-      const reservations = guestDataNormalizers.normalizeReservations(
-        getProperty(reservationsResponse, "reservations")
-      );
-
-      return {
-        id: room.id,
-        name: room.name,
-        color: room.color,
-        windowStartMinute: room.windowStartMinute,
-        windowEndMinute: room.windowEndMinute,
-        reservations,
-      };
-    })
-  );
-
-  const range = guestDataNormalizers.computeTimelineRange(rooms);
-  const timeline = guestDataNormalizers.buildTimelineSlots(
-    range.startMinute,
-    range.endMinute,
-    TIME_STEP_MINUTES
-  );
-
-  return {
-    mapId: mapContext.mapId,
-    mapName: mapContext.mapName,
-    date,
-    roomType,
-    range,
-    timeline,
-    rooms,
-  };
-}
-
-async function loadMapContext(payload, roomType = null) {
-  const sharingMapId = sanitizeSharingMapId(getProperty(payload, "sharingMapId"));
-
-  const mapData = await fetchJson(
-    `${API_BASE_URL}/api/guests/maps?sharingMapId=${encodeURIComponent(
-      sharingMapId
-    )}`
-  );
-
-  const mapId = Number(getProperty(mapData, "mapId"));
-  if (!Number.isInteger(mapId)) {
-    throw new Error("맵 정보를 불러오지 못했습니다.");
-  }
-
-  const spacesResponse = await fetchJson(
-    `${API_BASE_URL}/api/guests/maps/${mapId}/spaces`
-  );
-  const spaces = guestDataNormalizers.normalizeSpaces(spacesResponse);
-
-  return {
-    mapId,
-    mapName:
-      typeof getProperty(mapData, "mapName") === "string"
-        ? getProperty(mapData, "mapName")
-        : "회의실 지도",
-    targetRooms: guestDataNormalizers.buildTargetRooms(spaces, roomType),
-  };
+function loadDailySchedule(payload) {
+  return loadLmsDailySchedule(payload);
 }
 
 // 개편 서비스(techcourse-lms-plus)에는 공유 맵 개념이 없어 /api/spaces 하나로 공간을 받는다.
@@ -402,8 +236,7 @@ async function fetchJson(url) {
       accept: "application/json",
     },
     // 개편 서비스는 세션 쿠키 기반 인증이라 자격 증명을 함께 보낸다.
-    // legacy 찜꽁 API는 인증 없이 열려 있어 기존 동작(omit)을 유지한다.
-    credentials: String(url).startsWith(LMS_API_BASE_URL) ? "include" : "same-origin",
+    credentials: "include",
   });
 
   const text = await response.text();
@@ -433,13 +266,6 @@ function safeParseJson(text) {
   } catch (error) {
     return {};
   }
-}
-
-function sanitizeSharingMapId(value) {
-  if (typeof value !== "string" || value.trim() === "") {
-    throw new Error("공유 맵 ID를 찾을 수 없습니다.");
-  }
-  return value.trim();
 }
 
 function sanitizeDate(value, options = {}) {
@@ -480,8 +306,8 @@ function sanitizeTime(value) {
   if (hour < 0 || hour > 23 || minute < 0 || minute > 59) {
     throw new Error("시간 형식이 올바르지 않습니다.");
   }
-  if (minute % TIME_STEP_MINUTES !== 0) {
-    throw new Error("시간은 10분 단위로 선택해 주세요.");
+  if (minute % LMS_TIME_STEP_MINUTES !== 0) {
+    throw new Error("시간은 30분 단위로 선택해 주세요.");
   }
 
   return `${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}`;

@@ -32,8 +32,6 @@
   const SLACK_CHANNEL_HISTORY_STORAGE_KEY = "zzk-slack-channel-history-v1";
   const SLACK_REMINDER_LEAD_TIME_STORAGE_KEY = "zzk-slack-reminder-lead-time-v1";
   const PENDING_SLACK_MODAL_STORAGE_KEY = "zzk-pending-slack-modal-v1";
-  const BLANK_GUEST_RECOVERY_STORAGE_KEY = "zzk-blank-guest-recovery-v1";
-  const PENDING_EDIT_SUBMIT_STORAGE_KEY = "zzk-pending-edit-submit-v1";
   const MAP_CALENDAR_ALWAYS_OPEN_STORAGE_KEY = "zzk-map-calendar-always-open-v3";
   const MAP_CALENDAR_SPACE_TAB_STORAGE_KEY = "zzk-map-calendar-space-tab-v1";
   const MAP_CALENDAR_WIDTH_STORAGE_KEY = "zzk-map-calendar-width-v1";
@@ -45,7 +43,6 @@
   const MAP_CALENDAR_CURRENT_TIME_SCROLL_LEAD_MINUTES = 30;
   const MAP_CALENDAR_SPACE_TAB_MEETING = "meeting";
   const MAP_CALENDAR_SPACE_TAB_PAIR = "pair";
-  const API_BASE_URL = "https://k8s.zzimkkong.com";
   const LMS_API_BASE_URL = "https://techcourse-lms-plus-api.woowahan.com";
   const RUNTIME_MESSAGE_TIMEOUT_MS = 3000;
   const RESERVATION_SCHEDULE_STALE_MS = 3000;
@@ -87,27 +84,25 @@
     { name: "아폴로", floor: "12층", kind: MAP_CALENDAR_SPACE_TAB_MEETING, tags: [] },
     { name: "허블", floor: "12층", kind: MAP_CALENDAR_SPACE_TAB_MEETING, tags: [] },
     { name: "은하수", floor: "13층", kind: MAP_CALENDAR_SPACE_TAB_MEETING, tags: ["window"] },
-    { name: "페1", floor: "13층", kind: MAP_CALENDAR_SPACE_TAB_PAIR, tags: [] },
-    { name: "페2", floor: "13층", kind: MAP_CALENDAR_SPACE_TAB_PAIR, tags: [] },
-    { name: "페3", floor: "13층", kind: MAP_CALENDAR_SPACE_TAB_PAIR, tags: [] },
-    { name: "페4", floor: "13층", kind: MAP_CALENDAR_SPACE_TAB_PAIR, tags: [] },
-    { name: "페5", floor: "13층", kind: MAP_CALENDAR_SPACE_TAB_PAIR, tags: [] },
-    { name: "페6", floor: "13층", kind: MAP_CALENDAR_SPACE_TAB_PAIR, tags: [] },
-    { name: "페7", floor: "12층", kind: MAP_CALENDAR_SPACE_TAB_PAIR, tags: [] },
-    { name: "페8", floor: "12층", kind: MAP_CALENDAR_SPACE_TAB_PAIR, tags: [] },
-    { name: "페9", floor: "12층", kind: MAP_CALENDAR_SPACE_TAB_PAIR, tags: [] },
-    { name: "페10", floor: "12층", kind: MAP_CALENDAR_SPACE_TAB_PAIR, tags: [] },
-    { name: "페11", floor: "12층", kind: MAP_CALENDAR_SPACE_TAB_PAIR, tags: [] },
-    { name: "페12", floor: "12층", kind: MAP_CALENDAR_SPACE_TAB_PAIR, tags: [] },
-    { name: "페13", floor: "12층", kind: MAP_CALENDAR_SPACE_TAB_PAIR, tags: [] },
-    { name: "페14", floor: "12층", kind: MAP_CALENDAR_SPACE_TAB_PAIR, tags: [] },
+    // 이름은 lms+ /api/spaces 응답 그대로("페어룸 01"). 공백 제거 정규화를 거쳐
+    // "페어룸01" 로 매칭되므로 API 이름이 바뀌지 않는 한 여기서 kind 가 확정된다.
+    { name: "페어룸 01", floor: "13층", kind: MAP_CALENDAR_SPACE_TAB_PAIR, tags: [] },
+    { name: "페어룸 02", floor: "13층", kind: MAP_CALENDAR_SPACE_TAB_PAIR, tags: [] },
+    { name: "페어룸 03", floor: "13층", kind: MAP_CALENDAR_SPACE_TAB_PAIR, tags: [] },
+    { name: "페어룸 04", floor: "13층", kind: MAP_CALENDAR_SPACE_TAB_PAIR, tags: [] },
+    { name: "페어룸 05", floor: "13층", kind: MAP_CALENDAR_SPACE_TAB_PAIR, tags: [] },
+    { name: "페어룸 06", floor: "13층", kind: MAP_CALENDAR_SPACE_TAB_PAIR, tags: [] },
+    { name: "페어룸 07", floor: "12층", kind: MAP_CALENDAR_SPACE_TAB_PAIR, tags: [] },
+    { name: "페어룸 08", floor: "12층", kind: MAP_CALENDAR_SPACE_TAB_PAIR, tags: [] },
+    { name: "페어룸 09", floor: "12층", kind: MAP_CALENDAR_SPACE_TAB_PAIR, tags: [] },
+    { name: "페어룸 10", floor: "12층", kind: MAP_CALENDAR_SPACE_TAB_PAIR, tags: [] },
+    { name: "페어룸 11", floor: "12층", kind: MAP_CALENDAR_SPACE_TAB_PAIR, tags: [] },
+    { name: "페어룸 12", floor: "12층", kind: MAP_CALENDAR_SPACE_TAB_PAIR, tags: [] },
+    { name: "페어룸 13", floor: "12층", kind: MAP_CALENDAR_SPACE_TAB_PAIR, tags: [] },
+    { name: "페어룸 14", floor: "12층", kind: MAP_CALENDAR_SPACE_TAB_PAIR, tags: [] },
   ];
   const TARGET_ROOM_METADATA_BY_NORMALIZED_NAME = new Map(TARGET_ROOM_METADATA.map((entry, index) => [normalizeTargetRoomName(entry.name), { ...entry, index }]));
   const MAP_CALENDAR_ROOM_FLOOR_BY_NAME = new Map(TARGET_ROOM_METADATA.map((entry) => [normalizeTargetRoomName(entry.name), entry.floor]));
-  // 13층에는 목성/스튜디오/안드로메다같은방(공간 ID 276)/천왕성/코치1/코치2/토성도 API에 내려오지만,
-  // 크루 예약 가능 회의실은 은하수뿐이라 레이더 대상에서 제외한다.
-  const EXCLUDED_CREW_ROOM_NAMES = ["목성", "스튜디오", "안드로메다같은방", "천왕성", "코치1", "코치2", "토성"];
-  const EXCLUDED_CREW_ROOM_SET = new Set(EXCLUDED_CREW_ROOM_NAMES.map((name) => normalizeTargetRoomName(name)));
   const TARGET_ROOM_NAMES = TARGET_ROOM_METADATA.map((entry) => entry.name);
   const TARGET_ROOM_SET = new Set(TARGET_ROOM_NAMES.map((name) => normalizeTargetRoomName(name)));
   const TARGET_ROOM_ORDER = new Map(TARGET_ROOM_METADATA.map((entry, index) => [normalizeTargetRoomName(entry.name), index]));
@@ -146,8 +141,6 @@
     SLACK_CHANNEL_HISTORY_STORAGE_KEY,
     SLACK_REMINDER_LEAD_TIME_STORAGE_KEY,
     PENDING_SLACK_MODAL_STORAGE_KEY,
-    BLANK_GUEST_RECOVERY_STORAGE_KEY,
-    PENDING_EDIT_SUBMIT_STORAGE_KEY,
     MAP_CALENDAR_ALWAYS_OPEN_STORAGE_KEY,
     MAP_CALENDAR_SPACE_TAB_STORAGE_KEY,
     MAP_CALENDAR_WIDTH_STORAGE_KEY,
@@ -158,7 +151,6 @@
     MAP_CALENDAR_CURRENT_TIME_SCROLL_LEAD_MINUTES,
     MAP_CALENDAR_SPACE_TAB_MEETING,
     MAP_CALENDAR_SPACE_TAB_PAIR,
-    API_BASE_URL,
     LMS_API_BASE_URL,
     RUNTIME_MESSAGE_TIMEOUT_MS,
     RESERVATION_SCHEDULE_STALE_MS,
@@ -188,8 +180,6 @@
     TARGET_ROOM_METADATA,
     TARGET_ROOM_METADATA_BY_NORMALIZED_NAME,
     MAP_CALENDAR_ROOM_FLOOR_BY_NAME,
-    EXCLUDED_CREW_ROOM_NAMES,
-    EXCLUDED_CREW_ROOM_SET,
     TARGET_ROOM_NAMES,
     TARGET_ROOM_SET,
     TARGET_ROOM_ORDER,

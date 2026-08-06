@@ -3,6 +3,9 @@ import { expect, test } from "@playwright/test";
 
 const WIDTH_STORAGE_KEY = "zzk-map-calendar-width-v1";
 
+const WEB_ORIGIN = "https://techcourse-lms-plus-web.woowahan.com";
+const API_ORIGIN = "https://techcourse-lms-plus-api.woowahan.com";
+
 async function injectContentScriptBundle(page, beforeContentScript) {
   await page.addScriptTag({ path: path.resolve(process.cwd(), "src/constants/debug.js") });
   await page.addScriptTag({ path: path.resolve(process.cwd(), "src/utils/shared.js") });
@@ -13,9 +16,7 @@ async function injectContentScriptBundle(page, beforeContentScript) {
   await page.addScriptTag({ path: path.resolve(process.cwd(), "src/features/slack/shared.js") });
   await page.addScriptTag({ path: path.resolve(process.cwd(), "src/features/slack/workflow.js") });
   await page.addScriptTag({ path: path.resolve(process.cwd(), "src/features/slack/success-flow.js") });
-  await page.addScriptTag({ path: path.resolve(process.cwd(), "src/features/host-sync/shared.js") });
-  await page.addScriptTag({ path: path.resolve(process.cwd(), "src/services/guest-data/normalizers.js") });
-  await page.addScriptTag({ path: path.resolve(process.cwd(), "src/services/guest-data/shared.js") });
+  await page.addScriptTag({ path: path.resolve(process.cwd(), "src/features/form-fields/shared.js") });
   await page.addScriptTag({ path: path.resolve(process.cwd(), "src/services/lms-data/normalizers.js") });
   await page.addScriptTag({ path: path.resolve(process.cwd(), "src/services/lms-data/shared.js") });
   await page.addScriptTag({ path: path.resolve(process.cwd(), "src/features/radar/floor-maps.js") });
@@ -37,84 +38,42 @@ async function injectContentScriptBundle(page, beforeContentScript) {
 
 const SPACES = [
   {
+    accessRole: "ALL",
+    active: true,
+    closeTime: "23:00:00",
+    floor: 11,
     id: 3,
+    maxReservationMinutes: 60,
     name: "수성",
-    color: "#60a5fa",
-    reservationEnable: true,
-    settings: [{ settingStartTime: "09:00:00", settingEndTime: "18:00:00" }],
+    openTime: "07:00:00",
+    reservationUnitMinutes: 30,
   },
   {
+    accessRole: "ALL",
+    active: true,
+    closeTime: "23:00:00",
+    floor: 11,
     id: 5,
+    maxReservationMinutes: 60,
     name: "화성",
-    color: "#f97316",
-    reservationEnable: true,
-    settings: [{ settingStartTime: "09:00:00", settingEndTime: "18:00:00" }],
+    openTime: "07:00:00",
+    reservationUnitMinutes: 30,
   },
   {
+    accessRole: "ALL",
+    active: true,
+    closeTime: "23:00:00",
+    floor: 11,
     id: 6,
+    maxReservationMinutes: 60,
     name: "지구",
-    color: "#10b981",
-    reservationEnable: true,
-    settings: [{ settingStartTime: "09:00:00", settingEndTime: "18:00:00" }],
+    openTime: "07:00:00",
+    reservationUnitMinutes: 30,
   },
 ];
 
-const AVAILABILITY = [
-  { spaceId: 3, isAvailable: true },
-  { spaceId: 5, isAvailable: false },
-  { spaceId: 6, isAvailable: true },
-];
-
-async function mountGuestMap(page, { reservationDate = "2026-12-02" } = {}) {
-  await page.goto("https://example.com/guest/test-map", { waitUntil: "domcontentloaded" });
-
-  await page.route("https://k8s.zzimkkong.com/api/guests/**", async (route) => {
-    const url = new URL(route.request().url());
-
-    if (url.pathname === "/api/guests/maps" && url.searchParams.get("sharingMapId") === "test-map") {
-      await route.fulfill({
-        status: 200,
-        contentType: "application/json",
-        body: JSON.stringify({ mapId: 234, mapName: "테스트 맵" }),
-      });
-      return;
-    }
-
-    if (url.pathname === "/api/guests/maps/234/spaces") {
-      await route.fulfill({
-        status: 200,
-        contentType: "application/json",
-        body: JSON.stringify({ spaces: SPACES }),
-      });
-      return;
-    }
-
-    if (url.pathname === "/api/guests/maps/234/spaces/availability") {
-      await route.fulfill({
-        status: 200,
-        contentType: "application/json",
-        body: JSON.stringify({ spaces: AVAILABILITY }),
-      });
-      return;
-    }
-
-    if (url.pathname.match(/^\/api\/guests\/maps\/234\/spaces\/\d+\/reservations$/)) {
-      await route.fulfill({
-        status: 200,
-        contentType: "application/json",
-        body: JSON.stringify({ reservations: [] }),
-      });
-      return;
-    }
-
-    await route.fulfill({
-      status: 404,
-      contentType: "application/json",
-      body: JSON.stringify({ message: "not found" }),
-    });
-  });
-
-  await page.setContent(`
+function buildPageHtml(reservationDate) {
+  return `<html><body>
     <main>
       <div id="top-tabs" style="display:flex; gap:8px; margin-bottom:16px;">
         <button type="button">예약현황</button>
@@ -143,7 +102,53 @@ async function mountGuestMap(page, { reservationDate = "2026-12-02" } = {}) {
         </div>
       </form>
     </main>
-  `);
+  </body></html>`;
+}
+
+// 라우트/init script 는 페이지당 한 번만 건다. 같은 테스트에서 mountGuestMap 을
+// 여러 번 부르면 핸들러가 쌓여 문서 응답이 어긋나기 때문이다.
+const preparedPages = new WeakSet();
+
+async function mountGuestMap(page, { reservationDate = "2026-12-02" } = {}) {
+  if (!preparedPages.has(page)) {
+    preparedPages.add(page);
+
+    // content.js 는 실제 lms+ 호스트에서 테스트 훅을 감추므로 명시적으로 열어준다.
+    await page.addInitScript(() => {
+      window.__ZZK_TEST_HOOKS__ = true;
+    });
+
+    // 실제 사이트는 미인증 요청을 로그인 페이지로 돌려보내므로 문서 응답을 고정한다.
+    await page.route(`${WEB_ORIGIN}/**`, async (route) => {
+      if (route.request().resourceType() !== "document") {
+        await route.continue();
+        return;
+      }
+      await route.fulfill({
+        status: 200,
+        contentType: "text/html",
+        body: buildPageHtml(page.__zzkReservationDate),
+      });
+    });
+
+    await page.route(`${API_ORIGIN}/api/**`, async (route) => {
+      const url = new URL(route.request().url());
+      const body = url.pathname === "/api/spaces" ? SPACES : [];
+      await route.fulfill({
+        status: 200,
+        headers: {
+          // credentials: "include" 요청은 와일드카드 origin 을 허용하지 않는다.
+          "access-control-allow-origin": WEB_ORIGIN,
+          "access-control-allow-credentials": "true",
+          "content-type": "application/json",
+        },
+        body: JSON.stringify(body),
+      });
+    });
+  }
+
+  page.__zzkReservationDate = reservationDate;
+  await page.goto(`${WEB_ORIGIN}/space-reservations`, { waitUntil: "domcontentloaded" });
 }
 
 async function openRadar(page) {

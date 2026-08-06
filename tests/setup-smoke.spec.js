@@ -21,9 +21,7 @@ test("manifest content script order preserves global bootstrap dependencies", as
     "src/features/slack/shared.js",
     "src/features/slack/workflow.js",
     "src/features/slack/success-flow.js",
-    "src/features/host-sync/shared.js",
-    "src/services/guest-data/normalizers.js",
-    "src/services/guest-data/shared.js",
+    "src/features/form-fields/shared.js",
     "src/services/lms-data/normalizers.js",
     "src/services/lms-data/shared.js",
     "src/features/radar/floor-maps.js",
@@ -42,7 +40,6 @@ test("background service worker reuses shared room policy constants", async () =
 
   expect(backgroundSource).toContain('importScripts("constants/runtime.js")');
   expect(backgroundSource).not.toMatch(/const\s+TARGET_ROOM_NAMES\s*=\s*\[/);
-  expect(backgroundSource).not.toMatch(/const\s+EXCLUDED_CREW_ROOM_NAMES\s*=\s*\[/);
 });
 
 test("content script reports missing bootstrap dependencies instead of throwing", async ({ page }) => {
@@ -129,9 +126,9 @@ const bootstrapConsumerCases = [
     missing: ["__zzkSharedConstants", "__zzkDateTimeUtils"],
   },
   {
-    scriptPath: "src/services/guest-data/shared.js",
-    exportedGlobal: "__zzkGuestDataShared",
-    missing: ["__zzkSharedConstants", "__zzkDateTimeUtils", "__zzkGuestDataNormalizers"],
+    scriptPath: "src/features/form-fields/shared.js",
+    exportedGlobal: "__zzkFormFieldUtils",
+    missing: ["__zzkSharedUtils", "__zzkSlackShared", "__zzkSharedConstants"],
   },
   {
     scriptPath: "src/services/lms-data/shared.js",
