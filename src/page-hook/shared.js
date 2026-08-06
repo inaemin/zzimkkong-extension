@@ -104,9 +104,7 @@
     }
 
     const isCompositeNameField =
-      normalized.endsWith(".name") ||
-      normalized.endsWith("[name]") ||
-      normalized.endsWith("_name");
+      normalized.endsWith(".name") || normalized.endsWith("[name]") || normalized.endsWith("_name");
     if (!isCompositeNameField) {
       return false;
     }
@@ -122,8 +120,9 @@
       "예약자",
       "신청자",
     ].some((token) => normalized.includes(token));
-    const hasRoomContext = ["room", "space", "map", "resource", "회의실", "공간", "장소"]
-      .some((token) => normalized.includes(token));
+    const hasRoomContext = ["room", "space", "map", "resource", "회의실", "공간", "장소"].some(
+      (token) => normalized.includes(token),
+    );
     return hasOwnerContext && !hasRoomContext;
   }
 
@@ -213,7 +212,9 @@
 
       try {
         const searchParams = new URLSearchParams(trimmed);
-        const candidateFromParams = extractOwnerCandidateFromEntries(Array.from(searchParams.entries()));
+        const candidateFromParams = extractOwnerCandidateFromEntries(
+          Array.from(searchParams.entries()),
+        );
         if (candidateFromParams) {
           return candidateFromParams;
         }
@@ -321,7 +322,9 @@
       return "";
     }
 
-    if (["-", "--", "description", "purpose", "사용목적", "이용목적", "예약내용"].includes(normalized)) {
+    if (
+      ["-", "--", "description", "purpose", "사용목적", "이용목적", "예약내용"].includes(normalized)
+    ) {
       return "";
     }
 
@@ -580,7 +583,7 @@
 
       try {
         const fromParams = extractReservationRequestContextFromEntries(
-          Array.from(new URLSearchParams(trimmed).entries())
+          Array.from(new URLSearchParams(trimmed).entries()),
         );
         if (fromParams) {
           return fromParams;
@@ -624,7 +627,7 @@
   function resolveReservationRequestContextForEmit(urlValue, bodyContext) {
     const mergedContext = mergeReservationRequestContext(
       extractReservationContextFromUrl(urlValue),
-      bodyContext && typeof bodyContext === "object" ? bodyContext : null
+      bodyContext && typeof bodyContext === "object" ? bodyContext : null,
     );
     return finalizeReservationRequestContext(mergedContext);
   }
@@ -641,7 +644,7 @@
             const formData = await clonedRequest.formData();
             context = mergeReservationRequestContext(
               context,
-              extractReservationRequestContextFromBody(formData)
+              extractReservationRequestContextFromBody(formData),
             );
           } catch (error) {
             const ignoredError = error;
@@ -655,7 +658,7 @@
             const jsonValue = await secondClone.json();
             context = mergeReservationRequestContext(
               context,
-              extractReservationRequestContextFromBody(jsonValue)
+              extractReservationRequestContextFromBody(jsonValue),
             );
           } catch (error) {
             const ignoredError = error;
@@ -667,7 +670,7 @@
         const text = await thirdClone.text();
         context = mergeReservationRequestContext(
           context,
-          extractReservationRequestContextFromBody(text)
+          extractReservationRequestContextFromBody(text),
         );
       } catch (error) {
         const ignoredError = error;
@@ -721,7 +724,7 @@
         type: MESSAGE_TYPE,
         payload,
       },
-      location.origin
+      location.origin,
     );
   }
 
@@ -738,7 +741,9 @@
   function buildReservationMutationEventPayload(options) {
     const eventUrl = String(options && options.url ? options.url : "");
     const reservationAttemptId =
-      options && typeof options.reservationAttemptId === "string" && options.reservationAttemptId.trim()
+      options &&
+      typeof options.reservationAttemptId === "string" &&
+      options.reservationAttemptId.trim()
         ? options.reservationAttemptId.trim()
         : readReservationAttemptId();
 
@@ -752,7 +757,7 @@
       ownerNameCandidate: normalizeOwnerCandidate(options && options.ownerNameCandidate),
       requestContext: resolveReservationRequestContextForEmit(
         eventUrl,
-        options && options.requestContext != null ? options.requestContext : null
+        options && options.requestContext != null ? options.requestContext : null,
       ),
     };
 
@@ -767,7 +772,6 @@
 
     return payload;
   }
-
 
   globalThis.__zzkPageHookShared = {
     MESSAGE_SOURCE,

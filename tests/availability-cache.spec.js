@@ -48,7 +48,9 @@ async function mountWithRequestCounter(page) {
   return reservationRequests;
 }
 
-test("TTL 안에 같은 조건으로 다시 조회하면 회의실별 요청을 다시 보내지 않는다", async ({ page }) => {
+test("TTL 안에 같은 조건으로 다시 조회하면 회의실별 요청을 다시 보내지 않는다", async ({
+  page,
+}) => {
   const reservationRequests = await mountWithRequestCounter(page);
 
   const afterMount = reservationRequests.length;

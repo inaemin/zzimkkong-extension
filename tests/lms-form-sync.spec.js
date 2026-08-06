@@ -61,8 +61,22 @@ async function mountFormPage(page, reservationsBySpaceId = {}) {
     let body = [];
     if (url.pathname === "/api/spaces") {
       body = [
-        { id: 8, name: "허블", floor: 12, active: true, openTime: "07:00:00", closeTime: "23:00:00" },
-        { id: 9, name: "은하수", floor: 13, active: true, openTime: "07:00:00", closeTime: "23:00:00" },
+        {
+          id: 8,
+          name: "허블",
+          floor: 12,
+          active: true,
+          openTime: "07:00:00",
+          closeTime: "23:00:00",
+        },
+        {
+          id: 9,
+          name: "은하수",
+          floor: 13,
+          active: true,
+          openTime: "07:00:00",
+          closeTime: "23:00:00",
+        },
       ];
     } else if (url.pathname === "/api/space-reservations") {
       const spaceId = url.searchParams.get("spaceId");
@@ -287,9 +301,7 @@ async function hoverSlot(page, label) {
       return n && (n.textContent || "").includes("은하수");
     });
     const row = labelRow && labelRow.__zzkTimelineRow;
-    return row
-      ? row.querySelector(`.zzk-map-calendar-slot[data-zzk-slot-start="${label}"]`)
-      : null;
+    return row ? row.querySelector(`.zzk-map-calendar-slot[data-zzk-slot-start="${label}"]`) : null;
   }, label);
   await handle.hover();
 }
@@ -435,7 +447,9 @@ test("today scrolls near current time; a future date resets to the start", async
 
 test("드래그로 옮긴 모달 위치가 저장되고 재로드 시 복원된다", async ({ page }) => {
   await mountFormPage(page);
-  await page.waitForSelector("#zzk-map-calendar-overlay .zzk-map-calendar-header", { timeout: 4000 });
+  await page.waitForSelector("#zzk-map-calendar-overlay .zzk-map-calendar-header", {
+    timeout: 4000,
+  });
 
   // 헤더를 드래그해 모달을 옮긴다.
   const header = page.locator("#zzk-map-calendar-overlay .zzk-map-calendar-header").first();

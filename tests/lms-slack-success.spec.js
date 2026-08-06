@@ -59,23 +59,26 @@ async function mountLmsPage(page) {
 }
 
 function emitReservationSuccess(page, payloadOverrides = {}) {
-  return page.evaluate((payload) => {
-    window.postMessage(
-      {
-        source: "zzk-page-reservation-hook",
-        type: "ZZK_RESERVATION_NETWORK_EVENT",
-        payload,
-      },
-      "*",
-    );
-  }, {
-    ok: true,
-    status: 200,
-    method: "POST",
-    url: "https://techcourse-lms-plus-api.woowahan.com/api/space-reservations",
-    responseBody: RESERVATION_RESPONSE,
-    ...payloadOverrides,
-  });
+  return page.evaluate(
+    (payload) => {
+      window.postMessage(
+        {
+          source: "zzk-page-reservation-hook",
+          type: "ZZK_RESERVATION_NETWORK_EVENT",
+          payload,
+        },
+        "*",
+      );
+    },
+    {
+      ok: true,
+      status: 200,
+      method: "POST",
+      url: "https://techcourse-lms-plus-api.woowahan.com/api/space-reservations",
+      responseBody: RESERVATION_RESPONSE,
+      ...payloadOverrides,
+    },
+  );
 }
 
 test("lms+ 예약 성공 시 Slack 모달이 응답 body 기반으로 뜬다", async ({ page }) => {

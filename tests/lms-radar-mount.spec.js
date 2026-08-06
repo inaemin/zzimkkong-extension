@@ -55,10 +55,14 @@ test("radar launcher and modal mount on the new service reservation page", async
   await mountServicePage(page);
 
   await expect
-    .poll(() => page.evaluate((id) => Boolean(document.getElementById(id)), MAP_CALENDAR_LAUNCHER_ID))
+    .poll(() =>
+      page.evaluate((id) => Boolean(document.getElementById(id)), MAP_CALENDAR_LAUNCHER_ID),
+    )
     .toBe(true);
   await expect
-    .poll(() => page.evaluate((id) => Boolean(document.getElementById(id)), MAP_CALENDAR_OVERLAY_ID))
+    .poll(() =>
+      page.evaluate((id) => Boolean(document.getElementById(id)), MAP_CALENDAR_OVERLAY_ID),
+    )
     .toBe(true);
 
   expect(pageErrors).toEqual([]);
@@ -114,7 +118,9 @@ test("radar launcher toggles the modal closed and open on the new service", asyn
   await expect.poll(isOverlayMounted).toBe(true);
 });
 
-test("API 403 still renders the modal shell with an error message, not a blank", async ({ page }) => {
+test("API 403 still renders the modal shell with an error message, not a blank", async ({
+  page,
+}) => {
   await page.route(`${WEB_ORIGIN}/**`, async (route) => {
     if (route.request().resourceType() !== "document") {
       await route.continue();
@@ -144,7 +150,9 @@ test("API 403 still renders the modal shell with an error message, not a blank",
 
   // API 가 실패해도 오버레이(모달 껍데기)는 떠야 하고, 에러 메시지가 보여야 한다.
   await expect
-    .poll(() => page.evaluate((id) => Boolean(document.getElementById(id)), MAP_CALENDAR_OVERLAY_ID))
+    .poll(() =>
+      page.evaluate((id) => Boolean(document.getElementById(id)), MAP_CALENDAR_OVERLAY_ID),
+    )
     .toBe(true);
 
   const errorText = await page.evaluate(() => {
@@ -216,7 +224,9 @@ test("층이 바뀌는 경계에는 가로 구분선(floor-divider)이 그려진
 // 모달을 좁혀 가로 스크롤을 만들고, 스크롤을 맨 끝으로 옮긴 상태에서
 // 층/회의실 라벨 열 영역에 (허용된 세로 구분선 2개를 제외한) 세로선 토막이나
 // 타임블록이 새어 보이지 않는지 픽셀 단위로 검사한다.
-test("라벨 pane 은 타임라인 스크롤과 분리돼 타임블록이 침범하지 못한다(모달 축소 + 가로 스크롤 맨 끝)", async ({ page }) => {
+test("라벨 pane 은 타임라인 스크롤과 분리돼 타임블록이 침범하지 못한다(모달 축소 + 가로 스크롤 맨 끝)", async ({
+  page,
+}) => {
   await mountServicePage(page);
   await page.waitForSelector(`#${MAP_CALENDAR_OVERLAY_ID} .zzk-map-calendar-slot`, {
     timeout: 4000,
@@ -287,9 +297,7 @@ test("07:00 슬롯 앞에는 정시 여백만 있고(다른 정시와 리듬 동
     const s0730 = byLabel("07:30");
     const s0800 = byLabel("08:00");
     // 타임라인 트랙(스크롤 콘텐츠)의 왼쪽 = 07:00 앞 여백의 시작점.
-    const tl = overlay
-      .querySelector(".zzk-map-calendar-timeline-track")
-      .getBoundingClientRect();
+    const tl = overlay.querySelector(".zzk-map-calendar-timeline-track").getBoundingClientRect();
 
     // 07:00 앞 여백(트랙 왼쪽 ~ 07:00 왼쪽) vs 08:00 앞 정시 여백(07:30 오른쪽 ~ 08:00 왼쪽)
     const before0700 = s0700.getBoundingClientRect().left - tl.left;
@@ -369,9 +377,9 @@ test("lms+ 레이더 하단에 층별 평면도 영역이 기본 접힘으로 �
       captions: Array.from(scroller.querySelectorAll(".zzk-map-calendar-floormap-caption")).map(
         (el) => el.textContent,
       ),
-      allSvgDataUri: Array.from(scroller.querySelectorAll(".zzk-map-calendar-floormap-image")).every(
-        (img) => img.getAttribute("src").startsWith("data:image/svg+xml,"),
-      ),
+      allSvgDataUri: Array.from(
+        scroller.querySelectorAll(".zzk-map-calendar-floormap-image"),
+      ).every((img) => img.getAttribute("src").startsWith("data:image/svg+xml,")),
     };
   }, MAP_CALENDAR_OVERLAY_ID);
 
@@ -439,9 +447,9 @@ test("평면도를 누르고 있는 동안에만 확대 모달이 보인다", as
 
   // 평면도 영역을 펼친다.
   await page.click(`#${MAP_CALENDAR_OVERLAY_ID} .zzk-map-calendar-floormap-header`);
-  const firstImage = page.locator(
-    `#${MAP_CALENDAR_OVERLAY_ID} .zzk-map-calendar-floormap-image`,
-  ).first();
+  const firstImage = page
+    .locator(`#${MAP_CALENDAR_OVERLAY_ID} .zzk-map-calendar-floormap-image`)
+    .first();
   await firstImage.waitFor({ state: "visible" });
 
   const readZoom = () =>
@@ -481,8 +489,6 @@ test("평면도를 누르고 있는 동안에만 확대 모달이 보인다", as
   expect(after.display).toBe("none");
 });
 
-
-
 test("리렌더돼도 평면도 가로 스크롤 위치가 유지된다", async ({ page }) => {
   await mountServicePage(page);
   await page.waitForSelector(`#${MAP_CALENDAR_OVERLAY_ID} .zzk-map-calendar-floormap-header`, {
@@ -502,7 +508,7 @@ test("리렌더돼도 평면도 가로 스크롤 위치가 유지된다", async 
           .getElementById(overlayId)
           .querySelector(".zzk-map-calendar-floormap-scroller");
         return s ? s.scrollWidth - s.clientWidth > 2 : false;
-      }, MAP_CALENDAR_OVERLAY_ID)
+      }, MAP_CALENDAR_OVERLAY_ID),
     )
     .toBe(true);
 
@@ -513,13 +519,13 @@ test("리렌더돼도 평면도 가로 스크롤 위치가 유지된다", async 
       .querySelector(".zzk-map-calendar-floormap-scroller");
     s.scrollLeft = s.scrollWidth - s.clientWidth; // 맨 오른쪽(13F)
   }, MAP_CALENDAR_OVERLAY_ID);
-  const scrolled = await page.evaluate((overlayId) =>
-    Math.round(
-      document
-        .getElementById(overlayId)
-        .querySelector(".zzk-map-calendar-floormap-scroller").scrollLeft
-    ),
-    MAP_CALENDAR_OVERLAY_ID
+  const scrolled = await page.evaluate(
+    (overlayId) =>
+      Math.round(
+        document.getElementById(overlayId).querySelector(".zzk-map-calendar-floormap-scroller")
+          .scrollLeft,
+      ),
+    MAP_CALENDAR_OVERLAY_ID,
   );
   expect(scrolled).toBeGreaterThan(0);
 
@@ -534,14 +540,14 @@ test("리렌더돼도 평면도 가로 스크롤 위치가 유지된다", async 
   // 리렌더 후에도 평면도 스크롤 위치가 맨 앞(0)으로 튀지 않고 유지돼야 한다.
   await expect
     .poll(() =>
-      page.evaluate((overlayId) =>
-        Math.round(
-          document
-            .getElementById(overlayId)
-            .querySelector(".zzk-map-calendar-floormap-scroller").scrollLeft
-        ),
-        MAP_CALENDAR_OVERLAY_ID
-      )
+      page.evaluate(
+        (overlayId) =>
+          Math.round(
+            document.getElementById(overlayId).querySelector(".zzk-map-calendar-floormap-scroller")
+              .scrollLeft,
+          ),
+        MAP_CALENDAR_OVERLAY_ID,
+      ),
     )
     .toBeGreaterThan(0);
 });

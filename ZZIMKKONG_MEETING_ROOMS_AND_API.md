@@ -28,12 +28,12 @@
 
 ### 3.1 실측 결과
 
-| Probe | Result | 근거 |
-|---|---|---|
-| `GET https://k8s.zzimkkong.com/api/guests/maps?...` with `Origin: https://zzimkkong.com` | `200`, `Access-Control-Allow-Origin: https://zzimkkong.com` | Confirmed-Live |
-| 동일 요청 with `Origin: https://example-mobile.com` | `403`, body: `Invalid CORS request` | Confirmed-Live |
-| `OPTIONS https://k8s.zzimkkong.com/api/guests/maps/234/spaces/263/reservations` with foreign origin preflight | `403` | Confirmed-Live |
-| `GET https://api.zzimkkong.com/api/members/me` with foreign origin | `401` + `Access-Control-Allow-Origin: https://example-mobile.com` | Confirmed-Live |
+| Probe                                                                                                         | Result                                                            | 근거           |
+| ------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------- | -------------- |
+| `GET https://k8s.zzimkkong.com/api/guests/maps?...` with `Origin: https://zzimkkong.com`                      | `200`, `Access-Control-Allow-Origin: https://zzimkkong.com`       | Confirmed-Live |
+| 동일 요청 with `Origin: https://example-mobile.com`                                                           | `403`, body: `Invalid CORS request`                               | Confirmed-Live |
+| `OPTIONS https://k8s.zzimkkong.com/api/guests/maps/234/spaces/263/reservations` with foreign origin preflight | `403`                                                             | Confirmed-Live |
+| `GET https://api.zzimkkong.com/api/members/me` with foreign origin                                            | `401` + `Access-Control-Allow-Origin: https://example-mobile.com` | Confirmed-Live |
 
 ### 3.2 결론
 
@@ -46,12 +46,12 @@
 
 ### 3.3 모바일 연동 의사결정 가이드
 
-| 접근 | 브라우저 CORS | 구현 난이도 | 운영 리스크 | 권장도 |
-|---|---|---|---|---|
-| 모바일 웹 -> `k8s.zzimkkong.com` 직접 호출 | 불가(실측 403) | 낮음 | 매우 높음(실패) | 비권장 |
-| 모바일 웹 -> 자체 BFF -> `k8s.zzimkkong.com` | 가능 | 중간 | 중간(토큰/보안 관리 필요) | 권장 |
-| 모바일 웹 -> reverse proxy로 same-origin화 | 가능 | 중간 | 중간(인프라 라우팅 필요) | 권장 |
-| 모바일 웹 -> `api.zzimkkong.com` 직접 호출 | 가능성 있음(일부 실측 ACAO) | 낮음 | 높음(기능/데이터 일치 미확정) | 조건부 |
+| 접근                                         | 브라우저 CORS               | 구현 난이도 | 운영 리스크                   | 권장도 |
+| -------------------------------------------- | --------------------------- | ----------- | ----------------------------- | ------ |
+| 모바일 웹 -> `k8s.zzimkkong.com` 직접 호출   | 불가(실측 403)              | 낮음        | 매우 높음(실패)               | 비권장 |
+| 모바일 웹 -> 자체 BFF -> `k8s.zzimkkong.com` | 가능                        | 중간        | 중간(토큰/보안 관리 필요)     | 권장   |
+| 모바일 웹 -> reverse proxy로 same-origin화   | 가능                        | 중간        | 중간(인프라 라우팅 필요)      | 권장   |
+| 모바일 웹 -> `api.zzimkkong.com` 직접 호출   | 가능성 있음(일부 실측 ACAO) | 낮음        | 높음(기능/데이터 일치 미확정) | 조건부 |
 
 모바일 사이트를 바로 구현해야 한다면, **BFF 또는 reverse proxy를 기본 아키텍처**로 잡는 것이 가장 안전하다.
 
@@ -326,9 +326,9 @@
 }
 ```
 
-  - 즉, 맵 전체는 **고정 좌표계 캔버스**를 가지며, 기준 크기는 `850 x 1630`이다.
-  - `thumbnail`은 같은 좌표계를 그대로 반영한 SVG 문자열이다.
-  - 실응답 예시 일부:
+- 즉, 맵 전체는 **고정 좌표계 캔버스**를 가지며, 기준 크기는 `850 x 1630`이다.
+- `thumbnail`은 같은 좌표계를 그대로 반영한 SVG 문자열이다.
+- 실응답 예시 일부:
 
 ```svg
 <svg xmlns='http://www.w3.org/2000/svg' version='1.1' width='850px' height='1630px' viewBox='0 0 850 1630'>
@@ -414,7 +414,7 @@
 }
 ```
 
-  - 위 geometry는 `thumbnail` 내부 사각형 `<rect x='560' y='100' width='80' height='70' ... />`와 일치한다.
+- 위 geometry는 `thumbnail` 내부 사각형 `<rect x='560' y='100' width='80' height='70' ... />`와 일치한다.
 
 구현 메모:
 
@@ -622,62 +622,62 @@ Content-Type: application/json
 
 아래는 `GET /api/guests/maps/234/spaces` 실응답 스냅샷 기준.
 
-| spaceId | name | color | reservationEnable |
-|---:|---|---|:---:|
-| 262 | 금성 | #EB3933 | Y |
-| 263 | 수성 | #EB3933 | Y |
-| 264 | 지구 | #EB3933 | Y |
-| 265 | 화성 | #EB3933 | Y |
-| 266 | 보이저 | #EB3933 | Y |
-| 267 | 아폴로 | #EB3933 | Y |
-| 268 | 디스커버리 | #EB3933 | Y |
-| 269 | 허블 | #EB3933 | Y |
-| 270 | 은하수 | #EB3933 | Y |
-| 271 | 목성 | #FFEE58 | Y |
-| 272 | 토성 | #FFEE58 | Y |
-| 273 | 천왕성 | #FFEE58 | Y |
-| 274 | 코치 1 | #FFEE58 | Y |
-| 275 | 코치 2 | #FFEE58 | Y |
-| 276 | 안드로메다같은 방 | #FFEE58 | Y |
-| 277 | 스튜디오 | #FFEE58 | Y |
-| 278 | 큰 강의실 | #0060FF | N |
-| 279 | 옆 강의실 | #0060FF | N |
-| 280 | 작은 강의실 | #0060FF | N |
-| 281 | 스타트랙 | #8B5CF6 | N |
-| 282 | 페 1 | #6BC2F9 | Y |
-| 283 | 페 2 | #6BC2F9 | Y |
-| 284 | 페 3 | #6BC2F9 | Y |
-| 285 | 페 4 | #6BC2F9 | Y |
-| 286 | 페 5 | #6BC2F9 | Y |
-| 287 | 페 6 | #6BC2F9 | Y |
-| 288 | 코워킹 존 | #5CAC1E | N |
-| 289 | 캔틴 | #5CAC1E | N |
-| 293 | 캔틴 | #5CAC1E | N |
-| 294 | 라이브러리 | #5CAC1E | N |
-| 295 | 포커스 존 | #5CAC1E | N |
-| 296 | 코워킹 존 | #5CAC1E | N |
-| 297 | 공조실 | #bbbbbb | N |
-| 298 | 화장실 | #bbbbbb | N |
-| 299 | 출입구 | #bbbbbb | N |
-| 300 | 코치룸 | #bbbbbb | N |
-| 301 | 공조실 | #bbbbbb | N |
-| 302 | 화장실 | #bbbbbb | N |
-| 303 | 출입구 | #bbbbbb | N |
-| 304 | 서버실 | #bbbbbb | N |
-| 305 | 코치룸 | #bbbbbb | N |
-| 306 | 공조실 | #bbbbbb | N |
-| 307 | 화장실 | #bbbbbb | N |
-| 308 | 출입구 | #bbbbbb | N |
-| 309 | 라이브러리 | #5CAC1E | N |
-| 310 | 코워킹 존 | #5CAC1E | N |
-| 311 | 페 7 | #6BC2F9 | Y |
-| 312 | 페 8 | #6BC2F9 | Y |
-| 313 | 페 9 | #6BC2F9 | Y |
-| 314 | 페 10 | #6BC2F9 | Y |
-| 315 | 페 11 | #6BC2F9 | Y |
-| 316 | 페 12 | #6BC2F9 | Y |
-| 317 | 페 13 | #6BC2F9 | Y |
-| 318 | 페 14 | #6BC2F9 | Y |
+| spaceId | name              | color   | reservationEnable |
+| ------: | ----------------- | ------- | :---------------: |
+|     262 | 금성              | #EB3933 |         Y         |
+|     263 | 수성              | #EB3933 |         Y         |
+|     264 | 지구              | #EB3933 |         Y         |
+|     265 | 화성              | #EB3933 |         Y         |
+|     266 | 보이저            | #EB3933 |         Y         |
+|     267 | 아폴로            | #EB3933 |         Y         |
+|     268 | 디스커버리        | #EB3933 |         Y         |
+|     269 | 허블              | #EB3933 |         Y         |
+|     270 | 은하수            | #EB3933 |         Y         |
+|     271 | 목성              | #FFEE58 |         Y         |
+|     272 | 토성              | #FFEE58 |         Y         |
+|     273 | 천왕성            | #FFEE58 |         Y         |
+|     274 | 코치 1            | #FFEE58 |         Y         |
+|     275 | 코치 2            | #FFEE58 |         Y         |
+|     276 | 안드로메다같은 방 | #FFEE58 |         Y         |
+|     277 | 스튜디오          | #FFEE58 |         Y         |
+|     278 | 큰 강의실         | #0060FF |         N         |
+|     279 | 옆 강의실         | #0060FF |         N         |
+|     280 | 작은 강의실       | #0060FF |         N         |
+|     281 | 스타트랙          | #8B5CF6 |         N         |
+|     282 | 페 1              | #6BC2F9 |         Y         |
+|     283 | 페 2              | #6BC2F9 |         Y         |
+|     284 | 페 3              | #6BC2F9 |         Y         |
+|     285 | 페 4              | #6BC2F9 |         Y         |
+|     286 | 페 5              | #6BC2F9 |         Y         |
+|     287 | 페 6              | #6BC2F9 |         Y         |
+|     288 | 코워킹 존         | #5CAC1E |         N         |
+|     289 | 캔틴              | #5CAC1E |         N         |
+|     293 | 캔틴              | #5CAC1E |         N         |
+|     294 | 라이브러리        | #5CAC1E |         N         |
+|     295 | 포커스 존         | #5CAC1E |         N         |
+|     296 | 코워킹 존         | #5CAC1E |         N         |
+|     297 | 공조실            | #bbbbbb |         N         |
+|     298 | 화장실            | #bbbbbb |         N         |
+|     299 | 출입구            | #bbbbbb |         N         |
+|     300 | 코치룸            | #bbbbbb |         N         |
+|     301 | 공조실            | #bbbbbb |         N         |
+|     302 | 화장실            | #bbbbbb |         N         |
+|     303 | 출입구            | #bbbbbb |         N         |
+|     304 | 서버실            | #bbbbbb |         N         |
+|     305 | 코치룸            | #bbbbbb |         N         |
+|     306 | 공조실            | #bbbbbb |         N         |
+|     307 | 화장실            | #bbbbbb |         N         |
+|     308 | 출입구            | #bbbbbb |         N         |
+|     309 | 라이브러리        | #5CAC1E |         N         |
+|     310 | 코워킹 존         | #5CAC1E |         N         |
+|     311 | 페 7              | #6BC2F9 |         Y         |
+|     312 | 페 8              | #6BC2F9 |         Y         |
+|     313 | 페 9              | #6BC2F9 |         Y         |
+|     314 | 페 10             | #6BC2F9 |         Y         |
+|     315 | 페 11             | #6BC2F9 |         Y         |
+|     316 | 페 12             | #6BC2F9 |         Y         |
+|     317 | 페 13             | #6BC2F9 |         Y         |
+|     318 | 페 14             | #6BC2F9 |         Y         |
 
 ## 8) 운영 메모
 

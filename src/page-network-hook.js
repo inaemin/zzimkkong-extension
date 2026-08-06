@@ -14,9 +14,7 @@
     });
   }
 
-  const missingBootstrapDependencies = [
-    ["__zzkPageHookShared", globalThis.__zzkPageHookShared],
-  ]
+  const missingBootstrapDependencies = [["__zzkPageHookShared", globalThis.__zzkPageHookShared]]
     .filter(([, value]) => !value)
     .map(([name]) => name);
 
@@ -130,9 +128,10 @@
       let method = "GET";
       const reservationAttemptId = readReservationAttemptId();
       const ownerNamePromise = extractOwnerCandidateFromFetchRequest(input, init).catch(() => "");
-      const requestContextPromise = extractReservationRequestContextFromFetchRequest(input, init).catch(
-        () => null
-      );
+      const requestContextPromise = extractReservationRequestContextFromFetchRequest(
+        input,
+        init,
+      ).catch(() => null);
 
       if (typeof input === "string" || input instanceof URL) {
         url = String(input);
@@ -160,8 +159,14 @@
         Promise.all([ownerNamePromise, requestContextPromise, responseBodyPromise])
           .then(([ownerNameCandidate, requestContext, responseBody]) => {
             const shouldEmit =
-              shouldEmitReservationMutationEvent(url, method, { reservationAttemptId, requestContext }) ||
-              shouldEmitReservationMutationEvent(eventUrl, method, { reservationAttemptId, requestContext });
+              shouldEmitReservationMutationEvent(url, method, {
+                reservationAttemptId,
+                requestContext,
+              }) ||
+              shouldEmitReservationMutationEvent(eventUrl, method, {
+                reservationAttemptId,
+                requestContext,
+              });
             if (!shouldEmit) {
               return;
             }
@@ -175,7 +180,7 @@
                 requestContext,
                 reservationAttemptId,
                 responseBody,
-              })
+              }),
             );
           })
           .catch(() => {
@@ -195,7 +200,7 @@
                 ownerNameCandidate: "",
                 requestContext: null,
                 reservationAttemptId,
-              })
+              }),
             );
           });
 
@@ -238,7 +243,7 @@
               ownerNameCandidate: this.__zzkReservationOwnerNameCandidate,
               requestContext: this.__zzkReservationRequestContext,
               reservationAttemptId: this.__zzkReservationAttemptId,
-            })
+            }),
           );
         }
       });

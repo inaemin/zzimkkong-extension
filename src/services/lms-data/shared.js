@@ -18,7 +18,9 @@
   function getRoomTypeForRoomName(roomName) {
     const normalizedName = normalizeTargetRoomName(roomName);
     const metadata = TARGET_ROOM_METADATA_BY_NORMALIZED_NAME.get(normalizedName);
-    return metadata?.kind || (normalizedName.startsWith("페") ? "pair" : MAP_CALENDAR_SPACE_TAB_MEETING);
+    return (
+      metadata?.kind || (normalizedName.startsWith("페") ? "pair" : MAP_CALENDAR_SPACE_TAB_MEETING)
+    );
   }
 
   const lmsDataNormalizers = globalThis.__zzkLmsDataNormalizers.createLmsDataNormalizers({
@@ -319,9 +321,7 @@
         );
       }
       const message =
-        data && typeof data.message === "string"
-          ? data.message
-          : `요청 실패 (${response.status})`;
+        data && typeof data.message === "string" ? data.message : `요청 실패 (${response.status})`;
       throw new Error(message);
     }
 

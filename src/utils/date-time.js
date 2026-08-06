@@ -264,7 +264,7 @@
     if (!isDateString(dateString) || !Number.isInteger(dayOffset)) {
       return dateString;
     }
-    const [year, month, day] = dateString.split('-').map((value) => Number(value));
+    const [year, month, day] = dateString.split("-").map((value) => Number(value));
     const date = new Date(Date.UTC(year, month - 1, day));
     if (Number.isNaN(date.getTime())) {
       return dateString;
@@ -290,7 +290,7 @@
     if (!isDateString(dateString)) {
       return null;
     }
-    const [year, month, day] = dateString.split('-').map((value) => Number(value));
+    const [year, month, day] = dateString.split("-").map((value) => Number(value));
     const date = new Date(Date.UTC(year, month - 1, day));
     return Number.isNaN(date.getTime()) ? null : date;
   }
@@ -338,7 +338,7 @@
     if (!isDateString(dateString)) {
       return "";
     }
-    const [year, month, day] = dateString.split('-');
+    const [year, month, day] = dateString.split("-");
     const weekdayText = formatKSTWeekday(dateString);
     return weekdayText ? `${year}.${month}.${day} (${weekdayText})` : `${year}.${month}.${day}`;
   }

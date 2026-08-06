@@ -401,19 +401,10 @@
     scheduleLoadingTab: null,
     activeScheduleDate: null,
     activeScheduleTab: null,
-    mapCalendarVisible: readStoredBoolean(
-      MAP_CALENDAR_ALWAYS_OPEN_STORAGE_KEY,
-      true,
-    ),
-    mapCalendarAlwaysOpen: readStoredBoolean(
-      MAP_CALENDAR_ALWAYS_OPEN_STORAGE_KEY,
-      true,
-    ),
+    mapCalendarVisible: readStoredBoolean(MAP_CALENDAR_ALWAYS_OPEN_STORAGE_KEY, true),
+    mapCalendarAlwaysOpen: readStoredBoolean(MAP_CALENDAR_ALWAYS_OPEN_STORAGE_KEY, true),
     mapCalendarSpaceTab: normalizeMapCalendarSpaceTab(
-      readStoredText(
-        MAP_CALENDAR_SPACE_TAB_STORAGE_KEY,
-        MAP_CALENDAR_SPACE_TAB_MEETING,
-      ),
+      readStoredText(MAP_CALENDAR_SPACE_TAB_STORAGE_KEY, MAP_CALENDAR_SPACE_TAB_MEETING),
     ),
     mapCalendarCollapsed: false,
     mapCalendarWidth: readStoredNumber(MAP_CALENDAR_WIDTH_STORAGE_KEY, null),
@@ -461,13 +452,8 @@
     slackModalKeydownHandler: null,
     slackModalVisible: false,
     mapCalendarSuppressedBySlack: false,
-    slackChannelMention: readStoredText(
-      SLACK_CHANNEL_MENTION_STORAGE_KEY,
-      "",
-    ),
-    slackChannelHistory: readStoredChannelTokens(
-      SLACK_CHANNEL_HISTORY_STORAGE_KEY,
-    ),
+    slackChannelMention: readStoredText(SLACK_CHANNEL_MENTION_STORAGE_KEY, ""),
+    slackChannelHistory: readStoredChannelTokens(SLACK_CHANNEL_HISTORY_STORAGE_KEY),
     slackReminderLeadMinutes: normalizeSlackReminderLeadMinutes(
       readStoredText(
         SLACK_REMINDER_LEAD_TIME_STORAGE_KEY,
@@ -505,7 +491,7 @@
         state.mapCalendarVisible = false;
         state.lastAutoOpenPath = null;
       } else {
-        queueSlackModalFromPersistedEditSubmitIfNeeded('boot-ready');
+        queueSlackModalFromPersistedEditSubmitIfNeeded("boot-ready");
         if (state.mapCalendarAlwaysOpen) {
           state.scheduleOverlayEnabled = true;
           state.mapCalendarVisible = true;
@@ -530,9 +516,7 @@
     });
 
     const observerRoot =
-      document.documentElement instanceof HTMLElement
-        ? document.documentElement
-        : document.body;
+      document.documentElement instanceof HTMLElement ? document.documentElement : document.body;
     observer.observe(observerRoot, {
       childList: true,
       subtree: true,
@@ -601,7 +585,7 @@
       teardownGuestUi();
       return;
     }
-    queueSlackModalFromPersistedEditSubmitIfNeeded('mutation-observer');
+    queueSlackModalFromPersistedEditSubmitIfNeeded("mutation-observer");
     if (!isGuestUiReadyForActivation()) {
       removeMapCalendarLauncher();
       removeMapCalendarOverlay();
@@ -782,18 +766,12 @@
           return;
         }
 
-        if (
-          event.target instanceof Node &&
-          expectedTarget.contains(event.target)
-        ) {
+        if (event.target instanceof Node && expectedTarget.contains(event.target)) {
           return;
         }
 
         const actualTopElement = document.elementFromPoint(x, y);
-        if (
-          !(actualTopElement instanceof Element) ||
-          expectedTarget.contains(actualTopElement)
-        ) {
+        if (!(actualTopElement instanceof Element) || expectedTarget.contains(actualTopElement)) {
           return;
         }
 
@@ -821,19 +799,14 @@
 
     const logoutButton = Array.from(document.querySelectorAll("button")).find(
       (button) =>
-        button instanceof HTMLButtonElement &&
-        (button.textContent || "").includes("로그아웃"),
+        button instanceof HTMLButtonElement && (button.textContent || "").includes("로그아웃"),
     );
 
-    return [myPageLink, logoutButton].filter(
-      (node) => node instanceof HTMLElement,
-    );
+    return [myPageLink, logoutButton].filter((node) => node instanceof HTMLElement);
   }
 
   function pointInRect(x, y, rect) {
-    return (
-      x >= rect.left && x <= rect.right && y >= rect.top && y <= rect.bottom
-    );
+    return x >= rect.left && x <= rect.right && y >= rect.top && y <= rect.bottom;
   }
 
   async function refreshAvailability() {
@@ -926,10 +899,7 @@
 
     state.loading = true;
     state.pendingAvailabilityRefresh = false;
-    setStatus(
-      `${getMapCalendarSpaceTabLabel()} 현황을 불러오는 중입니다...`,
-      "loading",
-    );
+    setStatus(`${getMapCalendarSpaceTabLabel()} 현황을 불러오는 중입니다...`, "loading");
     state.elements.refreshButton.disabled = true;
 
     const inflight = sendMessage({
@@ -1000,9 +970,7 @@
     const availableCount = rooms.filter((room) => room.isAvailable).length;
     state.elements.totalCount.textContent = String(rooms.length);
     state.elements.availableCount.textContent = String(availableCount);
-    state.elements.occupiedCount.textContent = String(
-      Math.max(0, rooms.length - availableCount),
-    );
+    state.elements.occupiedCount.textContent = String(Math.max(0, rooms.length - availableCount));
   }
 
   function renderRoomLists(rooms) {
@@ -1043,10 +1011,7 @@
         document.getElementById(MAP_CALENDAR_OVERLAY_TAB_MEETING_ID),
         MAP_CALENDAR_SPACE_TAB_MEETING,
       ],
-      [
-        document.getElementById(MAP_CALENDAR_OVERLAY_TAB_PAIR_ID),
-        MAP_CALENDAR_SPACE_TAB_PAIR,
-      ],
+      [document.getElementById(MAP_CALENDAR_OVERLAY_TAB_PAIR_ID), MAP_CALENDAR_SPACE_TAB_PAIR],
     ];
 
     tabs.forEach(([button, tab]) => {
@@ -1065,12 +1030,9 @@
     renderCounts(visibleRooms);
     renderRoomLists(visibleRooms);
 
-    const activeDate =
-      normalizeDateInput(state.elements?.dateInput) || state.activeScheduleDate;
+    const activeDate = normalizeDateInput(state.elements?.dateInput) || state.activeScheduleDate;
     const isModalOpen = isMapCalendarModalOpenRequested();
-    const cachedSchedule = activeDate
-      ? getFreshScheduleCache(activeDate, activeTab)
-      : null;
+    const cachedSchedule = activeDate ? getFreshScheduleCache(activeDate, activeTab) : null;
     if (cachedSchedule && isModalOpen) {
       renderMapCalendarOverlay(cachedSchedule);
       return;
@@ -1112,8 +1074,7 @@
     if (rooms.length === 0) {
       const empty = document.createElement("li");
       empty.className = "zzk-empty";
-      empty.textContent =
-        type === "available" ? "비어 있는 공간 없음" : "사용 중인 공간 없음";
+      empty.textContent = type === "available" ? "비어 있는 공간 없음" : "사용 중인 공간 없음";
       container.appendChild(empty);
       return;
     }
@@ -1190,17 +1151,13 @@
 
     state.latestRooms = rooms;
     state.latestRoomsBySpaceTab.set(roomType, rooms);
-    state.latestMapName =
-      typeof data?.mapName === "string" ? data.mapName : state.latestMapName;
+    state.latestMapName = typeof data?.mapName === "string" ? data.mapName : state.latestMapName;
 
     renderCounts(rooms);
     renderRoomLists(rooms);
     renderUpdatedAt();
 
-    setStatus(
-      `${data?.mapName || "공간 지도"} · ${date} ${startTime}~${endTime} 기준`,
-      "success",
-    );
+    setStatus(`${data?.mapName || "공간 지도"} · ${date} ${startTime}~${endTime} 기준`, "success");
   }
 
   function isScheduleCacheStale(date) {
@@ -1221,15 +1178,12 @@
     tab = state.mapCalendarSpaceTab,
     sharingMapId = state.currentSharingMapId || getSharingMapId(),
   ) {
-    const normalizedDate = normalizeDateString(
-      typeof date === "string" ? date : "",
-    );
+    const normalizedDate = normalizeDateString(typeof date === "string" ? date : "");
     if (!isDateString(normalizedDate)) {
       return "";
     }
 
-    const normalizedSharingMapId =
-      typeof sharingMapId === "string" ? sharingMapId.trim() : "";
+    const normalizedSharingMapId = typeof sharingMapId === "string" ? sharingMapId.trim() : "";
     if (!normalizedSharingMapId) {
       return "";
     }
@@ -1242,9 +1196,7 @@
     tab = state.mapCalendarSpaceTab,
     sharingMapId = state.currentSharingMapId || getSharingMapId(),
   ) {
-    const normalizedDate = normalizeDateString(
-      typeof date === "string" ? date : "",
-    );
+    const normalizedDate = normalizeDateString(typeof date === "string" ? date : "");
     if (!isDateString(normalizedDate)) {
       return null;
     }
@@ -1274,9 +1226,7 @@
     tab = state.mapCalendarSpaceTab,
     sharingMapId = state.currentSharingMapId || getSharingMapId(),
   ) {
-    const normalizedDate = normalizeDateString(
-      typeof date === "string" ? date : "",
-    );
+    const normalizedDate = normalizeDateString(typeof date === "string" ? date : "");
     if (!isDateString(normalizedDate)) {
       return;
     }
@@ -1304,9 +1254,7 @@
   }
 
   function setScheduleLoadingDate(date, isLoading, tab = state.mapCalendarSpaceTab) {
-    const normalizedDate = normalizeDateString(
-      typeof date === "string" ? date : "",
-    );
+    const normalizedDate = normalizeDateString(typeof date === "string" ? date : "");
     const normalizedTab = normalizeMapCalendarSpaceTab(tab);
 
     if (isLoading) {
@@ -1321,8 +1269,7 @@
 
     if (
       isDateString(normalizedDate) &&
-      (state.scheduleLoadingDate !== normalizedDate ||
-        state.scheduleLoadingTab !== normalizedTab)
+      (state.scheduleLoadingDate !== normalizedDate || state.scheduleLoadingTab !== normalizedTab)
     ) {
       return;
     }
@@ -1364,11 +1311,7 @@
       return;
     }
 
-    const scopeKey = buildScheduleScopeKey(
-      normalizedDate,
-      activeTab,
-      sharingMapId,
-    );
+    const scopeKey = buildScheduleScopeKey(normalizedDate, activeTab, sharingMapId);
     const existingInflight = state.scheduleInflightByDate.get(scopeKey);
     if (existingInflight instanceof Promise) {
       setScheduleLoadingDate(normalizedDate, true, activeTab);
@@ -1405,9 +1348,7 @@
       });
 
       if (!response?.ok) {
-        throw new Error(
-          response?.error || "시간대별 예약 현황을 불러오지 못했습니다.",
-        );
+        throw new Error(response?.error || "시간대별 예약 현황을 불러오지 못했습니다.");
       }
 
       if (getSharingMapId() !== sharingMapId) {
@@ -1543,8 +1484,7 @@
     errorBox.className = "zzk-map-calendar-error";
     const errorText = document.createElement("p");
     errorText.className = "zzk-map-calendar-error-message";
-    errorText.textContent =
-      errorMessage || "예약 현황을 불러오지 못했습니다.";
+    errorText.textContent = errorMessage || "예약 현황을 불러오지 못했습니다.";
     errorBox.appendChild(errorText);
 
     const retryButton = document.createElement("button");
@@ -1615,20 +1555,14 @@
     const previousScrollEl = getMapCalendarScrollElement(overlay);
     const previousBody = overlay.querySelector(".zzk-map-calendar-body");
     const preservedBodyScroll = {
-      left:
-        previousScrollEl instanceof HTMLElement ? previousScrollEl.scrollLeft : 0,
-      top:
-        previousBody instanceof HTMLElement ? previousBody.scrollTop : 0,
+      left: previousScrollEl instanceof HTMLElement ? previousScrollEl.scrollLeft : 0,
+      top: previousBody instanceof HTMLElement ? previousBody.scrollTop : 0,
     };
     // 평면도 스크롤러도 매 리렌더마다 새로 그려지므로, 슬롯 hover 등으로 자주 재렌더될 때
     // 가로 스크롤 위치가 맨 앞으로 튀지 않도록 이전 위치를 보존한다.
-    const previousFloorMapScroller = overlay.querySelector(
-      ".zzk-map-calendar-floormap-scroller",
-    );
+    const previousFloorMapScroller = overlay.querySelector(".zzk-map-calendar-floormap-scroller");
     const preservedFloorMapScrollLeft =
-      previousFloorMapScroller instanceof HTMLElement
-        ? previousFloorMapScroller.scrollLeft
-        : 0;
+      previousFloorMapScroller instanceof HTMLElement ? previousFloorMapScroller.scrollLeft : 0;
 
     applyMapCalendarOverlayOffset(overlay);
     updateMapCalendarLauncherState();
@@ -1660,18 +1594,14 @@
         }
 
         const orderA =
-          TARGET_ROOM_ORDER.get(normalizeTargetRoomName(roomA?.name)) ??
-          Number.MAX_SAFE_INTEGER;
+          TARGET_ROOM_ORDER.get(normalizeTargetRoomName(roomA?.name)) ?? Number.MAX_SAFE_INTEGER;
         const orderB =
-          TARGET_ROOM_ORDER.get(normalizeTargetRoomName(roomB?.name)) ??
-          Number.MAX_SAFE_INTEGER;
+          TARGET_ROOM_ORDER.get(normalizeTargetRoomName(roomB?.name)) ?? Number.MAX_SAFE_INTEGER;
         return orderA - orderB;
       });
     const selectionDate = scheduleData.date || "";
     const previousRenderedScheduleDate = state.lastRenderedScheduleDate;
-    state.lastRenderedScheduleDate = isDateString(selectionDate)
-      ? selectionDate
-      : null;
+    state.lastRenderedScheduleDate = isDateString(selectionDate) ? selectionDate : null;
     state.mapCalendarTimelineSnapshot = Array.isArray(timeline) ? timeline : [];
     if (state.lastRenderedScheduleDate !== previousRenderedScheduleDate) {
       // 날짜가 바뀌면 현재 시각 스크롤을 다시 한 번 맞춰준다.
@@ -1688,10 +1618,7 @@
     if (state.slotHover && state.slotHover.date !== selectionDate) {
       state.slotHover = null;
     }
-    if (
-      state.appliedSelection &&
-      state.appliedSelection.date !== selectionDate
-    ) {
+    if (state.appliedSelection && state.appliedSelection.date !== selectionDate) {
       state.appliedSelection = null;
     }
     if (
@@ -1739,17 +1666,11 @@
     const stopOverlayEventPropagation = (event) => {
       event.stopPropagation();
     };
-    [
-      "pointerdown",
-      "mousedown",
-      "mouseup",
-      "click",
-      "dblclick",
-      "touchstart",
-      "touchend",
-    ].forEach((eventName) => {
-      card.addEventListener(eventName, stopOverlayEventPropagation);
-    });
+    ["pointerdown", "mousedown", "mouseup", "click", "dblclick", "touchstart", "touchend"].forEach(
+      (eventName) => {
+        card.addEventListener(eventName, stopOverlayEventPropagation);
+      },
+    );
     card.addEventListener("wheel", stopOverlayEventPropagation, {
       passive: true,
     });
@@ -1811,8 +1732,7 @@
 
       const datePopoverPrevButton = document.createElement("button");
       datePopoverPrevButton.type = "button";
-      datePopoverPrevButton.className =
-        "zzk-map-calendar-date-popover-nav prev";
+      datePopoverPrevButton.className = "zzk-map-calendar-date-popover-nav prev";
       datePopoverPrevButton.innerHTML = CHEVRON_LEFT_ICON_SVG;
       datePopoverPrevButton.setAttribute("aria-label", "이전달");
 
@@ -1821,16 +1741,11 @@
 
       const datePopoverNextButton = document.createElement("button");
       datePopoverNextButton.type = "button";
-      datePopoverNextButton.className =
-        "zzk-map-calendar-date-popover-nav next";
+      datePopoverNextButton.className = "zzk-map-calendar-date-popover-nav next";
       datePopoverNextButton.innerHTML = CHEVRON_RIGHT_ICON_SVG;
       datePopoverNextButton.setAttribute("aria-label", "다음달");
 
-      datePopoverHeader.append(
-        datePopoverPrevButton,
-        datePopoverTitle,
-        datePopoverNextButton,
-      );
+      datePopoverHeader.append(datePopoverPrevButton, datePopoverTitle, datePopoverNextButton);
 
       const datePopoverWeekdays = document.createElement("div");
       datePopoverWeekdays.className = "zzk-map-calendar-date-popover-weekdays";
@@ -1842,23 +1757,14 @@
 
       const datePopoverGrid = document.createElement("div");
       datePopoverGrid.className = "zzk-map-calendar-date-popover-grid";
-      datePopover.append(
-        datePopoverHeader,
-        datePopoverWeekdays,
-        datePopoverGrid,
+      datePopover.append(datePopoverHeader, datePopoverWeekdays, datePopoverGrid);
+      ["pointerdown", "click", "mousedown", "mouseup", "touchstart", "touchend"].forEach(
+        (eventName) => {
+          datePopover.addEventListener(eventName, (event) => {
+            event.stopPropagation();
+          });
+        },
       );
-      [
-        "pointerdown",
-        "click",
-        "mousedown",
-        "mouseup",
-        "touchstart",
-        "touchend",
-      ].forEach((eventName) => {
-        datePopover.addEventListener(eventName, (event) => {
-          event.stopPropagation();
-        });
-      });
 
       const prevDateButton = document.createElement("button");
       prevDateButton.type = "button";
@@ -1868,8 +1774,7 @@
 
       const dateInput = document.createElement("input");
       dateInput.type = "date";
-      dateInput.className =
-        "zzk-map-calendar-control zzk-date zzk-map-calendar-date-native";
+      dateInput.className = "zzk-map-calendar-control zzk-date zzk-map-calendar-date-native";
 
       const nextDateButton = document.createElement("button");
       nextDateButton.type = "button";
@@ -1896,12 +1801,8 @@
 
         const prevDate = addDaysToDateString(normalizedDate, -1);
         const nextDate = addDaysToDateString(normalizedDate, 1);
-        const prevLabel = isDateString(prevDate)
-          ? `이전일 (${prevDate})`
-          : "이전일";
-        const nextLabel = isDateString(nextDate)
-          ? `다음일 (${nextDate})`
-          : "다음일";
+        const prevLabel = isDateString(prevDate) ? `이전일 (${prevDate})` : "이전일";
+        const nextLabel = isDateString(nextDate) ? `다음일 (${nextDate})` : "다음일";
         const todayLabel = `오늘 (${todayDate})`;
         const dateDisplayText = formatDateSelectorText(normalizedDate);
         renderDateDisplayLabel(dateWeekdayLabel, normalizedDate);
@@ -1930,8 +1831,7 @@
       dateInput.setAttribute("aria-label", "지도 날짜 선택");
       const shouldUseCustomDatePopover = true;
       let datePopoverMonth =
-        state.mapCalendarDatePopoverMonth ||
-        getMonthStartDateString(initialDate || todayDate);
+        state.mapCalendarDatePopoverMonth || getMonthStartDateString(initialDate || todayDate);
       let lastDatePopoverPosition = { left: null, top: null };
 
       const syncMapCalendarDatePopoverPosition = () => {
@@ -1943,16 +1843,10 @@
 
         const displayRect = dateDisplayWrap.getBoundingClientRect();
         const popoverRect = datePopover.getBoundingClientRect();
-        const viewportWidth =
-          window.innerWidth || document.documentElement.clientWidth || 0;
-        const viewportHeight =
-          window.innerHeight || document.documentElement.clientHeight || 0;
-        const popoverWidth = Math.ceil(
-          popoverRect.width || datePopover.offsetWidth || 236,
-        );
-        const popoverHeight = Math.ceil(
-          popoverRect.height || datePopover.offsetHeight || 0,
-        );
+        const viewportWidth = window.innerWidth || document.documentElement.clientWidth || 0;
+        const viewportHeight = window.innerHeight || document.documentElement.clientHeight || 0;
+        const popoverWidth = Math.ceil(popoverRect.width || datePopover.offsetWidth || 236);
+        const popoverHeight = Math.ceil(popoverRect.height || datePopover.offsetHeight || 0);
         const horizontalPadding = 12;
         const verticalGap = 8;
 
@@ -1978,10 +1872,7 @@
         left = Math.min(left, viewportWidth - popoverWidth - horizontalPadding);
         left = Math.max(horizontalPadding, left);
 
-        const top = Math.max(
-          horizontalPadding,
-          displayRect.bottom + verticalGap,
-        );
+        const top = Math.max(horizontalPadding, displayRect.bottom + verticalGap);
 
         const nextLeft = Math.round(left);
         const nextTop = Math.round(top);
@@ -1989,8 +1880,7 @@
         datePopover.style.top = `${nextTop}px`;
         lastDatePopoverPosition = { left: nextLeft, top: nextTop };
       };
-      state.syncMapCalendarDatePopoverPosition =
-        syncMapCalendarDatePopoverPosition;
+      state.syncMapCalendarDatePopoverPosition = syncMapCalendarDatePopoverPosition;
 
       const handleViewportPopoverReposition = () => {
         if (datePopover.hidden) {
@@ -2008,11 +1898,7 @@
         state.mapCalendarDatePopoverMonth = datePopoverMonth;
         syncMapCalendarDatePopoverPosition();
         window.removeEventListener("resize", handleViewportPopoverReposition);
-        window.removeEventListener(
-          "scroll",
-          handleViewportPopoverReposition,
-          true,
-        );
+        window.removeEventListener("scroll", handleViewportPopoverReposition, true);
       };
 
       const openMapCalendarDatePopover = () => {
@@ -2022,11 +1908,7 @@
         state.mapCalendarDatePopoverOpen = true;
         state.mapCalendarDatePopoverMonth = datePopoverMonth;
         window.addEventListener("resize", handleViewportPopoverReposition);
-        window.addEventListener(
-          "scroll",
-          handleViewportPopoverReposition,
-          true,
-        );
+        window.addEventListener("scroll", handleViewportPopoverReposition, true);
         window.requestAnimationFrame(() => {
           syncMapCalendarDatePopoverPosition();
         });
@@ -2041,10 +1923,7 @@
       };
 
       const selectMapCalendarPopoverDate = (nextDate) => {
-        const normalizedDate = clampDateToMin(
-          normalizeDateString(nextDate),
-          getTodayDateInKST(),
-        );
+        const normalizedDate = clampDateToMin(normalizeDateString(nextDate), getTodayDateInKST());
         if (!normalizedDate) {
           return;
         }
@@ -2061,13 +1940,9 @@
         const todayDateValue = getTodayDateInKST();
         const selectedDate =
           normalizeDateString(
-            state.elements?.dateInput.value ||
-              dateInput.value ||
-              todayDateValue,
+            state.elements?.dateInput.value || dateInput.value || todayDateValue,
           ) || todayDateValue;
-        const monthStart = parseDateStringAsUTC(
-          datePopoverMonth || selectedDate,
-        );
+        const monthStart = parseDateStringAsUTC(datePopoverMonth || selectedDate);
         if (!(monthStart instanceof Date)) {
           datePopoverGrid.replaceChildren();
           datePopoverTitle.textContent = "";
@@ -2085,8 +1960,7 @@
         const endWeekday = monthEnd.getUTCDay();
         const gridEnd = new Date(monthEnd.getTime());
         gridEnd.setUTCDate(gridEnd.getUTCDate() + (6 - endWeekday));
-        const totalDayCount =
-          Math.round((gridEnd.getTime() - gridStart.getTime()) / 86400000) + 1;
+        const totalDayCount = Math.round((gridEnd.getTime() - gridStart.getTime()) / 86400000) + 1;
 
         for (let index = 0; index < totalDayCount; index += 1) {
           const cellDate = new Date(gridStart.getTime());
@@ -2218,10 +2092,7 @@
             closeMapCalendarDatePopover();
             return;
           }
-          if (
-            dateDisplayWrap.contains(target) ||
-            datePopover.contains(target)
-          ) {
+          if (dateDisplayWrap.contains(target) || datePopover.contains(target)) {
             return;
           }
           closeMapCalendarDatePopover();
@@ -2250,12 +2121,7 @@
       if (state.mapCalendarDatePopoverOpen) {
         openMapCalendarDatePopover();
       }
-      dateControlRow.append(
-        prevDateButton,
-        dateDisplayWrap,
-        nextDateButton,
-        todayDateButton,
-      );
+      dateControlRow.append(prevDateButton, dateDisplayWrap, nextDateButton, todayDateButton);
       controlRow.appendChild(dateControlRow);
       const dateTagLegend = document.createElement("div");
       dateTagLegend.className = "zzk-room-tag-legend";
@@ -2278,10 +2144,7 @@
     alwaysOpenInput.setAttribute("aria-label", "지도 타임블록 항상 열기");
     alwaysOpenInput.addEventListener("change", () => {
       state.mapCalendarAlwaysOpen = alwaysOpenInput.checked;
-      writeStoredBoolean(
-        MAP_CALENDAR_ALWAYS_OPEN_STORAGE_KEY,
-        state.mapCalendarAlwaysOpen,
-      );
+      writeStoredBoolean(MAP_CALENDAR_ALWAYS_OPEN_STORAGE_KEY, state.mapCalendarAlwaysOpen);
       if (state.mapCalendarAlwaysOpen) {
         state.mapCalendarVisible = true;
         openMapCalendarModal();
@@ -2343,12 +2206,8 @@
     }
 
     const hasTerminalHourBoundary =
-      Number.isInteger(scheduleData?.range?.endMinute) &&
-      scheduleData.range.endMinute % 60 === 0;
-    const timelineLayout = buildMapCalendarTimelineGridLayout(
-      timeline,
-      hasTerminalHourBoundary,
-    );
+      Number.isInteger(scheduleData?.range?.endMinute) && scheduleData.range.endMinute % 60 === 0;
+    const timelineLayout = buildMapCalendarTimelineGridLayout(timeline, hasTerminalHourBoundary);
 
     // 2-pane 구조:
     //  - gridWrap(flex): [labelPane(고정)] [timelinePane(가로 스크롤)]
@@ -2384,10 +2243,7 @@
     boundaryTrack.style.gridTemplateColumns = timelineLayout.templateColumns;
     boundaryLayer.appendChild(boundaryTrack);
     timelineTrack.appendChild(boundaryLayer);
-    renderMapCalendarHourBoundaryCells(
-      boundaryTrack,
-      timelineLayout.boundaryColumnStarts,
-    );
+    renderMapCalendarHourBoundaryCells(boundaryTrack, timelineLayout.boundaryColumnStarts);
 
     // 라벨 pane 의 그리드(층/회의실 열).
     const labelGrid = document.createElement("div");
@@ -2438,9 +2294,7 @@
       if (slot.isHourMark) {
         slotLabel.classList.add("hour-boundary");
       }
-      slotLabel.style.gridColumn = String(
-        timelineLayout.slotColumnStarts[index],
-      );
+      slotLabel.style.gridColumn = String(timelineLayout.slotColumnStarts[index]);
       slotLabel.textContent = slot.isHourMark ? slot.label : "";
       axisSlots.appendChild(slotLabel);
     });
@@ -2472,8 +2326,8 @@
         currentFloorKey = floorInfo.floorKey;
         const isFloorDivider = Boolean(
           floorInfo.floorLabel &&
-            previousMappedFloorLabel &&
-            previousMappedFloorLabel !== floorInfo.floorLabel,
+          previousMappedFloorLabel &&
+          previousMappedFloorLabel !== floorInfo.floorLabel,
         );
 
         // 라벨 pane: 층 이름 열 + 회의실 이름 행들.
@@ -2524,9 +2378,7 @@
       slots.style.gridTemplateColumns = timelineLayout.templateColumns;
       row.appendChild(slots);
 
-      const reservations = Array.isArray(room.reservations)
-        ? room.reservations
-        : [];
+      const reservations = Array.isArray(room.reservations) ? room.reservations : [];
 
       const slotMetas = timeline.map((slot) => {
         const overlappedReservations = reservations.filter(
@@ -2538,8 +2390,7 @@
         );
 
         const isPastBlocked =
-          Number.isFinite(earliestSelectableMinute) &&
-          slot.startMinute < earliestSelectableMinute;
+          Number.isFinite(earliestSelectableMinute) && slot.startMinute < earliestSelectableMinute;
 
         return {
           slot,
@@ -2575,20 +2426,13 @@
           (meta) => meta.slot.startMinute === state.slotSelection?.startMinute,
         );
 
-        if (
-          selectionStartIndex >= 0 &&
-          slotMetas[selectionStartIndex].isSelectable
-        ) {
+        if (selectionStartIndex >= 0 && slotMetas[selectionStartIndex].isSelectable) {
           const hardMaxIndex = Math.min(
             slotMetas.length - 1,
             selectionStartIndex + MAX_RESERVATION_BLOCKS - 1,
           );
 
-          for (
-            let index = selectionStartIndex;
-            index <= hardMaxIndex;
-            index += 1
-          ) {
+          for (let index = selectionStartIndex; index <= hardMaxIndex; index += 1) {
             if (!slotMetas[index].isSelectable) {
               break;
             }
@@ -2609,10 +2453,7 @@
         }
       }
 
-      if (
-        selectionStartIndex >= 0 &&
-        selectionHoverIndex < selectionStartIndex
-      ) {
+      if (selectionStartIndex >= 0 && selectionHoverIndex < selectionStartIndex) {
         selectionHoverIndex = selectionStartIndex;
       }
 
@@ -2641,8 +2482,7 @@
           // lms+ 는 클릭 시 기본 60분(30분 슬롯 2칸)을 선택하므로, hover 미리보기도
           // 같은 범위(다음 칸이 막혀 있으면 1칸)를 보여줘 클릭 결과와 일치시킨다.
           const hoverStartMinute = timeline[hoverStartIndex].startMinute;
-          const hoverTargetEndMinute =
-            hoverStartMinute + LMS_DEFAULT_RESERVATION_MINUTES;
+          const hoverTargetEndMinute = hoverStartMinute + LMS_DEFAULT_RESERVATION_MINUTES;
           let lmsMaxIndex = hoverStartIndex;
           for (
             let candidateIndex = hoverStartIndex;
@@ -2679,21 +2519,13 @@
       });
 
       slotMetas.forEach((slotMeta, index) => {
-        const {
-          slot,
-          isBusy,
-          isPastBlocked,
-          isSelectable,
-          isRoomLocked,
-          overlappedReservations,
-        } = slotMeta;
+        const { slot, isBusy, isPastBlocked, isSelectable, isRoomLocked, overlappedReservations } =
+          slotMeta;
         const slotElement = document.createElement("div");
         slotElement.className = "zzk-map-calendar-slot";
         // 슬롯 시작 시각을 데이터 속성으로 남겨 두면 테스트/디버깅에서 특정 블록을 집기 쉽다.
         slotElement.dataset.zzkSlotStart = slot.label;
-        slotElement.style.gridColumn = String(
-          timelineLayout.slotColumnStarts[index],
-        );
+        slotElement.style.gridColumn = String(timelineLayout.slotColumnStarts[index]);
         if (isBusy) {
           slotElement.classList.add("busy");
         } else {
@@ -2839,11 +2671,7 @@
 
           let autoEndIndex = index;
 
-          for (
-            let selectionIndex = index;
-            selectionIndex <= hardMaxIndex;
-            selectionIndex += 1
-          ) {
+          for (let selectionIndex = index; selectionIndex <= hardMaxIndex; selectionIndex += 1) {
             if (!slotMetas[selectionIndex].isSelectable) {
               break;
             }
@@ -2926,7 +2754,6 @@
     state.editReservationBaselinePathKey = "";
   }
 
-
   function syncMapCalendarBodyScrollState(bodyElement) {
     if (!(bodyElement instanceof HTMLElement)) {
       return;
@@ -2952,20 +2779,14 @@
 
       // gutter 만큼의 넘침은 스크롤바 자리이지 실제 콘텐츠 넘침이 아니므로 제외한다.
       const overflowDelta = bodyElement.scrollHeight - bodyElement.clientHeight - gutter;
-      bodyElement.classList.toggle(
-        "zzk-map-calendar-body-scrollable",
-        overflowDelta > 2,
-      );
+      bodyElement.classList.toggle("zzk-map-calendar-body-scrollable", overflowDelta > 2);
     };
 
     update();
     window.requestAnimationFrame(update);
   }
 
-  function buildMapCalendarTimelineGridLayout(
-    timeline,
-    hasTerminalHourBoundary,
-  ) {
+  function buildMapCalendarTimelineGridLayout(timeline, hasTerminalHourBoundary) {
     if (!Array.isArray(timeline) || timeline.length === 0) {
       return {
         templateColumns: "",
@@ -3000,9 +2821,7 @@
     // 갖는데 07:00 만 여백 없이 붙으면 어색하므로, 선 없이 '여백'만 넣어 리듬을 맞춘다.
     // 여백 폭은 정시 경계 세그먼트(gap + line + gap)와 동일하게 잡는다.
     if (timeline[0]?.isHourMark) {
-      addColumn(
-        CALENDAR_HOUR_BOUNDARY_SIDE_GAP * 2 + CALENDAR_HOUR_BOUNDARY_LINE_WIDTH,
-      );
+      addColumn(CALENDAR_HOUR_BOUNDARY_SIDE_GAP * 2 + CALENDAR_HOUR_BOUNDARY_LINE_WIDTH);
     }
 
     slotColumnStarts.push(columns.length + 1);
@@ -3031,17 +2850,12 @@
     };
   }
 
-  function renderMapCalendarHourBoundaryCells(
-    slotsContainer,
-    boundaryColumnStarts,
-  ) {
+  function renderMapCalendarHourBoundaryCells(slotsContainer, boundaryColumnStarts) {
     if (!(slotsContainer instanceof HTMLElement)) {
       return;
     }
 
-    const columnStarts = Array.isArray(boundaryColumnStarts)
-      ? boundaryColumnStarts
-      : [];
+    const columnStarts = Array.isArray(boundaryColumnStarts) ? boundaryColumnStarts : [];
     columnStarts.forEach((columnStart) => {
       if (!Number.isInteger(columnStart) || columnStart < 1) {
         return;
@@ -4304,8 +4118,7 @@
     normalizeHostRoomCandidate,
     extractKnownRoomName,
     readHostRoomName,
-    buildSlackReservationContext: (rootOverride) =>
-      buildSlackReservationContext(rootOverride),
+    buildSlackReservationContext: (rootOverride) => buildSlackReservationContext(rootOverride),
     showSlackCopyModal: (context) => showSlackCopyModal(context),
     isRadarSupportedPage,
     shouldDelayGuestMapCalendarUi,
@@ -4409,9 +4222,7 @@
 
       const handleMove = (moveEvent) => {
         // 모달이 오른쪽에 고정되어 있어 핸들을 오른쪽으로 끌면 너비가 줄어든다.
-        const nextWidth = clampMapCalendarWidth(
-          startWidth - (moveEvent.clientX - startX),
-        );
+        const nextWidth = clampMapCalendarWidth(startWidth - (moveEvent.clientX - startX));
         if (nextWidth === null) {
           return;
         }
@@ -4451,13 +4262,8 @@
   }
 
   function getMapCalendarWidthBounds() {
-    const viewportWidth = Number.isFinite(window.innerWidth)
-      ? window.innerWidth
-      : 0;
-    const max = Math.max(
-      MAP_CALENDAR_MIN_WIDTH,
-      viewportWidth - MAP_CALENDAR_VIEWPORT_MARGIN,
-    );
+    const viewportWidth = Number.isFinite(window.innerWidth) ? window.innerWidth : 0;
+    const max = Math.max(MAP_CALENDAR_MIN_WIDTH, viewportWidth - MAP_CALENDAR_VIEWPORT_MARGIN);
 
     return { min: MAP_CALENDAR_MIN_WIDTH, max };
   }
@@ -4472,9 +4278,7 @@
     return Math.min(max, Math.max(min, Math.round(numericValue)));
   }
 
-  function applyMapCalendarWidth(
-    overlay = document.getElementById(MAP_CALENDAR_OVERLAY_ID),
-  ) {
+  function applyMapCalendarWidth(overlay = document.getElementById(MAP_CALENDAR_OVERLAY_ID)) {
     if (!(overlay instanceof HTMLElement)) {
       return;
     }
@@ -4536,12 +4340,9 @@
       ? Math.max(timelineStartMinute, currentMinute)
       : currentMinute;
 
-    const leadMinute =
-      effectiveMinute - MAP_CALENDAR_CURRENT_TIME_SCROLL_LEAD_MINUTES;
+    const leadMinute = effectiveMinute - MAP_CALENDAR_CURRENT_TIME_SCROLL_LEAD_MINUTES;
 
-    let targetIndex = timeline.findIndex(
-      (slot) => Number(slot?.endMinute) > leadMinute,
-    );
+    let targetIndex = timeline.findIndex((slot) => Number(slot?.endMinute) > leadMinute);
     if (targetIndex < 0) {
       targetIndex = timeline.length - 1;
     }
@@ -4563,9 +4364,7 @@
 
   // 가로 스크롤이 실제로 일어나는 요소. 2-pane 구조에서는 timeline-pane 이고,
   // 아직 렌더 전이면 body 로 대체한다.
-  function getMapCalendarScrollElement(
-    overlay = document.getElementById(MAP_CALENDAR_OVERLAY_ID),
-  ) {
+  function getMapCalendarScrollElement(overlay = document.getElementById(MAP_CALENDAR_OVERLAY_ID)) {
     if (!(overlay instanceof HTMLElement)) {
       return null;
     }
@@ -4658,8 +4457,7 @@
 
     // scrollEl 콘텐츠 좌표 = 뷰포트 좌표 - scrollEl 왼쪽 + 현재 scrollLeft.
     const scrollRectLeft = scrollEl.getBoundingClientRect().left;
-    const toContentX = (viewportLeft) =>
-      viewportLeft - scrollRectLeft + scrollEl.scrollLeft;
+    const toContentX = (viewportLeft) => viewportLeft - scrollRectLeft + scrollEl.scrollLeft;
 
     const firstLeft = toContentX(slotCells[0].getBoundingClientRect().left);
     const secondLeft = toContentX(slotCells[1].getBoundingClientRect().left);
@@ -4682,10 +4480,7 @@
       return;
     }
 
-    const offset = normalizeElementOffset(
-      overlay,
-      state.mapCalendarOffset || { x: 0, y: 0 },
-    );
+    const offset = normalizeElementOffset(overlay, state.mapCalendarOffset || { x: 0, y: 0 });
     state.mapCalendarOffset = offset;
     overlay.style.transform = `translate(${offset.x}px, ${offset.y}px)`;
   }
@@ -4732,13 +4527,7 @@
     });
   }
 
-  function bindDraggableHeader({
-    header,
-    element,
-    getOffset,
-    setOffset,
-    applyOffset,
-  }) {
+  function bindDraggableHeader({ header, element, getOffset, setOffset, applyOffset }) {
     if (!(header instanceof HTMLElement) || !(element instanceof HTMLElement)) {
       return;
     }
@@ -4772,10 +4561,7 @@
     );
   }
 
-  function startElementDrag(
-    event,
-    { element, getOffset, setOffset, applyOffset },
-  ) {
+  function startElementDrag(event, { element, getOffset, setOffset, applyOffset }) {
     if (!(event instanceof PointerEvent)) {
       return;
     }
@@ -4826,22 +4612,11 @@
     event.preventDefault();
   }
 
-  function clampOffsetWithinViewport({
-    startRect,
-    baseOffset,
-    deltaX,
-    deltaY,
-  }) {
+  function clampOffsetWithinViewport({ startRect, baseOffset, deltaX, deltaY }) {
     const margin = 8;
-    const maxLeft = Math.max(
-      margin,
-      window.innerWidth - startRect.width - margin,
-    );
+    const maxLeft = Math.max(margin, window.innerWidth - startRect.width - margin);
     const minTop = Math.max(margin, DRAG_SAFE_TOP);
-    const maxTop = Math.max(
-      minTop,
-      window.innerHeight - startRect.height - margin,
-    );
+    const maxTop = Math.max(minTop, window.innerHeight - startRect.height - margin);
 
     const desiredLeft = startRect.left + deltaX;
     const desiredTop = startRect.top + deltaY;
@@ -4921,13 +4696,8 @@
       return;
     }
 
-    const {
-      dateInput,
-      datePrevButton,
-      dateNextButton,
-      dateTodayButton,
-      dateWeekdayLabel,
-    } = state.elements;
+    const { dateInput, datePrevButton, dateNextButton, dateTodayButton, dateWeekdayLabel } =
+      state.elements;
     if (
       !(dateInput instanceof HTMLInputElement) ||
       !(datePrevButton instanceof HTMLButtonElement) ||
@@ -4941,10 +4711,7 @@
     const todayDate = getTodayDateInKST();
     const minimumDate = getMinimumSelectableDateForCurrentContext(dateInput.value);
     setDateInputMinimum(dateInput, minimumDate);
-    const normalizedDate = clampDateToMin(
-      normalizeDateString(dateInput.value),
-      minimumDate,
-    );
+    const normalizedDate = clampDateToMin(normalizeDateString(dateInput.value), minimumDate);
     if (dateInput.value !== normalizedDate) {
       dateInput.value = normalizedDate;
     }
@@ -4954,12 +4721,8 @@
 
     const prevDate = addDaysToDateString(normalizedDate, -1);
     const nextDate = addDaysToDateString(normalizedDate, 1);
-    const prevLabel = isDateString(prevDate)
-      ? `이전일 (${prevDate})`
-      : "이전일";
-    const nextLabel = isDateString(nextDate)
-      ? `다음일 (${nextDate})`
-      : "다음일";
+    const prevLabel = isDateString(prevDate) ? `이전일 (${prevDate})` : "이전일";
+    const nextLabel = isDateString(nextDate) ? `다음일 (${nextDate})` : "다음일";
     const todayLabel = `오늘 (${todayDate})`;
     const dateDisplayText = formatDateSelectorText(normalizedDate);
     renderDateDisplayLabel(dateWeekdayLabel, normalizedDate);
@@ -4987,16 +4750,9 @@
       return false;
     }
 
-    const currentPanelDate = normalizeDateString(
-      state.elements.dateInput.value,
-    );
-    const currentActiveDate = normalizeDateString(
-      state.activeScheduleDate || "",
-    );
-    if (
-      currentPanelDate === normalizedDate &&
-      currentActiveDate === normalizedDate
-    ) {
+    const currentPanelDate = normalizeDateString(state.elements.dateInput.value);
+    const currentActiveDate = normalizeDateString(state.activeScheduleDate || "");
+    if (currentPanelDate === normalizedDate && currentActiveDate === normalizedDate) {
       syncPanelDateNavigationState();
       return false;
     }
@@ -5014,8 +4770,7 @@
       return;
     }
 
-    const baseDate =
-      normalizeDateInput(state.elements.dateInput) || getTodayDateInKST();
+    const baseDate = normalizeDateInput(state.elements.dateInput) || getTodayDateInKST();
     const shiftedDate = addDaysToDateString(baseDate, dayOffset);
     const changed = applyPanelDateChange(shiftedDate);
     if (changed) {
@@ -5062,22 +4817,14 @@
 
     state.activeScheduleDate = requestedDate;
     state.activeScheduleTab = requestedTab;
-    const cached = getFreshScheduleCacheForTab(
-      requestedDate,
-      requestedTab,
-      requestedSharingMapId,
-    );
+    const cached = getFreshScheduleCacheForTab(requestedDate, requestedTab, requestedSharingMapId);
     if (cached) {
       setScheduleLoadingDate(requestedDate, false, requestedTab);
       renderMapCalendarOverlay(cached);
       return;
     }
 
-    const scopeKey = buildScheduleScopeKey(
-      requestedDate,
-      requestedTab,
-      requestedSharingMapId,
-    );
+    const scopeKey = buildScheduleScopeKey(requestedDate, requestedTab, requestedSharingMapId);
     const existingInflight = state.scheduleInflightByDate.get(scopeKey);
     if (existingInflight instanceof Promise) {
       setScheduleLoadingDate(requestedDate, true, requestedTab);
@@ -5139,9 +4886,7 @@
         ? room.floorLabel.trim()
         : "";
     const mappedFloor =
-      serverFloor ||
-      MAP_CALENDAR_ROOM_FLOOR_BY_NAME.get(normalizeTargetRoomName(roomName)) ||
-      "";
+      serverFloor || MAP_CALENDAR_ROOM_FLOOR_BY_NAME.get(normalizeTargetRoomName(roomName)) || "";
     const floorLabel = mappedFloor || "";
     const fallbackRoomKey =
       Number.isInteger(room?.id) || Number.isFinite(Number(room?.id))
@@ -5246,9 +4991,7 @@
     const dateInputs = Array.from(
       document.querySelectorAll("input[name='date'], input[type='date']"),
     ).filter(
-      (candidate) =>
-        candidate instanceof HTMLInputElement &&
-        isHostScannableInput(candidate),
+      (candidate) => candidate instanceof HTMLInputElement && isHostScannableInput(candidate),
     );
 
     if (dateInputs.length === 0) {
@@ -5288,11 +5031,7 @@
       ) {
         score += 10;
       }
-      if (
-        rootCandidate.querySelector(
-          "select[name='spaceId'], select[name='roomId']",
-        )
-      ) {
+      if (rootCandidate.querySelector("select[name='spaceId'], select[name='roomId']")) {
         score += 4;
       }
 
@@ -5390,10 +5129,7 @@
         ) {
           score += 8;
         }
-        if (
-          descriptor.includes("시작시간") ||
-          descriptor.includes("종료시간")
-        ) {
+        if (descriptor.includes("시작시간") || descriptor.includes("종료시간")) {
           score -= 12;
         }
         if (candidate.closest("form")) {
@@ -5418,9 +5154,9 @@
     }
 
     if (root !== document) {
-      const globalButtons = Array.from(
-        document.querySelectorAll("button"),
-      ).filter((candidate) => candidate instanceof HTMLButtonElement);
+      const globalButtons = Array.from(document.querySelectorAll("button")).filter(
+        (candidate) => candidate instanceof HTMLButtonElement,
+      );
       return pickBestButton(globalButtons);
     }
 
@@ -5428,43 +5164,31 @@
   }
 
   function isHostRoomSelectionSynced(roomId, roomName, root = document) {
-    const scopedRoomSelect = root.querySelector(
-      "select[name='spaceId'], select[name='roomId']",
-    );
+    const scopedRoomSelect = root.querySelector("select[name='spaceId'], select[name='roomId']");
     const roomSelect =
       scopedRoomSelect instanceof HTMLSelectElement
         ? scopedRoomSelect
-        : document.querySelector(
-            "select[name='spaceId'], select[name='roomId']",
-          );
+        : document.querySelector("select[name='spaceId'], select[name='roomId']");
 
     if (roomSelect instanceof HTMLSelectElement) {
       const selectedOption =
-        roomSelect.selectedIndex >= 0
-          ? roomSelect.options[roomSelect.selectedIndex]
-          : null;
+        roomSelect.selectedIndex >= 0 ? roomSelect.options[roomSelect.selectedIndex] : null;
       if (!(selectedOption instanceof HTMLOptionElement)) {
         return false;
       }
 
       const selectedValue = (selectedOption.value || "").trim();
-      const selectedName = normalizeTextForMatch(
-        selectedOption.textContent || "",
-      );
+      const selectedName = normalizeTextForMatch(selectedOption.textContent || "");
       const expectedName = normalizeTextForMatch(roomName || "");
       return (
         selectedValue === String(roomId) ||
-        (selectedName !== "" &&
-          expectedName !== "" &&
-          selectedName.includes(expectedName))
+        (selectedName !== "" && expectedName !== "" && selectedName.includes(expectedName))
       );
     }
 
     const roomDropdownButton = findHostRoomDropdownButton(root);
     if (roomDropdownButton instanceof HTMLButtonElement) {
-      const selectedName = normalizeTextForMatch(
-        roomDropdownButton.textContent || "",
-      );
+      const selectedName = normalizeTextForMatch(roomDropdownButton.textContent || "");
       const expectedName = normalizeTextForMatch(roomName || "");
       if (selectedName && expectedName) {
         return selectedName.includes(expectedName);
@@ -5535,10 +5259,7 @@
       if (!hasHourMinuteOptions) {
         continue;
       }
-      if (
-        !startTime ||
-        Array.from(select.options).some((option) => option.value === startTime)
-      ) {
+      if (!startTime || Array.from(select.options).some((option) => option.value === startTime)) {
         return select;
       }
     }
@@ -5565,8 +5286,7 @@
   async function syncLmsReservationForm(payload, requestId = null) {
     // 타임블록 연속 클릭 시 이전 sync 가 나중 선택을 덮어쓰지 않도록
     // 각 await 뒤에서 최신 요청인지 확인한다.
-    const isStaleRequest = () =>
-      requestId != null && !isLatestTimelineSelectionRequest(requestId);
+    const isStaleRequest = () => requestId != null && !isLatestTimelineSelectionRequest(requestId);
 
     const startTime = normalizeHourMinute(payload.startTime);
     const endMinute = parseHourMinute(normalizeHourMinute(payload.endTime));
@@ -5683,16 +5403,11 @@
     );
 
     let startValue =
-      startInput instanceof HTMLInputElement
-        ? normalizeHourMinute(startInput.value)
-        : null;
+      startInput instanceof HTMLInputElement ? normalizeHourMinute(startInput.value) : null;
     let endValue =
-      endInput instanceof HTMLInputElement
-        ? normalizeHourMinute(endInput.value)
-        : null;
+      endInput instanceof HTMLInputElement ? normalizeHourMinute(endInput.value) : null;
     let hasAnyControl =
-      startInput instanceof HTMLInputElement ||
-      endInput instanceof HTMLInputElement;
+      startInput instanceof HTMLInputElement || endInput instanceof HTMLInputElement;
 
     if (startValue == null || endValue == null) {
       const fallbackPair = queryFallbackHostTimeInputs(root);
@@ -5709,8 +5424,7 @@
 
     if (startValue == null) {
       const startButton =
-        findHostTimePickerButton("시작시간", root) ||
-        findHostTimePickerButton("시작", root);
+        findHostTimePickerButton("시작시간", root) || findHostTimePickerButton("시작", root);
       if (startButton instanceof HTMLButtonElement) {
         hasAnyControl = true;
       }
@@ -5719,8 +5433,7 @@
 
     if (endValue == null) {
       const endButton =
-        findHostTimePickerButton("종료시간", root) ||
-        findHostTimePickerButton("종료", root);
+        findHostTimePickerButton("종료시간", root) || findHostTimePickerButton("종료", root);
       if (endButton instanceof HTMLButtonElement) {
         hasAnyControl = true;
       }
@@ -5749,10 +5462,7 @@
     return dateInput instanceof HTMLInputElement;
   }
 
-  async function waitForHostReservationReady(
-    timeoutMs = 1200,
-    requireTimeControls = false,
-  ) {
+  async function waitForHostReservationReady(timeoutMs = 1200, requireTimeControls = false) {
     const resolved = await waitForElement(
       () => {
         const root = getHostReservationRoot();
@@ -5766,9 +5476,7 @@
       80,
     );
 
-    return resolved instanceof HTMLElement || resolved === document
-      ? resolved
-      : null;
+    return resolved instanceof HTMLElement || resolved === document ? resolved : null;
   }
 
   function readTimeValueFromElement(element) {
@@ -5860,8 +5568,14 @@
     const normalizedName = normalizeTextForMatch(input.name || "");
     const normalizedId = normalizeTextForMatch(input.id || "");
     const exactKeys = [normalizedName, normalizedId];
-    const isStartQuery = keywords.some((keyword) => keyword === "start" || keyword === "starttime" || keyword === "begin" || keyword === "시작");
-    const isEndQuery = keywords.some((keyword) => keyword === "end" || keyword === "endtime" || keyword === "finish" || keyword === "종료");
+    const isStartQuery = keywords.some(
+      (keyword) =>
+        keyword === "start" || keyword === "starttime" || keyword === "begin" || keyword === "시작",
+    );
+    const isEndQuery = keywords.some(
+      (keyword) =>
+        keyword === "end" || keyword === "endtime" || keyword === "finish" || keyword === "종료",
+    );
     if (
       isStartQuery &&
       exactKeys.some((key) => key === "starttime" || key === "start" || key === "startdate")
@@ -5894,11 +5608,7 @@
     return score;
   }
 
-  function queryHostTimeInput(
-    nameKeywords,
-    root = document,
-    excludedInput = null,
-  ) {
+  function queryHostTimeInput(nameKeywords, root = document, excludedInput = null) {
     const keywords = nameKeywords.map((keyword) => keyword.toLowerCase());
     const candidates = getScopedHostInputs(root).filter(
       (input) => isHostInputCandidate(input) && input !== excludedInput,
@@ -5951,19 +5661,14 @@
       startInput,
     );
 
-    if (
-      startInput instanceof HTMLInputElement &&
-      endInput instanceof HTMLInputElement
-    ) {
+    if (startInput instanceof HTMLInputElement && endInput instanceof HTMLInputElement) {
       return {
         startInput,
         endInput,
       };
     }
 
-    const timeTypeCandidates = candidates.filter(
-      (input) => input.type === "time",
-    );
+    const timeTypeCandidates = candidates.filter((input) => input.type === "time");
     if (timeTypeCandidates.length >= 2) {
       return {
         startInput: timeTypeCandidates[0],
@@ -5975,12 +5680,7 @@
   }
 
   function setFormElementValue(element, value) {
-    if (
-      !(
-        element instanceof HTMLInputElement ||
-        element instanceof HTMLSelectElement
-      )
-    ) {
+    if (!(element instanceof HTMLInputElement || element instanceof HTMLSelectElement)) {
       return;
     }
 
@@ -5994,12 +5694,7 @@
   }
 
   function setFormElementValueSilently(element, value) {
-    if (
-      !(
-        element instanceof HTMLInputElement ||
-        element instanceof HTMLSelectElement
-      )
-    ) {
+    if (!(element instanceof HTMLInputElement || element instanceof HTMLSelectElement)) {
       return;
     }
 
@@ -6018,12 +5713,7 @@
   }
 
   function dispatchFormElementEvents(element) {
-    if (
-      !(
-        element instanceof HTMLInputElement ||
-        element instanceof HTMLSelectElement
-      )
-    ) {
+    if (!(element instanceof HTMLInputElement || element instanceof HTMLSelectElement)) {
       return;
     }
 
@@ -6115,9 +5805,9 @@
     }
 
     if (root !== document) {
-      const globalButtons = Array.from(
-        document.querySelectorAll("button"),
-      ).filter((candidate) => candidate instanceof HTMLButtonElement);
+      const globalButtons = Array.from(document.querySelectorAll("button")).filter(
+        (candidate) => candidate instanceof HTMLButtonElement,
+      );
       return pickBestButton(globalButtons);
     }
 
@@ -6140,17 +5830,14 @@
       findHostTimePickerButton("종료"),
     ].find(
       (button) =>
-        button instanceof HTMLButtonElement &&
-        button.getAttribute("aria-expanded") === "true",
+        button instanceof HTMLButtonElement && button.getAttribute("aria-expanded") === "true",
     );
 
     if (expandedPickerButton) {
       return true;
     }
 
-    const radioCandidates = Array.from(
-      document.querySelectorAll("input[type='radio']"),
-    );
+    const radioCandidates = Array.from(document.querySelectorAll("input[type='radio']"));
     const hasVisiblePickerRadio = radioCandidates.some((candidate) => {
       if (!(candidate instanceof HTMLInputElement)) {
         return false;
@@ -6162,9 +5849,7 @@
         return false;
       }
 
-      const labelText = normalizePickerCellText(
-        candidate.getAttribute("aria-label") || "",
-      );
+      const labelText = normalizePickerCellText(candidate.getAttribute("aria-label") || "");
       return (
         labelText === "오전" ||
         labelText === "오후" ||
@@ -6177,9 +5862,7 @@
       return true;
     }
 
-    const cells = Array.from(
-      document.querySelectorAll("label, span, button, div, li"),
-    );
+    const cells = Array.from(document.querySelectorAll("label, span, button, div, li"));
 
     return cells.some((candidate) => {
       if (!(candidate instanceof HTMLElement)) {
@@ -6231,11 +5914,9 @@
 
   async function collapseHostTimePickers(root = document) {
     const startButton =
-      findHostTimePickerButton("시작시간", root) ||
-      findHostTimePickerButton("시작", root);
+      findHostTimePickerButton("시작시간", root) || findHostTimePickerButton("시작", root);
     const endButton =
-      findHostTimePickerButton("종료시간", root) ||
-      findHostTimePickerButton("종료", root);
+      findHostTimePickerButton("종료시간", root) || findHostTimePickerButton("종료", root);
 
     const closeByEscape = async () => {
       if (document.activeElement instanceof HTMLElement) {
@@ -6254,18 +5935,10 @@
           }),
         );
       }
-      document.dispatchEvent(
-        new KeyboardEvent("keydown", { key: "Escape", bubbles: true }),
-      );
-      document.dispatchEvent(
-        new KeyboardEvent("keyup", { key: "Escape", bubbles: true }),
-      );
-      window.dispatchEvent(
-        new KeyboardEvent("keydown", { key: "Escape", bubbles: true }),
-      );
-      window.dispatchEvent(
-        new KeyboardEvent("keyup", { key: "Escape", bubbles: true }),
-      );
+      document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+      document.dispatchEvent(new KeyboardEvent("keyup", { key: "Escape", bubbles: true }));
+      window.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+      window.dispatchEvent(new KeyboardEvent("keyup", { key: "Escape", bubbles: true }));
       await waitForTimeout(70);
     };
 
@@ -6333,28 +6006,19 @@
       document.activeElement.blur();
     }
 
-    await waitForElement(
-      () => (!hasVisibleHostTimePickerCells() ? true : null),
-      260,
-      40,
-    );
+    await waitForElement(() => (!hasVisibleHostTimePickerCells() ? true : null), 260, 40);
   }
 
   function inspectHostTimePickerState(root = document) {
     const startButton =
-      findHostTimePickerButton("시작시간", root) ||
-      findHostTimePickerButton("시작", root);
+      findHostTimePickerButton("시작시간", root) || findHostTimePickerButton("시작", root);
     const endButton =
-      findHostTimePickerButton("종료시간", root) ||
-      findHostTimePickerButton("종료", root);
+      findHostTimePickerButton("종료시간", root) || findHostTimePickerButton("종료", root);
 
     let isOpen = false;
     let activeButton = null;
 
-    if (
-      startButton instanceof HTMLButtonElement &&
-      endButton instanceof HTMLButtonElement
-    ) {
+    if (startButton instanceof HTMLButtonElement && endButton instanceof HTMLButtonElement) {
       const startClass = (startButton.className || "").trim();
       const endClass = (endButton.className || "").trim();
 
@@ -6396,14 +6060,8 @@
     }
   }
 
-  async function setHostTimeByPicker(
-    buttonLabelOrLabels,
-    timeValue,
-    root = document,
-  ) {
-    const labels = Array.isArray(buttonLabelOrLabels)
-      ? buttonLabelOrLabels
-      : [buttonLabelOrLabels];
+  async function setHostTimeByPicker(buttonLabelOrLabels, timeValue, root = document) {
+    const labels = Array.isArray(buttonLabelOrLabels) ? buttonLabelOrLabels : [buttonLabelOrLabels];
     let button = null;
     labels.some((label) => {
       const matched = findHostTimePickerButton(label, root);
@@ -6451,10 +6109,7 @@
       ));
 
     if (quickSegmentedCell instanceof HTMLElement) {
-      const segmentedApplied = await setHostTimeBySegmentedPicker(
-        button,
-        normalizedTargetTime,
-      );
+      const segmentedApplied = await setHostTimeBySegmentedPicker(button, normalizedTargetTime);
       if (segmentedApplied) {
         await closeHostTimePickerAfterSelection(root);
         return true;
@@ -6477,10 +6132,7 @@
       }
     }
 
-    const segmentedApplied = await setHostTimeBySegmentedPicker(
-      button,
-      normalizedTargetTime,
-    );
+    const segmentedApplied = await setHostTimeBySegmentedPicker(button, normalizedTargetTime);
     if (segmentedApplied) {
       await closeHostTimePickerAfterSelection(root);
       return true;
@@ -6505,11 +6157,7 @@
     }
 
     const clickPickerCell = async (label) => {
-      const cell = await waitForElement(
-        () => findVisiblePickerCell(label, triggerButton),
-        600,
-        40,
-      );
+      const cell = await waitForElement(() => findVisiblePickerCell(label, triggerButton), 600, 40);
       if (!(cell instanceof HTMLElement)) {
         return false;
       }
@@ -6550,9 +6198,7 @@
     }
 
     const currentTime = readTimeValueFromElement(triggerButton);
-    const currentMinuteOfDay = currentTime
-      ? parseHourMinute(currentTime)
-      : null;
+    const currentMinuteOfDay = currentTime ? parseHourMinute(currentTime) : null;
     const targetMinuteOfDay = parseHourMinute(labels.normalizedTime);
 
     let meridiemApplied = true;
@@ -6583,13 +6229,9 @@
       return null;
     }
 
-    const candidates = Array.from(
-      document.querySelectorAll("label, span, button, div, li"),
-    );
+    const candidates = Array.from(document.querySelectorAll("label, span, button, div, li"));
     const triggerRect =
-      triggerButton instanceof HTMLElement
-        ? triggerButton.getBoundingClientRect()
-        : null;
+      triggerButton instanceof HTMLElement ? triggerButton.getBoundingClientRect() : null;
 
     let bestCandidate = null;
     let bestScore = Number.NEGATIVE_INFINITY;
@@ -6657,9 +6299,7 @@
     let bestCandidate = null;
     let bestScore = Number.NEGATIVE_INFINITY;
     const triggerRect =
-      triggerButton instanceof HTMLElement
-        ? triggerButton.getBoundingClientRect()
-        : null;
+      triggerButton instanceof HTMLElement ? triggerButton.getBoundingClientRect() : null;
 
     candidates.forEach((candidate) => {
       if (!(candidate instanceof HTMLElement)) {
@@ -6685,9 +6325,7 @@
         return;
       }
 
-      const normalizedText = normalizePickerCellText(
-        candidate.textContent || "",
-      );
+      const normalizedText = normalizePickerCellText(candidate.textContent || "");
       if (
         normalizedText.length > 30 &&
         !candidate.matches("[role='option'], [role='menuitem'], button")
@@ -6695,13 +6333,9 @@
         return;
       }
 
-      const dataValueTime = normalizeHourMinute(
-        candidate.getAttribute("data-value") || "",
-      );
+      const dataValueTime = normalizeHourMinute(candidate.getAttribute("data-value") || "");
       const textTime = normalizeHourMinute(candidate.textContent || "");
-      const ariaLabelTime = normalizeHourMinute(
-        candidate.getAttribute("aria-label") || "",
-      );
+      const ariaLabelTime = normalizeHourMinute(candidate.getAttribute("aria-label") || "");
       const matchedTime = dataValueTime || textTime;
       if (matchedTime !== normalizedTime && ariaLabelTime !== normalizedTime) {
         return;
@@ -6713,17 +6347,13 @@
         score += 6;
       }
 
-      if (
-        candidate.closest("[role='listbox'], [role='menu'], [role='dialog']")
-      ) {
+      if (candidate.closest("[role='listbox'], [role='menu'], [role='dialog']")) {
         score += 4;
       }
 
       if (triggerRect) {
         const candidateRect = candidate.getBoundingClientRect();
-        const verticalDistance = Math.abs(
-          candidateRect.top - triggerRect.bottom,
-        );
+        const verticalDistance = Math.abs(candidateRect.top - triggerRect.bottom);
         score -= Math.min(6, verticalDistance / 120);
       }
 
@@ -6770,9 +6400,7 @@
       ),
     );
     const triggerRect =
-      triggerButton instanceof HTMLElement
-        ? triggerButton.getBoundingClientRect()
-        : null;
+      triggerButton instanceof HTMLElement ? triggerButton.getBoundingClientRect() : null;
 
     let bestOption = null;
     let bestScore = Number.NEGATIVE_INFINITY;
@@ -6799,9 +6427,7 @@
         return;
       }
 
-      const popupContainer = candidate.closest(
-        "[role='listbox'], [role='menu'], [role='dialog']",
-      );
+      const popupContainer = candidate.closest("[role='listbox'], [role='menu'], [role='dialog']");
       const hasPopupContext = popupContainer instanceof HTMLElement;
 
       const valueToken = (
@@ -6810,18 +6436,13 @@
         ""
       ).trim();
       const idMatched = valueToken !== "" && valueToken === String(roomId);
-      const nameMatched =
-        normalizedRoomName !== "" && text.includes(normalizedRoomName);
+      const nameMatched = normalizedRoomName !== "" && text.includes(normalizedRoomName);
 
       if (!idMatched && !nameMatched) {
         return;
       }
 
-      if (
-        !idMatched &&
-        !hasPopupContext &&
-        candidate.getAttribute("role") !== "option"
-      ) {
+      if (!idMatched && !hasPopupContext && candidate.getAttribute("role") !== "option") {
         return;
       }
 
@@ -6862,20 +6483,15 @@
       return true;
     }
 
-    const scopedRoomSelect = root.querySelector(
-      "select[name='spaceId'], select[name='roomId']",
-    );
+    const scopedRoomSelect = root.querySelector("select[name='spaceId'], select[name='roomId']");
     const roomSelect =
       scopedRoomSelect instanceof HTMLSelectElement
         ? scopedRoomSelect
-        : document.querySelector(
-            "select[name='spaceId'], select[name='roomId']",
-          );
+        : document.querySelector("select[name='spaceId'], select[name='roomId']");
     if (roomSelect instanceof HTMLSelectElement) {
       const option = Array.from(roomSelect.options).find(
         (candidate) =>
-          candidate.value === String(roomId) ||
-          candidate.textContent?.trim() === roomName,
+          candidate.value === String(roomId) || candidate.textContent?.trim() === roomName,
       );
       if (option) {
         setFormElementValue(roomSelect, option.value);
@@ -6898,9 +6514,7 @@
         return false;
       }
 
-      const currentName = normalizeTextForMatch(
-        roomDropdownButton.textContent || "",
-      );
+      const currentName = normalizeTextForMatch(roomDropdownButton.textContent || "");
       const targetName = normalizeTextForMatch(roomName || "");
       if (currentName && targetName && currentName === targetName) {
         return true;
@@ -6911,11 +6525,7 @@
         await waitForTimeout(80);
       }
 
-      let roomOption = findVisibleHostRoomOption(
-        roomId,
-        roomName,
-        roomDropdownButton,
-      );
+      let roomOption = findVisibleHostRoomOption(roomId, roomName, roomDropdownButton);
       if (!(roomOption instanceof HTMLElement)) {
         roomOption = await waitForElement(
           () => findVisibleHostRoomOption(roomId, roomName, roomDropdownButton),
@@ -6929,8 +6539,7 @@
         await waitForTimeout(100);
 
         const settled = await waitForElement(
-          () =>
-            isHostRoomSelectionSynced(roomId, roomName, root) ? true : null,
+          () => (isHostRoomSelectionSynced(roomId, roomName, root) ? true : null),
           520,
           40,
         );
@@ -7019,7 +6628,6 @@
     state.lastGuestRouteChangeAt = Date.now();
     state.lastObservedPathname = location.pathname;
 
-
     syncMapCalendarAlwaysOpenPreference();
     if (!isGuestUiReadyForActivation()) {
       removeMapCalendarLauncher();
@@ -7028,7 +6636,7 @@
       state.lastAutoOpenPath = null;
       return;
     }
-    queueSlackModalFromPersistedEditSubmitIfNeeded('location-change');
+    queueSlackModalFromPersistedEditSubmitIfNeeded("location-change");
     ensurePanel();
     ensureMapCalendarLauncher();
     const openedPendingSlackModal = tryOpenPendingSlackCopyModal();
@@ -7058,8 +6666,7 @@
   }
 
   function teardownGuestUi(options = {}) {
-    const preserveReservationContext =
-      options?.preserveReservationContext === true;
+    const preserveReservationContext = options?.preserveReservationContext === true;
     if (Number.isInteger(state.mutationGuestUiSyncTimer)) {
       window.clearTimeout(state.mutationGuestUiSyncTimer);
     }
@@ -7166,16 +6773,8 @@
       return;
     }
 
-    document.addEventListener(
-      "pointerdown",
-      handleHostTimePickerManualInteraction,
-      true,
-    );
-    document.addEventListener(
-      "focusin",
-      handleHostTimePickerManualInteraction,
-      true,
-    );
+    document.addEventListener("pointerdown", handleHostTimePickerManualInteraction, true);
+    document.addEventListener("focusin", handleHostTimePickerManualInteraction, true);
     state.hostTimePickerInteractionWatcherInstalled = true;
   }
 
@@ -7190,10 +6789,7 @@
     }
 
     const control = target.closest("input, button, [role='button']");
-    if (
-      !(control instanceof HTMLElement) ||
-      isInsideExtensionSurface(control)
-    ) {
+    if (!(control instanceof HTMLElement) || isInsideExtensionSurface(control)) {
       return;
     }
 
@@ -7254,14 +6850,12 @@
       return;
     }
 
-    if (
-      !(
-        target instanceof HTMLInputElement ||
-        target instanceof HTMLTextAreaElement ||
-        target instanceof HTMLSelectElement ||
-        target instanceof HTMLButtonElement
-      )
-    ) {
+    if (!(
+      target instanceof HTMLInputElement ||
+      target instanceof HTMLTextAreaElement ||
+      target instanceof HTMLSelectElement ||
+      target instanceof HTMLButtonElement
+    )) {
       return;
     }
 
@@ -7282,16 +6876,12 @@
       return;
     }
 
-    const actionTarget = target.closest(
-      "button, [role='button'], input[type='submit']",
-    );
+    const actionTarget = target.closest("button, [role='button'], input[type='submit']");
     if (!(actionTarget instanceof HTMLElement)) {
       return;
     }
 
-    const normalizedLabel = normalizeTextForMatch(
-      readActionTargetText(actionTarget),
-    );
+    const normalizedLabel = normalizeTextForMatch(readActionTargetText(actionTarget));
     if (!isReservationIntentActionLabel(normalizedLabel)) {
       return;
     }
@@ -7317,15 +6907,12 @@
 
     const normalizedFormText = normalizeTextForMatch(form.textContent || "");
     const hasReservationFieldSet =
-      form.querySelector("input[name='date'], input[type='date']") instanceof
-        HTMLInputElement &&
+      form.querySelector("input[name='date'], input[type='date']") instanceof HTMLInputElement &&
       (form.querySelector("input[type='time']") instanceof HTMLInputElement ||
-        form.querySelector(
-          "button[aria-label*='시작'], button[aria-label*='종료']",
-        ) instanceof HTMLButtonElement ||
-        form.querySelector(
-          "select[name='spaceId'], select[name='roomId']",
-        ) instanceof HTMLSelectElement);
+        form.querySelector("button[aria-label*='시작'], button[aria-label*='종료']") instanceof
+          HTMLButtonElement ||
+        form.querySelector("select[name='spaceId'], select[name='roomId']") instanceof
+          HTMLSelectElement);
     if (!normalizedFormText.includes("예약") && !hasReservationFieldSet) {
       return;
     }
@@ -7338,10 +6925,7 @@
       return false;
     }
 
-    if (
-      normalizedLabel.includes("예약하기") ||
-      normalizedLabel.includes("예약수정")
-    ) {
+    if (normalizedLabel.includes("예약하기") || normalizedLabel.includes("예약수정")) {
       return true;
     }
 
@@ -7358,8 +6942,7 @@
         : getHostReservationRoot();
     const contextSnapshot = buildSlackReservationContext(contextRoot);
     const previousContext =
-      state.lastReservationContext &&
-      typeof state.lastReservationContext === "object"
+      state.lastReservationContext && typeof state.lastReservationContext === "object"
         ? state.lastReservationContext
         : null;
     if (
@@ -7387,9 +6970,7 @@
       rememberReservationOwnerName(contextSnapshot.ownerName);
     }
     state.lastReservationContext =
-      contextSnapshot && typeof contextSnapshot === "object"
-        ? contextSnapshot
-        : null;
+      contextSnapshot && typeof contextSnapshot === "object" ? contextSnapshot : null;
     const reservationAttemptId = createReservationAttemptId();
     state.lastReservationAttemptId = reservationAttemptId;
     state.pendingReservationAttempts.set(reservationAttemptId, {
@@ -7405,9 +6986,10 @@
     prunePendingReservationAttempts();
     if (document.documentElement instanceof HTMLElement) {
       document.documentElement.dataset.zzkReservationAttemptId = reservationAttemptId;
-      document.documentElement.dataset.zzkReservationAttemptAt = String(state.lastReservationActionAt);
+      document.documentElement.dataset.zzkReservationAttemptAt = String(
+        state.lastReservationActionAt,
+      );
     }
-
   }
 
   function createReservationAttemptId() {
@@ -7430,7 +7012,8 @@
     }
 
     const attemptsByAge = Array.from(state.pendingReservationAttempts.entries()).sort(
-      ([, leftAttempt], [, rightAttempt]) => Number(leftAttempt?.at || 0) - Number(rightAttempt?.at || 0),
+      ([, leftAttempt], [, rightAttempt]) =>
+        Number(leftAttempt?.at || 0) - Number(rightAttempt?.at || 0),
     );
     for (const [attemptId] of attemptsByAge) {
       if (state.pendingReservationAttempts.size <= 10) {
@@ -7462,7 +7045,10 @@
     }
 
     const payloadContext =
-      payload && typeof payload === "object" && payload.requestContext && typeof payload.requestContext === "object"
+      payload &&
+      typeof payload === "object" &&
+      payload.requestContext &&
+      typeof payload.requestContext === "object"
         ? payload.requestContext
         : null;
     if (isCompleteReservationPayloadContext(payloadContext)) {
@@ -7481,18 +7067,21 @@
   }
 
   function doesReservationAttemptContextMatchPayload(attempt, payloadContext) {
-    const attemptContext = attempt && attempt.context && typeof attempt.context === "object"
-      ? attempt.context
-      : null;
+    const attemptContext =
+      attempt && attempt.context && typeof attempt.context === "object" ? attempt.context : null;
     if (!attemptContext || !payloadContext) {
       return false;
     }
 
     return (
-      normalizeReservationContextComparableValue(attemptContext.date) === normalizeReservationContextComparableValue(payloadContext.date) &&
-      normalizeReservationContextComparableValue(attemptContext.startTime) === normalizeReservationContextComparableValue(payloadContext.startTime) &&
-      normalizeReservationContextComparableValue(attemptContext.endTime) === normalizeReservationContextComparableValue(payloadContext.endTime) &&
-      normalizeReservationRoomComparableValue(attemptContext.roomName) === normalizeReservationRoomComparableValue(payloadContext.roomName)
+      normalizeReservationContextComparableValue(attemptContext.date) ===
+        normalizeReservationContextComparableValue(payloadContext.date) &&
+      normalizeReservationContextComparableValue(attemptContext.startTime) ===
+        normalizeReservationContextComparableValue(payloadContext.startTime) &&
+      normalizeReservationContextComparableValue(attemptContext.endTime) ===
+        normalizeReservationContextComparableValue(payloadContext.endTime) &&
+      normalizeReservationRoomComparableValue(attemptContext.roomName) ===
+        normalizeReservationRoomComparableValue(payloadContext.roomName)
     );
   }
 
@@ -7549,9 +7138,9 @@
     }
     return Boolean(
       isMeaningfulReservationContextField("date", payloadContext.date) &&
-        isMeaningfulReservationContextField("startTime", payloadContext.startTime) &&
-        isMeaningfulReservationContextField("endTime", payloadContext.endTime) &&
-        isMeaningfulReservationContextField("roomName", payloadContext.roomName),
+      isMeaningfulReservationContextField("startTime", payloadContext.startTime) &&
+      isMeaningfulReservationContextField("endTime", payloadContext.endTime) &&
+      isMeaningfulReservationContextField("roomName", payloadContext.roomName),
     );
   }
 
@@ -7607,17 +7196,14 @@
     return slackSuccessFlow.tryOpenPendingSlackCopyModal();
   }
 
-  function queueSlackModalFromPersistedEditSubmitIfNeeded(caller = '') {
+  function queueSlackModalFromPersistedEditSubmitIfNeeded(caller = "") {
     void caller;
     return slackSuccessFlow.queueSlackModalFromPersistedEditSubmitIfNeeded();
   }
 
   function normalizeReservationMutationMethod(methodValue) {
     const method = String(methodValue || "").toUpperCase();
-    return method === "POST" ||
-      method === "PUT" ||
-      method === "PATCH" ||
-      method === "DELETE"
+    return method === "POST" || method === "PUT" || method === "PATCH" || method === "DELETE"
       ? method
       : "";
   }
@@ -7635,9 +7221,7 @@
   }
 
   function createSlackMessageFingerprint(context, payload) {
-    const requestUrl = parseUrlSafely(
-      typeof payload?.url === "string" ? payload.url : "",
-    );
+    const requestUrl = parseUrlSafely(typeof payload?.url === "string" ? payload.url : "");
     return [
       context.date,
       context.startTime,
@@ -7666,8 +7250,7 @@
         ? options.payloadContext
         : null;
     const successPageContext =
-      options?.successPageContext &&
-      typeof options.successPageContext === "object"
+      options?.successPageContext && typeof options.successPageContext === "object"
         ? options.successPageContext
         : null;
     const payloadOwnerName = normalizeHostReservationOwnerCandidate(
@@ -7675,26 +7258,15 @@
     );
 
     const safeLiveContext = { ...liveContext };
-    const sources = [
-      payloadContext,
-      successPageContext,
-      snapshotContext,
-      safeLiveContext,
-    ].filter((source) => source && typeof source === "object");
+    const sources = [payloadContext, successPageContext, snapshotContext, safeLiveContext].filter(
+      (source) => source && typeof source === "object",
+    );
 
     const pickField = (fieldName, extraCandidates = []) => {
-      const candidates = [
-        ...sources.map((source) => source[fieldName]),
-        ...extraCandidates,
-      ];
+      const candidates = [...sources.map((source) => source[fieldName]), ...extraCandidates];
       for (const candidate of candidates) {
-        const normalizedCandidate = normalizeReservationContextField(
-          fieldName,
-          candidate,
-        );
-        if (
-          isMeaningfulReservationContextField(fieldName, normalizedCandidate)
-        ) {
+        const normalizedCandidate = normalizeReservationContextField(fieldName, candidate);
+        if (isMeaningfulReservationContextField(fieldName, normalizedCandidate)) {
           return normalizedCandidate;
         }
       }
@@ -7710,13 +7282,8 @@
         "회의실 지도",
       roomName: pickField("roomName") || "-",
       ownerName:
-        pickField("ownerName", [
-          payloadOwnerName,
-          state.lastKnownReservationOwnerName,
-        ]) ||
-        normalizeHostReservationOwnerCandidate(
-          state.lastKnownReservationOwnerName || "",
-        ) ||
+        pickField("ownerName", [payloadOwnerName, state.lastKnownReservationOwnerName]) ||
+        normalizeHostReservationOwnerCandidate(state.lastKnownReservationOwnerName || "") ||
         "-",
       channelMention:
         pickField("channelMention") ||
@@ -7727,9 +7294,7 @@
       date: pickField("date") || "-",
       startTime: pickField("startTime") || "--:--",
       endTime: pickField("endTime") || "--:--",
-      reservationLink: resolveReservationLinkFromContext(
-        pickField("reservationLink"),
-      ),
+      reservationLink: resolveReservationLinkFromContext(pickField("reservationLink")),
     };
 
     if (isMeaningfulSlackContextValue(mergedContext.ownerName)) {
@@ -7751,19 +7316,14 @@
     const source = requestContext || payload;
     const roomNameFromContext = resolveReservationRoomNameFromSource(source);
 
-    const startParts = extractDateTimeParts(
-      source.startDateTime || source.startTime || "",
-    );
-    const endParts = extractDateTimeParts(
-      source.endDateTime || source.endTime || "",
-    );
+    const startParts = extractDateTimeParts(source.startDateTime || source.startTime || "");
+    const endParts = extractDateTimeParts(source.endDateTime || source.endTime || "");
     const explicitDate = normalizeDateString(
       source.date || source.reservationDate || source.startDate || "",
     );
     const context = {
       date: explicitDate || startParts.date || endParts.date || "",
-      startTime:
-        startParts.time || normalizeHourMinute(source.startTime || "") || "",
+      startTime: startParts.time || normalizeHourMinute(source.startTime || "") || "",
       endTime: endParts.time || normalizeHourMinute(source.endTime || "") || "",
       description: normalizeReservationDescriptionCandidate(
         source.description ||
@@ -7799,20 +7359,14 @@
     }
 
     const roomId = parseReservationRoomIdCandidate(
-      source.roomId ||
-        source.spaceId ||
-        source.targetRoomId ||
-        source.room_id ||
-        source.space_id,
+      source.roomId || source.spaceId || source.targetRoomId || source.room_id || source.space_id,
     );
     const knownRooms = getLatestKnownRooms();
     if (!Number.isInteger(roomId) || knownRooms.length === 0) {
       return "";
     }
 
-    const matchedRoom = knownRooms.find(
-      (room) => Number(room?.id) === roomId,
-    );
+    const matchedRoom = knownRooms.find((room) => Number(room?.id) === roomId);
     if (!matchedRoom || typeof matchedRoom.name !== "string") {
       return "";
     }
@@ -7882,11 +7436,7 @@
       return "";
     }
 
-    if (
-      ["-", "--", "내용", "예약내용", "사용목적", "이용목적"].includes(
-        normalized,
-      )
-    ) {
+    if (["-", "--", "내용", "예약내용", "사용목적", "이용목적"].includes(normalized)) {
       return "";
     }
 
@@ -7913,9 +7463,7 @@
   }
 
   function extractDateTimeParts(value) {
-    const normalized = normalizeSlackFieldText(
-      typeof value === "string" ? value : "",
-    );
+    const normalized = normalizeSlackFieldText(typeof value === "string" ? value : "");
     if (!normalized) {
       return { date: "", time: "" };
     }
@@ -7953,10 +7501,7 @@
   }
 
   function isGuestSuccessPath(pathname) {
-    return (
-      typeof pathname === "string" &&
-      /^\/guest\/[^/?#]+\/success\/?$/.test(pathname)
-    );
+    return typeof pathname === "string" && /^\/guest\/[^/?#]+\/success\/?$/.test(pathname);
   }
 
   function resolveReservationOwnerNameFromPayload(payload) {
@@ -7974,8 +7519,7 @@
     ];
 
     for (const candidate of directCandidates) {
-      const normalizedCandidate =
-        normalizeHostReservationOwnerCandidate(candidate);
+      const normalizedCandidate = normalizeHostReservationOwnerCandidate(candidate);
       if (normalizedCandidate) {
         return normalizedCandidate;
       }
@@ -7985,9 +7529,7 @@
   }
 
   function isMeaningfulSlackContextValue(value) {
-    const normalized = normalizeSlackFieldText(
-      typeof value === "string" ? value : "",
-    );
+    const normalized = normalizeSlackFieldText(typeof value === "string" ? value : "");
     return normalized !== "" && normalized !== "-";
   }
 
@@ -8018,35 +7560,25 @@
     const panelEndInput = state.elements?.endInput;
 
     const date =
-      normalizeDateString(
-        hostDateInput instanceof HTMLInputElement ? hostDateInput.value : "",
-      ) ||
-      normalizeDateString(
-        panelDateInput instanceof HTMLInputElement ? panelDateInput.value : "",
-      ) ||
+      normalizeDateString(hostDateInput instanceof HTMLInputElement ? hostDateInput.value : "") ||
+      normalizeDateString(panelDateInput instanceof HTMLInputElement ? panelDateInput.value : "") ||
       "-";
 
     const startTime =
       normalizeHourMinute(
         observedTimes.startTime ||
-          (panelStartInput instanceof HTMLInputElement
-            ? panelStartInput.value
-            : ""),
+          (panelStartInput instanceof HTMLInputElement ? panelStartInput.value : ""),
       ) || "--:--";
     const endTime =
       normalizeHourMinute(
         observedTimes.endTime ||
-          (panelEndInput instanceof HTMLInputElement
-            ? panelEndInput.value
-            : ""),
+          (panelEndInput instanceof HTMLInputElement ? panelEndInput.value : ""),
       ) || "--:--";
 
     const roomName = readHostRoomName(root) || "-";
     const resolvedOwnerName =
       readHostReservationOwnerName(root) ||
-      normalizeHostReservationOwnerCandidate(
-        state.lastKnownReservationOwnerName || "",
-      );
+      normalizeHostReservationOwnerCandidate(state.lastKnownReservationOwnerName || "");
     const ownerName = resolvedOwnerName || "-";
     const usagePurpose = readHostReservationFieldValue(root, [
       "사용목적",
@@ -8056,12 +7588,7 @@
     ]);
     const description =
       usagePurpose ||
-      readHostReservationFieldValue(root, [
-        "예약내용",
-        "description",
-        "메모",
-        "내용",
-      ]) ||
+      readHostReservationFieldValue(root, ["예약내용", "description", "메모", "내용"]) ||
       "-";
     const defaultMutationMethod = "POST";
 
@@ -8082,20 +7609,13 @@
   }
 
   function readHostRoomName(root = document) {
-    const scopedSelect = root.querySelector(
-      "select[name='spaceId'], select[name='roomId']",
-    );
+    const scopedSelect = root.querySelector("select[name='spaceId'], select[name='roomId']");
     const roomSelect =
       scopedSelect instanceof HTMLSelectElement
         ? scopedSelect
-        : document.querySelector(
-            "select[name='spaceId'], select[name='roomId']",
-          );
+        : document.querySelector("select[name='spaceId'], select[name='roomId']");
 
-    if (
-      roomSelect instanceof HTMLSelectElement &&
-      roomSelect.selectedIndex >= 0
-    ) {
+    if (roomSelect instanceof HTMLSelectElement && roomSelect.selectedIndex >= 0) {
       const option = roomSelect.options[roomSelect.selectedIndex];
       if (option instanceof HTMLOptionElement) {
         const optionName = normalizeHostRoomCandidate(option.textContent || "");
@@ -8107,26 +7627,17 @@
 
     const dropdownButton = findHostRoomDropdownButton(root);
     if (dropdownButton instanceof HTMLButtonElement) {
-      const buttonName = normalizeHostRoomCandidate(
-        dropdownButton.textContent || "",
-      );
+      const buttonName = normalizeHostRoomCandidate(dropdownButton.textContent || "");
       if (buttonName) {
         return extractKnownRoomName(buttonName);
       }
     }
 
-    if (
-      state.appliedSelection &&
-      Number.isInteger(state.appliedSelection.roomId)
-    ) {
+    if (state.appliedSelection && Number.isInteger(state.appliedSelection.roomId)) {
       const matchedRoom = getLatestKnownRooms().find(
         (room) => room.id === state.appliedSelection.roomId,
       );
-      if (
-        matchedRoom &&
-        typeof matchedRoom.name === "string" &&
-        matchedRoom.name.trim()
-      ) {
+      if (matchedRoom && typeof matchedRoom.name === "string" && matchedRoom.name.trim()) {
         return matchedRoom.name.trim();
       }
     }
@@ -8158,29 +7669,17 @@
 
     const ownerFromNameInput =
       readHostReservationOwnerFromNameInputs(root) ||
-      (root !== document
-        ? readHostReservationOwnerFromNameInputs(document)
-        : "");
+      (root !== document ? readHostReservationOwnerFromNameInputs(document) : "");
     if (ownerFromNameInput) {
-      return (
-        rememberReservationOwnerName(ownerFromNameInput) || ownerFromNameInput
-      );
+      return rememberReservationOwnerName(ownerFromNameInput) || ownerFromNameInput;
     }
 
     const ownerFromRoot =
       normalizeHostReservationOwnerCandidate(
-        readHostReservationFieldValue(
-          root,
-          ownerSpecificKeywords,
-          ownerFieldOptions,
-        ),
+        readHostReservationFieldValue(root, ownerSpecificKeywords, ownerFieldOptions),
       ) ||
       normalizeHostReservationOwnerCandidate(
-        readHostReservationFieldValue(
-          root,
-          ownerFallbackKeywords,
-          ownerFieldOptions,
-        ),
+        readHostReservationFieldValue(root, ownerFallbackKeywords, ownerFieldOptions),
       );
     if (ownerFromRoot) {
       return rememberReservationOwnerName(ownerFromRoot) || ownerFromRoot;
@@ -8189,23 +7688,13 @@
     if (root !== document) {
       const ownerFromDocument =
         normalizeHostReservationOwnerCandidate(
-          readHostReservationFieldValue(
-            document,
-            ownerSpecificKeywords,
-            ownerFieldOptions,
-          ),
+          readHostReservationFieldValue(document, ownerSpecificKeywords, ownerFieldOptions),
         ) ||
         normalizeHostReservationOwnerCandidate(
-          readHostReservationFieldValue(
-            document,
-            ownerFallbackKeywords,
-            ownerFieldOptions,
-          ),
+          readHostReservationFieldValue(document, ownerFallbackKeywords, ownerFieldOptions),
         );
       if (ownerFromDocument) {
-        return (
-          rememberReservationOwnerName(ownerFromDocument) || ownerFromDocument
-        );
+        return rememberReservationOwnerName(ownerFromDocument) || ownerFromDocument;
       }
     }
 
@@ -8222,16 +7711,9 @@
       return false;
     }
 
-    return [
-      "예약자",
-      "신청자",
-      "booker",
-      "requester",
-      "owner",
-      "guest",
-      "name",
-      "이름",
-    ].some((keyword) => descriptor.includes(keyword));
+    return ["예약자", "신청자", "booker", "requester", "owner", "guest", "name", "이름"].some(
+      (keyword) => descriptor.includes(keyword),
+    );
   }
 
   function rememberReservationOwnerName(value) {
@@ -8249,9 +7731,7 @@
       return "";
     }
 
-    const candidates = Array.from(
-      root.querySelectorAll("input[name='name']"),
-    ).filter((input) => {
+    const candidates = Array.from(root.querySelectorAll("input[name='name']")).filter((input) => {
       if (!(input instanceof HTMLInputElement)) {
         return false;
       }
@@ -8267,9 +7747,7 @@
     let bestScore = Number.NEGATIVE_INFINITY;
 
     candidates.forEach((candidate) => {
-      const normalizedValue = normalizeHostReservationOwnerCandidate(
-        candidate.value || "",
-      );
+      const normalizedValue = normalizeHostReservationOwnerCandidate(candidate.value || "");
       if (!normalizedValue) {
         return;
       }
@@ -8322,48 +7800,43 @@
     const selector = includeExtendedControls
       ? "input, textarea, select, button, [role='combobox'], [role='textbox'], [contenteditable='true']"
       : "input, textarea";
-    const controls = Array.from(root.querySelectorAll(selector)).filter(
-      (control) => {
-        if (!(control instanceof HTMLElement)) {
+    const controls = Array.from(root.querySelectorAll(selector)).filter((control) => {
+      if (!(control instanceof HTMLElement)) {
+        return false;
+      }
+      if (isInsideExtensionSurface(control)) {
+        return false;
+      }
+      if (
+        control instanceof HTMLInputElement ||
+        control instanceof HTMLTextAreaElement ||
+        control instanceof HTMLSelectElement
+      ) {
+        if (!includeDisabled && control.disabled) {
           return false;
         }
-        if (isInsideExtensionSurface(control)) {
+      }
+      if (control instanceof HTMLInputElement || control instanceof HTMLTextAreaElement) {
+        if (!includeReadOnly && control.readOnly) {
           return false;
         }
-        if (
-          control instanceof HTMLInputElement ||
-          control instanceof HTMLTextAreaElement ||
-          control instanceof HTMLSelectElement
-        ) {
-          if (!includeDisabled && control.disabled) {
-            return false;
-          }
-        }
-        if (
-          control instanceof HTMLInputElement ||
-          control instanceof HTMLTextAreaElement
-        ) {
-          if (!includeReadOnly && control.readOnly) {
-            return false;
-          }
-        }
-        if (control instanceof HTMLButtonElement && control.disabled) {
+      }
+      if (control instanceof HTMLButtonElement && control.disabled) {
+        return false;
+      }
+      if (control instanceof HTMLInputElement) {
+        const type = (control.type || "text").toLowerCase();
+        if (!allowInputTypeSet.has(type)) {
           return false;
         }
-        if (control instanceof HTMLInputElement) {
-          const type = (control.type || "text").toLowerCase();
-          if (!allowInputTypeSet.has(type)) {
-            return false;
-          }
-        }
+      }
 
-        if (requireVisible && !isElementVisible(control)) {
-          return false;
-        }
+      if (requireVisible && !isElementVisible(control)) {
+        return false;
+      }
 
-        return true;
-      },
-    );
+      return true;
+    });
 
     let bestValue = "";
     let bestScore = Number.NEGATIVE_INFINITY;
@@ -8371,8 +7844,7 @@
     controls.forEach((control) => {
       const value = includeExtendedControls
         ? readHostFieldDisplayValue(control)
-        : control instanceof HTMLInputElement ||
-            control instanceof HTMLTextAreaElement
+        : control instanceof HTMLInputElement || control instanceof HTMLTextAreaElement
           ? normalizeSlackFieldText(control.value || "")
           : "";
       if (!value) {
@@ -8418,10 +7890,9 @@
   }
 
   function buildSlackRemindCommand(context, channelMention) {
-    const normalizedChannelMention = normalizeSlackChannelToken(
-      channelMention || "",
-      { allowBare: true },
-    );
+    const normalizedChannelMention = normalizeSlackChannelToken(channelMention || "", {
+      allowBare: true,
+    });
     const remindTimeRangeLabel = resolveSlackRemindTimeRangeLabel(context);
     const remindSubjectLabel = resolveSlackRemindSubjectLabel(context);
     const remindLocationLabel = resolveSlackRemindLocationLabel(context);
@@ -8442,20 +7913,15 @@
     };
 
     if (normalizedChannelMention) {
-      return formatRemindCommand(
-        normalizedChannelMention,
-        `${remindBodyPrefix} @channel`,
-      );
+      return formatRemindCommand(normalizedChannelMention, `${remindBodyPrefix} @channel`);
     }
 
     return formatRemindCommand("me", remindBodyPrefix);
   }
 
   function resolveSlackRemindTimeRangeLabel(context) {
-    const rawStartTime =
-      typeof context?.startTime === "string" ? context.startTime : "";
-    const rawEndTime =
-      typeof context?.endTime === "string" ? context.endTime : "";
+    const rawStartTime = typeof context?.startTime === "string" ? context.startTime : "";
+    const rawEndTime = typeof context?.endTime === "string" ? context.endTime : "";
     const normalizedStartTime = normalizeHourMinute(rawStartTime) || "--:--";
     const normalizedEndTime = normalizeHourMinute(rawEndTime) || "--:--";
     return `${normalizedStartTime}-${normalizedEndTime}`;
@@ -8479,13 +7945,11 @@
     );
     const sanitizedRoomName = rawRoomName === "-" ? "" : rawRoomName;
     const normalizedRoomName =
-      sanitizedRoomName.replace(/^\d+\s*층\s*/u, "").trim() ||
-      sanitizedRoomName;
+      sanitizedRoomName.replace(/^\d+\s*층\s*/u, "").trim() || sanitizedRoomName;
     const floorFromMap = normalizedRoomName
       ? MAP_CALENDAR_ROOM_FLOOR_BY_NAME.get(normalizedRoomName) || ""
       : "";
-    const floorFromText =
-      sanitizedRoomName.match(/(\d+\s*층)/u)?.[1]?.replace(/\s+/g, "") || "";
+    const floorFromText = sanitizedRoomName.match(/(\d+\s*층)/u)?.[1]?.replace(/\s+/g, "") || "";
     const floorLabel = formatSlackFloorLabel(floorFromMap || floorFromText);
     const roomLabel = normalizedRoomName || "회의실";
     return [floorLabel, roomLabel].filter(Boolean).join(" ");
@@ -8503,10 +7967,8 @@
 
   function formatSlackReservationTimeRange(dateValue, startTime, endTime) {
     const normalizedDate = isDateString(dateValue) ? dateValue : "";
-    const normalizedStart =
-      typeof startTime === "string" && startTime ? startTime : "--:--";
-    const normalizedEnd =
-      typeof endTime === "string" && endTime ? endTime : "--:--";
+    const normalizedStart = typeof startTime === "string" && startTime ? startTime : "--:--";
+    const normalizedEnd = typeof endTime === "string" && endTime ? endTime : "--:--";
 
     if (normalizedDate) {
       return `${normalizedDate} ${normalizedStart} ~ ${normalizedDate} ${normalizedEnd}`;
@@ -8583,8 +8045,7 @@
 
     const owner =
       typeof responseBody.reserverName === "string" ? responseBody.reserverName.trim() : "";
-    const purpose =
-      typeof responseBody.purpose === "string" ? responseBody.purpose.trim() : "";
+    const purpose = typeof responseBody.purpose === "string" ? responseBody.purpose.trim() : "";
 
     return {
       date,
@@ -8610,10 +8071,7 @@
   }
 
   function syncMapCalendarAlwaysOpenPreference() {
-    state.mapCalendarAlwaysOpen = readStoredBoolean(
-      MAP_CALENDAR_ALWAYS_OPEN_STORAGE_KEY,
-      true,
-    );
+    state.mapCalendarAlwaysOpen = readStoredBoolean(MAP_CALENDAR_ALWAYS_OPEN_STORAGE_KEY, true);
   }
 
   function syncSlackChannelMentionPreference() {
@@ -8621,9 +8079,7 @@
       readStoredText(SLACK_CHANNEL_MENTION_STORAGE_KEY, ""),
       { allowBare: true },
     );
-    state.slackChannelHistory = readStoredChannelTokens(
-      SLACK_CHANNEL_HISTORY_STORAGE_KEY,
-    );
+    state.slackChannelHistory = readStoredChannelTokens(SLACK_CHANNEL_HISTORY_STORAGE_KEY);
   }
 
   function rememberSlackChannelMention(channelMention) {
@@ -8651,9 +8107,7 @@
       return [];
     }
 
-    const nextHistory = state.slackChannelHistory.filter(
-      (token) => token !== normalizedChannel,
-    );
+    const nextHistory = state.slackChannelHistory.filter((token) => token !== normalizedChannel);
     state.slackChannelHistory = nextHistory;
     writeStoredChannelTokens(SLACK_CHANNEL_HISTORY_STORAGE_KEY, nextHistory);
     return nextHistory;
@@ -8691,9 +8145,7 @@
     const normalizedTokens = Array.from(
       new Set(
         channelTokens
-          .map((token) =>
-            normalizeSlackChannelToken(token, { allowBare: false }),
-          )
+          .map((token) => normalizeSlackChannelToken(token, { allowBare: false }))
           .filter(Boolean),
       ),
     );
@@ -8807,9 +8259,7 @@
 
   function isRuntimeMessageTimeoutError(error) {
     return Boolean(
-      error &&
-        typeof error === "object" &&
-        error.name === "ZzkRuntimeMessageTimeoutError",
+      error && typeof error === "object" && error.name === "ZzkRuntimeMessageTimeoutError",
     );
   }
 
@@ -8963,9 +8413,7 @@
       !inputElement.validity.stepMismatch &&
       isTenMinuteAligned(inputElement.value);
 
-    inputElement.setCustomValidity(
-      valid ? "" : "시간은 10분 단위로 입력해 주세요.",
-    );
+    inputElement.setCustomValidity(valid ? "" : "시간은 10분 단위로 입력해 주세요.");
 
     if (!valid) {
       inputElement.reportValidity();
@@ -9009,21 +8457,15 @@
   }
 
   function getMapCalendarSpaceTabLabel(tab = state.mapCalendarSpaceTab) {
-    return normalizeMapCalendarSpaceTab(tab) === MAP_CALENDAR_SPACE_TAB_PAIR
-      ? "페어룸"
-      : "회의실";
+    return normalizeMapCalendarSpaceTab(tab) === MAP_CALENDAR_SPACE_TAB_PAIR ? "페어룸" : "회의실";
   }
 
-  function getRoomsForMapCalendarSpaceTab(
-    rooms,
-    tab = state.mapCalendarSpaceTab,
-  ) {
+  function getRoomsForMapCalendarSpaceTab(rooms, tab = state.mapCalendarSpaceTab) {
     const normalizedTab = normalizeMapCalendarSpaceTab(tab);
     return Array.isArray(rooms)
       ? rooms.filter((room) => {
           const normalizedName = normalizeTargetRoomName(room?.name);
-          const metadata =
-            TARGET_ROOM_METADATA_BY_NORMALIZED_NAME.get(normalizedName);
+          const metadata = TARGET_ROOM_METADATA_BY_NORMALIZED_NAME.get(normalizedName);
           const roomKind = metadata?.kind || inferRoomKindFromName(room?.name);
           return roomKind === normalizedTab;
         })
@@ -9045,11 +8487,7 @@
 
   // 테스트 훅: 테스트 호스트(example.com), 테스트가 미리 심어둔 플래그, 또는 DEBUG 모드에서만
   // 노출한다. lms+ 실제 호스트에서는 플래그가 없으므로 그대로 감춰진다.
-  if (
-    location.hostname === "example.com" ||
-    globalThis.__ZZK_TEST_HOOKS__ === true ||
-    DEBUG_MODE
-  ) {
+  if (location.hostname === "example.com" || globalThis.__ZZK_TEST_HOOKS__ === true || DEBUG_MODE) {
     globalThis.__zzkTestApi = {
       clampMapCalendarWidth,
       getMapCalendarWidthBounds,
@@ -9109,7 +8547,8 @@
           state.elements.scheduleToggle.checked = true;
         }
         state.mapCalendarVisible = true;
-        const targetDate = normalizeDateInput(state.elements?.dateInput) || state.activeScheduleDate;
+        const targetDate =
+          normalizeDateInput(state.elements?.dateInput) || state.activeScheduleDate;
         if (targetDate) {
           await refreshDailySchedule(targetDate);
           return true;
@@ -9148,10 +8587,8 @@
           pendingReservationAttemptIds: Array.from(state.pendingReservationAttempts.keys()),
           lastKnownReservationOwnerName: state.lastKnownReservationOwnerName,
           pendingSlackModalContext: state.pendingSlackModalContext,
-          pendingSlackModalRequiresNonEditPage:
-            state.pendingSlackModalRequiresNonEditPage,
-          pendingSlackModalReloadAttempted:
-            state.pendingSlackModalReloadAttempted,
+          pendingSlackModalRequiresNonEditPage: state.pendingSlackModalRequiresNonEditPage,
+          pendingSlackModalReloadAttempted: state.pendingSlackModalReloadAttempted,
           slackModalVisible: state.slackModalVisible,
           lastSlackModalFingerprint: state.lastSlackModalFingerprint,
           lastSlackModalShownAt: state.lastSlackModalShownAt,

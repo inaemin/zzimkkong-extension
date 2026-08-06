@@ -61,13 +61,13 @@ GET /api/space-reservations?date=<YYYY-MM-DD>&spaceId=<id>
 
 응답: 예약 배열(또는 `{ reservations: [...] }`).
 
-| 필드                    | 설명                         |
-| ----------------------- | ---------------------------- |
-| `id`                    | 예약 ID                      |
-| `startTime` / `endTime` | 예약 구간(`HH:MM:SS`)        |
-| `purpose`               | 예약 목적                    |
+| 필드                    | 설명                           |
+| ----------------------- | ------------------------------ |
+| `id`                    | 예약 ID                        |
+| `startTime` / `endTime` | 예약 구간(`HH:MM:SS`)          |
+| `purpose`               | 예약 목적                      |
 | `reserverName`          | 예약자명(예: `닉네임(홍길동)`) |
-| `mine`                  | 내 예약 여부(boolean)        |
+| `mine`                  | 내 예약 여부(boolean)          |
 
 > lms+에는 가용성 전용 엔드포인트가 없어, 각 공간의 당일 예약을 받아와 요청 구간과 겹치는지로 예약 가능 여부를 계산합니다.
 

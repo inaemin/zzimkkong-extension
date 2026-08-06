@@ -27,32 +27,30 @@
       writeStoredText,
     } = deps;
 
-  function ensureSlackCopyModalStyle() {
-    if (document.getElementById(SLACK_COPY_MODAL_STYLE_ID)) {
-      return;
-    }
+    function ensureSlackCopyModalStyle() {
+      if (document.getElementById(SLACK_COPY_MODAL_STYLE_ID)) {
+        return;
+      }
 
-    const runtime =
-      typeof globalThis !== "undefined" &&
-      globalThis.chrome &&
-      globalThis.chrome.runtime
-        ? globalThis.chrome.runtime
-        : null;
-    if (
-      runtime &&
-      typeof runtime.getURL === "function" &&
-      !document.getElementById(SLACK_COPY_MODAL_BASECOAT_STYLE_ID)
-    ) {
-      const basecoatLink = document.createElement("link");
-      basecoatLink.id = SLACK_COPY_MODAL_BASECOAT_STYLE_ID;
-      basecoatLink.rel = "stylesheet";
-      basecoatLink.href = runtime.getURL(SLACK_COPY_MODAL_BASECOAT_STYLE_PATH);
-      document.head.appendChild(basecoatLink);
-    }
+      const runtime =
+        typeof globalThis !== "undefined" && globalThis.chrome && globalThis.chrome.runtime
+          ? globalThis.chrome.runtime
+          : null;
+      if (
+        runtime &&
+        typeof runtime.getURL === "function" &&
+        !document.getElementById(SLACK_COPY_MODAL_BASECOAT_STYLE_ID)
+      ) {
+        const basecoatLink = document.createElement("link");
+        basecoatLink.id = SLACK_COPY_MODAL_BASECOAT_STYLE_ID;
+        basecoatLink.rel = "stylesheet";
+        basecoatLink.href = runtime.getURL(SLACK_COPY_MODAL_BASECOAT_STYLE_PATH);
+        document.head.appendChild(basecoatLink);
+      }
 
-    const style = document.createElement("style");
-    style.id = SLACK_COPY_MODAL_STYLE_ID;
-    style.textContent = `
+      const style = document.createElement("style");
+      style.id = SLACK_COPY_MODAL_STYLE_ID;
+      style.textContent = `
       #${SLACK_COPY_MODAL_ID} {
         position: fixed;
         inset: 0;
@@ -564,638 +562,610 @@
         color: #b91c1c;
       }
     `;
-    document.head.appendChild(style);
-  }
-
-  function showSlackCopyModal(context) {
-    if (!(document.body instanceof HTMLBodyElement)) {
-      return;
+      document.head.appendChild(style);
     }
 
-    ensureSlackCopyModalStyle();
-    closeSlackCopyModal({ restoreMapCalendar: false });
-    state.slackModalVisible = true;
-    setMapCalendarSuppressedBySlack(true);
-
-    const baseContext =
-      context && typeof context === "object"
-        ? { ...context }
-        : buildSlackReservationContext();
-    if (typeof baseContext.channelMention !== "string") {
-      baseContext.channelMention = state.slackChannelMention || "";
-    }
-
-    let selectedChannelMention = normalizeSlackChannelToken(
-      baseContext.channelMention,
-      { allowBare: true },
-    );
-    let selectedReminderLeadMinutes = normalizeSlackReminderLeadMinutes(
-      state.slackReminderLeadMinutes,
-    );
-
-    const overlay = document.createElement("dialog");
-    overlay.id = SLACK_COPY_MODAL_ID;
-    overlay.className = "dialog";
-    overlay.setAttribute("role", "dialog");
-    overlay.setAttribute("aria-modal", "true");
-    overlay.setAttribute("aria-label", "슬랙 메시지 복사");
-
-    const card = document.createElement("div");
-    card.className = "zzk-slack-copy-card";
-    const stopPropagation = (event) => {
-      event.stopPropagation();
-    };
-    [
-      "pointerdown",
-      "mousedown",
-      "mouseup",
-      "click",
-      "dblclick",
-      "touchstart",
-      "touchend",
-    ].forEach((eventName) => {
-      card.addEventListener(eventName, stopPropagation);
-    });
-    card.addEventListener("wheel", stopPropagation, { passive: true });
-
-    const header = document.createElement("header");
-    header.className = "zzk-slack-copy-header";
-    const title = document.createElement("h2");
-    title.textContent = "슬랙 메시지 복사";
-
-    const description = document.createElement("p");
-    description.className = "zzk-slack-copy-description";
-    description.textContent =
-      "Slack에 붙여넣기 전에 내용을 한 번만 확인해 주세요.\n채널을 입력하면 해당 채널을 대상으로 한 줄짜리 /remind 명령을 생성합니다.\n내가 받은 리마인더는 Later 탭에서 볼 수 있고, /remind list에는 채널 리마인더만 보여요.";
-
-    const body = document.createElement("section");
-    body.className = "zzk-slack-copy-body form";
-
-    const closeIconButton = document.createElement("button");
-    closeIconButton.type = "button";
-    closeIconButton.className = "zzk-slack-copy-close";
-    closeIconButton.innerHTML = X_ICON_SVG;
-    closeIconButton.setAttribute("aria-label", "닫기");
-    closeIconButton.title = "닫기";
-    closeIconButton.addEventListener("click", () => {
-      closeSlackCopyModal();
-    });
-    header.append(title, closeIconButton);
-
-    const channelRow = document.createElement("div");
-    channelRow.className = "zzk-slack-copy-attendee-row field";
-
-    const channelLabel = document.createElement("label");
-    channelLabel.className = "zzk-slack-copy-attendee-label label";
-    channelLabel.textContent = "리마인드 채널";
-
-    const channelEditor = document.createElement("div");
-    channelEditor.className = "zzk-slack-copy-attendee-editor";
-
-    const channelCombobox = document.createElement("div");
-    channelCombobox.className = "zzk-slack-copy-channel-combobox";
-
-    const channelChipWrap = document.createElement("div");
-    channelChipWrap.className = "zzk-slack-copy-channel-chip-wrap";
-
-    const channelInput = document.createElement("input");
-    channelInput.className = "zzk-slack-copy-channel-input";
-    channelInput.type = "text";
-    channelInput.placeholder = "#채널명";
-    channelInput.value = "";
-
-    const channelSuggestionList = document.createElement("div");
-    channelSuggestionList.className = "zzk-slack-copy-channel-suggest";
-    channelSuggestionList.hidden = true;
-
-    channelChipWrap.append(channelInput);
-    channelCombobox.append(channelChipWrap, channelSuggestionList);
-    channelEditor.append(channelCombobox);
-    channelRow.append(channelLabel, channelEditor);
-
-    const reminderRow = document.createElement("div");
-    reminderRow.className = "zzk-slack-copy-setting-row field";
-
-    const reminderLabel = document.createElement("label");
-    reminderLabel.className = "zzk-slack-copy-setting-label label";
-    reminderLabel.textContent = "알림 시점";
-
-    const reminderSelect = document.createElement("select");
-    reminderSelect.className = "zzk-slack-copy-reminder-select input";
-    reminderSelect.setAttribute("aria-label", "슬랙 리마인드 알림 시점 선택");
-    reminderSelect.id = "zzk-slack-reminder-lead-time";
-    reminderLabel.htmlFor = reminderSelect.id;
-    SLACK_REMINDER_LEAD_TIME_OPTIONS.forEach((minutes) => {
-      const option = document.createElement("option");
-      option.value = String(minutes);
-      option.textContent = formatSlackReminderLeadOptionLabel(minutes);
-      option.selected = minutes === selectedReminderLeadMinutes;
-      reminderSelect.appendChild(option);
-    });
-    reminderRow.append(reminderLabel, reminderSelect);
-    channelRow.append(reminderRow);
-
-    const textarea = document.createElement("textarea");
-    textarea.className = "zzk-slack-copy-textarea textarea";
-    textarea.readOnly = true;
-    textarea.setAttribute("aria-label", "슬랙에 붙여넣을 예약 메시지");
-
-    const copyButton = document.createElement("button");
-    copyButton.type = "button";
-    copyButton.className = "zzk-slack-copy-button btn primary";
-    copyButton.textContent = "복사하기";
-
-    const footer = document.createElement("footer");
-    footer.className = "zzk-slack-copy-footer";
-
-    const status = document.createElement("p");
-    status.className = "zzk-slack-copy-status";
-    status.dataset.state = "idle";
-    status.textContent = "";
-
-    footer.append(status, copyButton);
-
-    const setStatusMessage = (message, stateName = "idle") => {
-      status.dataset.state = stateName;
-      status.textContent = typeof message === "string" ? message : "";
-    };
-
-    let channelSuggestionsVisible = false;
-    let channelSuggestionTokens = [];
-    let activeChannelSuggestionIndex = -1;
-
-    const normalizeTypedChannel = () => {
-      const rawValue = channelInput.value.trim();
-      return rawValue ? normalizeSlackChannelToken(rawValue, { allowBare: true }) : "";
-    };
-
-    const renderSelectedChannelChip = () => {
-      channelChipWrap
-        .querySelectorAll(".zzk-slack-copy-channel-chip")
-        .forEach((node) => node.remove());
-
-      channelInput.placeholder = selectedChannelMention ? "채널 변경 또는 새 채널 추가" : "#채널명";
-
-      if (!selectedChannelMention) {
+    function showSlackCopyModal(context) {
+      if (!(document.body instanceof HTMLBodyElement)) {
         return;
       }
 
-      const chip = document.createElement("span");
-      chip.className = "zzk-slack-copy-channel-chip";
+      ensureSlackCopyModalStyle();
+      closeSlackCopyModal({ restoreMapCalendar: false });
+      state.slackModalVisible = true;
+      setMapCalendarSuppressedBySlack(true);
 
-      const chipLabel = document.createElement("span");
-      chipLabel.className = "zzk-slack-copy-channel-chip-label";
-      chipLabel.textContent = selectedChannelMention;
-
-      const removeButton = document.createElement("button");
-      removeButton.type = "button";
-      removeButton.className = "zzk-slack-copy-channel-chip-remove";
-      removeButton.innerHTML = X_ICON_SVG;
-      removeButton.setAttribute("aria-label", `${selectedChannelMention} 제거`);
-      removeButton.addEventListener("click", () => {
-        selectedChannelMention = "";
-        persistChannelMention();
-        refreshPreviewText();
-        renderSelectedChannelChip();
-        refreshChannelSuggestions();
-        channelInput.focus();
-      });
-
-      chip.append(chipLabel, removeButton);
-      channelChipWrap.insertBefore(chip, channelInput);
-    };
-
-    const persistChannelMention = () => {
-      state.slackChannelMention = selectedChannelMention;
-      writeStoredText(SLACK_CHANNEL_MENTION_STORAGE_KEY, selectedChannelMention);
-      return selectedChannelMention;
-    };
-
-    const persistReminderLeadMinutes = () => {
-      state.slackReminderLeadMinutes = selectedReminderLeadMinutes;
-      writeStoredText(
-        SLACK_REMINDER_LEAD_TIME_STORAGE_KEY,
-        String(selectedReminderLeadMinutes),
-      );
-      return selectedReminderLeadMinutes;
-    };
-
-    const getFilteredChannelSuggestions = (queryValue) => {
-      const normalizedQuery = normalizeSlackFieldText(queryValue).toLowerCase();
-      const sourceTokens = Array.isArray(state.slackChannelHistory)
-        ? state.slackChannelHistory
-        : [];
-      if (!normalizedQuery) {
-        return sourceTokens.slice();
+      const baseContext =
+        context && typeof context === "object" ? { ...context } : buildSlackReservationContext();
+      if (typeof baseContext.channelMention !== "string") {
+        baseContext.channelMention = state.slackChannelMention || "";
       }
 
-      return sourceTokens.filter((token) => token.toLowerCase().includes(normalizedQuery));
-    };
+      let selectedChannelMention = normalizeSlackChannelToken(baseContext.channelMention, {
+        allowBare: true,
+      });
+      let selectedReminderLeadMinutes = normalizeSlackReminderLeadMinutes(
+        state.slackReminderLeadMinutes,
+      );
 
-    const hideChannelSuggestions = () => {
-      channelSuggestionsVisible = false;
-      channelSuggestionTokens = [];
-      activeChannelSuggestionIndex = -1;
+      const overlay = document.createElement("dialog");
+      overlay.id = SLACK_COPY_MODAL_ID;
+      overlay.className = "dialog";
+      overlay.setAttribute("role", "dialog");
+      overlay.setAttribute("aria-modal", "true");
+      overlay.setAttribute("aria-label", "슬랙 메시지 복사");
+
+      const card = document.createElement("div");
+      card.className = "zzk-slack-copy-card";
+      const stopPropagation = (event) => {
+        event.stopPropagation();
+      };
+      [
+        "pointerdown",
+        "mousedown",
+        "mouseup",
+        "click",
+        "dblclick",
+        "touchstart",
+        "touchend",
+      ].forEach((eventName) => {
+        card.addEventListener(eventName, stopPropagation);
+      });
+      card.addEventListener("wheel", stopPropagation, { passive: true });
+
+      const header = document.createElement("header");
+      header.className = "zzk-slack-copy-header";
+      const title = document.createElement("h2");
+      title.textContent = "슬랙 메시지 복사";
+
+      const description = document.createElement("p");
+      description.className = "zzk-slack-copy-description";
+      description.textContent =
+        "Slack에 붙여넣기 전에 내용을 한 번만 확인해 주세요.\n채널을 입력하면 해당 채널을 대상으로 한 줄짜리 /remind 명령을 생성합니다.\n내가 받은 리마인더는 Later 탭에서 볼 수 있고, /remind list에는 채널 리마인더만 보여요.";
+
+      const body = document.createElement("section");
+      body.className = "zzk-slack-copy-body form";
+
+      const closeIconButton = document.createElement("button");
+      closeIconButton.type = "button";
+      closeIconButton.className = "zzk-slack-copy-close";
+      closeIconButton.innerHTML = X_ICON_SVG;
+      closeIconButton.setAttribute("aria-label", "닫기");
+      closeIconButton.title = "닫기";
+      closeIconButton.addEventListener("click", () => {
+        closeSlackCopyModal();
+      });
+      header.append(title, closeIconButton);
+
+      const channelRow = document.createElement("div");
+      channelRow.className = "zzk-slack-copy-attendee-row field";
+
+      const channelLabel = document.createElement("label");
+      channelLabel.className = "zzk-slack-copy-attendee-label label";
+      channelLabel.textContent = "리마인드 채널";
+
+      const channelEditor = document.createElement("div");
+      channelEditor.className = "zzk-slack-copy-attendee-editor";
+
+      const channelCombobox = document.createElement("div");
+      channelCombobox.className = "zzk-slack-copy-channel-combobox";
+
+      const channelChipWrap = document.createElement("div");
+      channelChipWrap.className = "zzk-slack-copy-channel-chip-wrap";
+
+      const channelInput = document.createElement("input");
+      channelInput.className = "zzk-slack-copy-channel-input";
+      channelInput.type = "text";
+      channelInput.placeholder = "#채널명";
+      channelInput.value = "";
+
+      const channelSuggestionList = document.createElement("div");
+      channelSuggestionList.className = "zzk-slack-copy-channel-suggest";
       channelSuggestionList.hidden = true;
-      channelSuggestionList.textContent = "";
-      channelCombobox.classList.remove("is-open");
-    };
 
-    const syncActiveChannelSuggestion = () => {
-      const options = Array.from(
-        channelSuggestionList.querySelectorAll(".zzk-slack-copy-channel-option"),
-      );
-      options.forEach((option) => {
-        const index = Number(option.getAttribute("data-option-index"));
-        const isActive = Number.isInteger(index) && index === activeChannelSuggestionIndex;
-        option.classList.toggle("is-active", isActive);
-        if (isActive) {
-          option.scrollIntoView({ block: "nearest" });
-        }
+      channelChipWrap.append(channelInput);
+      channelCombobox.append(channelChipWrap, channelSuggestionList);
+      channelEditor.append(channelCombobox);
+      channelRow.append(channelLabel, channelEditor);
+
+      const reminderRow = document.createElement("div");
+      reminderRow.className = "zzk-slack-copy-setting-row field";
+
+      const reminderLabel = document.createElement("label");
+      reminderLabel.className = "zzk-slack-copy-setting-label label";
+      reminderLabel.textContent = "알림 시점";
+
+      const reminderSelect = document.createElement("select");
+      reminderSelect.className = "zzk-slack-copy-reminder-select input";
+      reminderSelect.setAttribute("aria-label", "슬랙 리마인드 알림 시점 선택");
+      reminderSelect.id = "zzk-slack-reminder-lead-time";
+      reminderLabel.htmlFor = reminderSelect.id;
+      SLACK_REMINDER_LEAD_TIME_OPTIONS.forEach((minutes) => {
+        const option = document.createElement("option");
+        option.value = String(minutes);
+        option.textContent = formatSlackReminderLeadOptionLabel(minutes);
+        option.selected = minutes === selectedReminderLeadMinutes;
+        reminderSelect.appendChild(option);
       });
-    };
+      reminderRow.append(reminderLabel, reminderSelect);
+      channelRow.append(reminderRow);
 
-    const renderChannelSuggestions = () => {
-      channelSuggestionList.textContent = "";
-      if (!channelSuggestionsVisible) {
-        channelSuggestionList.hidden = true;
-        return;
-      }
+      const textarea = document.createElement("textarea");
+      textarea.className = "zzk-slack-copy-textarea textarea";
+      textarea.readOnly = true;
+      textarea.setAttribute("aria-label", "슬랙에 붙여넣을 예약 메시지");
 
-      const typedChannel = normalizeTypedChannel();
-      const canAddTypedChannel =
-        typedChannel && !channelSuggestionTokens.includes(typedChannel);
-      let addIndex = -1;
+      const copyButton = document.createElement("button");
+      copyButton.type = "button";
+      copyButton.className = "zzk-slack-copy-button btn primary";
+      copyButton.textContent = "복사하기";
 
-      if (channelSuggestionTokens.length === 0 && !canAddTypedChannel) {
-        const empty = document.createElement("div");
-        empty.className = "zzk-slack-copy-channel-empty";
-        empty.textContent = "저장된 채널이 없습니다.";
-        channelSuggestionList.appendChild(empty);
-        channelSuggestionList.hidden = false;
-        return;
-      }
+      const footer = document.createElement("footer");
+      footer.className = "zzk-slack-copy-footer";
 
-      if (canAddTypedChannel) {
-        addIndex = channelSuggestionTokens.length;
-        channelSuggestionTokens = channelSuggestionTokens.concat(typedChannel);
-        const addOption = document.createElement("button");
-        addOption.type = "button";
-        addOption.className = "zzk-slack-copy-channel-option";
-        addOption.setAttribute("data-option-index", String(addIndex));
+      const status = document.createElement("p");
+      status.className = "zzk-slack-copy-status";
+      status.dataset.state = "idle";
+      status.textContent = "";
 
-        const addLabel = document.createElement("span");
-        addLabel.textContent = typedChannel;
-        const addBadge = document.createElement("span");
-        addBadge.className = "zzk-slack-copy-channel-option-add";
-        addBadge.textContent = "추가";
-        addOption.append(addLabel, addBadge);
+      footer.append(status, copyButton);
 
-        addOption.addEventListener("mouseenter", () => {
-          activeChannelSuggestionIndex = addIndex;
-          syncActiveChannelSuggestion();
-        });
-        addOption.addEventListener("click", (event) => {
-          event.preventDefault();
-          selectedChannelMention = typedChannel;
-          channelInput.value = "";
-          persistChannelMention();
-          rememberSlackChannelMention(typedChannel);
-          renderSelectedChannelChip();
-          refreshPreviewText();
-          hideChannelSuggestions();
-          channelInput.focus();
-        });
-        channelSuggestionList.appendChild(addOption);
-      }
+      const setStatusMessage = (message, stateName = "idle") => {
+        status.dataset.state = stateName;
+        status.textContent = typeof message === "string" ? message : "";
+      };
 
-      channelSuggestionTokens.forEach((token, index) => {
-        if (canAddTypedChannel && token === typedChannel && index === addIndex) {
+      let channelSuggestionsVisible = false;
+      let channelSuggestionTokens = [];
+      let activeChannelSuggestionIndex = -1;
+
+      const normalizeTypedChannel = () => {
+        const rawValue = channelInput.value.trim();
+        return rawValue ? normalizeSlackChannelToken(rawValue, { allowBare: true }) : "";
+      };
+
+      const renderSelectedChannelChip = () => {
+        channelChipWrap
+          .querySelectorAll(".zzk-slack-copy-channel-chip")
+          .forEach((node) => node.remove());
+
+        channelInput.placeholder = selectedChannelMention
+          ? "채널 변경 또는 새 채널 추가"
+          : "#채널명";
+
+        if (!selectedChannelMention) {
           return;
         }
-        const option = document.createElement("button");
-        option.type = "button";
-        option.className = "zzk-slack-copy-channel-option";
-        option.setAttribute("data-option-index", String(index));
-        const optionLabel = document.createElement("span");
-        optionLabel.textContent = token;
-        option.appendChild(optionLabel);
-        option.addEventListener("mouseenter", () => {
-          activeChannelSuggestionIndex = index;
-          syncActiveChannelSuggestion();
-        });
-        option.addEventListener("click", (event) => {
-          event.preventDefault();
-          selectedChannelMention = token;
-          channelInput.value = "";
+
+        const chip = document.createElement("span");
+        chip.className = "zzk-slack-copy-channel-chip";
+
+        const chipLabel = document.createElement("span");
+        chipLabel.className = "zzk-slack-copy-channel-chip-label";
+        chipLabel.textContent = selectedChannelMention;
+
+        const removeButton = document.createElement("button");
+        removeButton.type = "button";
+        removeButton.className = "zzk-slack-copy-channel-chip-remove";
+        removeButton.innerHTML = X_ICON_SVG;
+        removeButton.setAttribute("aria-label", `${selectedChannelMention} 제거`);
+        removeButton.addEventListener("click", () => {
+          selectedChannelMention = "";
           persistChannelMention();
-          rememberSlackChannelMention(token);
-          renderSelectedChannelChip();
           refreshPreviewText();
-          hideChannelSuggestions();
+          renderSelectedChannelChip();
+          refreshChannelSuggestions();
           channelInput.focus();
         });
 
-        const deleteButton = document.createElement("button");
-        deleteButton.type = "button";
-        deleteButton.className = "zzk-slack-copy-channel-option-delete";
-        deleteButton.innerHTML = X_ICON_SVG;
-        deleteButton.setAttribute("aria-label", `${token} 채널 삭제`);
-        deleteButton.addEventListener("click", (event) => {
-          event.preventDefault();
-          event.stopPropagation();
-          forgetSlackChannelMention(token);
-          if (selectedChannelMention === token) {
-            selectedChannelMention = "";
+        chip.append(chipLabel, removeButton);
+        channelChipWrap.insertBefore(chip, channelInput);
+      };
+
+      const persistChannelMention = () => {
+        state.slackChannelMention = selectedChannelMention;
+        writeStoredText(SLACK_CHANNEL_MENTION_STORAGE_KEY, selectedChannelMention);
+        return selectedChannelMention;
+      };
+
+      const persistReminderLeadMinutes = () => {
+        state.slackReminderLeadMinutes = selectedReminderLeadMinutes;
+        writeStoredText(SLACK_REMINDER_LEAD_TIME_STORAGE_KEY, String(selectedReminderLeadMinutes));
+        return selectedReminderLeadMinutes;
+      };
+
+      const getFilteredChannelSuggestions = (queryValue) => {
+        const normalizedQuery = normalizeSlackFieldText(queryValue).toLowerCase();
+        const sourceTokens = Array.isArray(state.slackChannelHistory)
+          ? state.slackChannelHistory
+          : [];
+        if (!normalizedQuery) {
+          return sourceTokens.slice();
+        }
+
+        return sourceTokens.filter((token) => token.toLowerCase().includes(normalizedQuery));
+      };
+
+      const hideChannelSuggestions = () => {
+        channelSuggestionsVisible = false;
+        channelSuggestionTokens = [];
+        activeChannelSuggestionIndex = -1;
+        channelSuggestionList.hidden = true;
+        channelSuggestionList.textContent = "";
+        channelCombobox.classList.remove("is-open");
+      };
+
+      const syncActiveChannelSuggestion = () => {
+        const options = Array.from(
+          channelSuggestionList.querySelectorAll(".zzk-slack-copy-channel-option"),
+        );
+        options.forEach((option) => {
+          const index = Number(option.getAttribute("data-option-index"));
+          const isActive = Number.isInteger(index) && index === activeChannelSuggestionIndex;
+          option.classList.toggle("is-active", isActive);
+          if (isActive) {
+            option.scrollIntoView({ block: "nearest" });
+          }
+        });
+      };
+
+      const renderChannelSuggestions = () => {
+        channelSuggestionList.textContent = "";
+        if (!channelSuggestionsVisible) {
+          channelSuggestionList.hidden = true;
+          return;
+        }
+
+        const typedChannel = normalizeTypedChannel();
+        const canAddTypedChannel = typedChannel && !channelSuggestionTokens.includes(typedChannel);
+        let addIndex = -1;
+
+        if (channelSuggestionTokens.length === 0 && !canAddTypedChannel) {
+          const empty = document.createElement("div");
+          empty.className = "zzk-slack-copy-channel-empty";
+          empty.textContent = "저장된 채널이 없습니다.";
+          channelSuggestionList.appendChild(empty);
+          channelSuggestionList.hidden = false;
+          return;
+        }
+
+        if (canAddTypedChannel) {
+          addIndex = channelSuggestionTokens.length;
+          channelSuggestionTokens = channelSuggestionTokens.concat(typedChannel);
+          const addOption = document.createElement("button");
+          addOption.type = "button";
+          addOption.className = "zzk-slack-copy-channel-option";
+          addOption.setAttribute("data-option-index", String(addIndex));
+
+          const addLabel = document.createElement("span");
+          addLabel.textContent = typedChannel;
+          const addBadge = document.createElement("span");
+          addBadge.className = "zzk-slack-copy-channel-option-add";
+          addBadge.textContent = "추가";
+          addOption.append(addLabel, addBadge);
+
+          addOption.addEventListener("mouseenter", () => {
+            activeChannelSuggestionIndex = addIndex;
+            syncActiveChannelSuggestion();
+          });
+          addOption.addEventListener("click", (event) => {
+            event.preventDefault();
+            selectedChannelMention = typedChannel;
+            channelInput.value = "";
             persistChannelMention();
+            rememberSlackChannelMention(typedChannel);
             renderSelectedChannelChip();
             refreshPreviewText();
+            hideChannelSuggestions();
+            channelInput.focus();
+          });
+          channelSuggestionList.appendChild(addOption);
+        }
+
+        channelSuggestionTokens.forEach((token, index) => {
+          if (canAddTypedChannel && token === typedChannel && index === addIndex) {
+            return;
           }
-          refreshChannelSuggestions();
-          channelInput.focus();
+          const option = document.createElement("button");
+          option.type = "button";
+          option.className = "zzk-slack-copy-channel-option";
+          option.setAttribute("data-option-index", String(index));
+          const optionLabel = document.createElement("span");
+          optionLabel.textContent = token;
+          option.appendChild(optionLabel);
+          option.addEventListener("mouseenter", () => {
+            activeChannelSuggestionIndex = index;
+            syncActiveChannelSuggestion();
+          });
+          option.addEventListener("click", (event) => {
+            event.preventDefault();
+            selectedChannelMention = token;
+            channelInput.value = "";
+            persistChannelMention();
+            rememberSlackChannelMention(token);
+            renderSelectedChannelChip();
+            refreshPreviewText();
+            hideChannelSuggestions();
+            channelInput.focus();
+          });
+
+          const deleteButton = document.createElement("button");
+          deleteButton.type = "button";
+          deleteButton.className = "zzk-slack-copy-channel-option-delete";
+          deleteButton.innerHTML = X_ICON_SVG;
+          deleteButton.setAttribute("aria-label", `${token} 채널 삭제`);
+          deleteButton.addEventListener("click", (event) => {
+            event.preventDefault();
+            event.stopPropagation();
+            forgetSlackChannelMention(token);
+            if (selectedChannelMention === token) {
+              selectedChannelMention = "";
+              persistChannelMention();
+              renderSelectedChannelChip();
+              refreshPreviewText();
+            }
+            refreshChannelSuggestions();
+            channelInput.focus();
+          });
+          option.appendChild(deleteButton);
+
+          channelSuggestionList.appendChild(option);
         });
-        option.appendChild(deleteButton);
 
-        channelSuggestionList.appendChild(option);
+        activeChannelSuggestionIndex = channelSuggestionTokens.length > 0 ? 0 : -1;
+        syncActiveChannelSuggestion();
+        channelSuggestionList.hidden = false;
+        channelCombobox.classList.add("is-open");
+      };
+
+      const refreshChannelSuggestions = () => {
+        channelSuggestionTokens = getFilteredChannelSuggestions(channelInput.value);
+        channelSuggestionsVisible = true;
+        renderChannelSuggestions();
+      };
+
+      const commitActiveChannelSuggestion = () => {
+        const nextToken = channelSuggestionTokens[activeChannelSuggestionIndex];
+        if (!nextToken) {
+          return false;
+        }
+        selectedChannelMention = nextToken;
+        channelInput.value = "";
+        persistChannelMention();
+        rememberSlackChannelMention(nextToken);
+        renderSelectedChannelChip();
+        refreshPreviewText();
+        hideChannelSuggestions();
+        return true;
+      };
+
+      const moveActiveChannelSuggestion = (delta) => {
+        if (!channelSuggestionsVisible || channelSuggestionTokens.length === 0) {
+          return false;
+        }
+
+        if (!Number.isInteger(activeChannelSuggestionIndex) || activeChannelSuggestionIndex < 0) {
+          activeChannelSuggestionIndex = delta >= 0 ? 0 : channelSuggestionTokens.length - 1;
+        } else {
+          const size = channelSuggestionTokens.length;
+          activeChannelSuggestionIndex = (activeChannelSuggestionIndex + delta + size) % size;
+        }
+        syncActiveChannelSuggestion();
+        return true;
+      };
+
+      const commitTypedChannel = () => {
+        const typedChannel = normalizeTypedChannel();
+        if (!typedChannel) {
+          return false;
+        }
+
+        selectedChannelMention = typedChannel;
+        channelInput.value = "";
+        persistChannelMention();
+        rememberSlackChannelMention(typedChannel);
+        renderSelectedChannelChip();
+        refreshPreviewText();
+        hideChannelSuggestions();
+        return true;
+      };
+
+      const buildPreviewText = () => {
+        return buildSlackReservationMessage({
+          ...baseContext,
+          channelMention: selectedChannelMention,
+          reminderLeadMinutes: selectedReminderLeadMinutes,
+        });
+      };
+
+      const refreshPreviewText = () => {
+        textarea.value = buildPreviewText();
+      };
+
+      channelInput.addEventListener("input", () => {
+        refreshPreviewText();
+        refreshChannelSuggestions();
       });
 
-      activeChannelSuggestionIndex = channelSuggestionTokens.length > 0 ? 0 : -1;
-      syncActiveChannelSuggestion();
-      channelSuggestionList.hidden = false;
-      channelCombobox.classList.add("is-open");
-    };
-
-    const refreshChannelSuggestions = () => {
-      channelSuggestionTokens = getFilteredChannelSuggestions(channelInput.value);
-      channelSuggestionsVisible = true;
-      renderChannelSuggestions();
-    };
-
-    const commitActiveChannelSuggestion = () => {
-      const nextToken = channelSuggestionTokens[activeChannelSuggestionIndex];
-      if (!nextToken) {
-        return false;
-      }
-      selectedChannelMention = nextToken;
-      channelInput.value = "";
-      persistChannelMention();
-      rememberSlackChannelMention(nextToken);
-      renderSelectedChannelChip();
-      refreshPreviewText();
-      hideChannelSuggestions();
-      return true;
-    };
-
-    const moveActiveChannelSuggestion = (delta) => {
-      if (!channelSuggestionsVisible || channelSuggestionTokens.length === 0) {
-        return false;
-      }
-
-      if (
-        !Number.isInteger(activeChannelSuggestionIndex) ||
-        activeChannelSuggestionIndex < 0
-      ) {
-        activeChannelSuggestionIndex = delta >= 0 ? 0 : channelSuggestionTokens.length - 1;
-      } else {
-        const size = channelSuggestionTokens.length;
-        activeChannelSuggestionIndex = (activeChannelSuggestionIndex + delta + size) % size;
-      }
-      syncActiveChannelSuggestion();
-      return true;
-    };
-
-    const commitTypedChannel = () => {
-      const typedChannel = normalizeTypedChannel();
-      if (!typedChannel) {
-        return false;
-      }
-
-      selectedChannelMention = typedChannel;
-      channelInput.value = "";
-      persistChannelMention();
-      rememberSlackChannelMention(typedChannel);
-      renderSelectedChannelChip();
-      refreshPreviewText();
-      hideChannelSuggestions();
-      return true;
-    };
-
-    const buildPreviewText = () => {
-      return buildSlackReservationMessage({
-        ...baseContext,
-        channelMention: selectedChannelMention,
-        reminderLeadMinutes: selectedReminderLeadMinutes,
+      channelInput.addEventListener("focus", () => {
+        refreshChannelSuggestions();
       });
-    };
 
-    const refreshPreviewText = () => {
-      textarea.value = buildPreviewText();
-    };
+      channelInput.addEventListener("click", () => {
+        refreshChannelSuggestions();
+      });
 
-    channelInput.addEventListener("input", () => {
-      refreshPreviewText();
-      refreshChannelSuggestions();
-    });
-
-    channelInput.addEventListener("focus", () => {
-      refreshChannelSuggestions();
-    });
-
-    channelInput.addEventListener("click", () => {
-      refreshChannelSuggestions();
-    });
-
-    channelChipWrap.addEventListener("click", (event) => {
-      const target = event.target;
-      if (
-        target instanceof Element &&
-        target.closest(".zzk-slack-copy-channel-chip-remove")
-      ) {
-        return;
-      }
-
-      channelInput.focus();
-      refreshChannelSuggestions();
-    });
-
-    channelInput.addEventListener("blur", () => {
-      window.setTimeout(() => {
-        const activeElement = document.activeElement;
-        if (activeElement === channelInput) {
+      channelChipWrap.addEventListener("click", (event) => {
+        const target = event.target;
+        if (target instanceof Element && target.closest(".zzk-slack-copy-channel-chip-remove")) {
           return;
         }
-        if (
-          activeElement instanceof Element &&
-          channelSuggestionList.contains(activeElement)
-        ) {
+
+        channelInput.focus();
+        refreshChannelSuggestions();
+      });
+
+      channelInput.addEventListener("blur", () => {
+        window.setTimeout(() => {
+          const activeElement = document.activeElement;
+          if (activeElement === channelInput) {
+            return;
+          }
+          if (activeElement instanceof Element && channelSuggestionList.contains(activeElement)) {
+            return;
+          }
+          hideChannelSuggestions();
+        }, 120);
+      });
+
+      channelInput.addEventListener("keydown", (event) => {
+        if (event.key === "ArrowDown") {
+          if (!channelSuggestionsVisible) {
+            refreshChannelSuggestions();
+          }
+          if (moveActiveChannelSuggestion(1)) {
+            event.preventDefault();
+          }
           return;
         }
-        hideChannelSuggestions();
-      }, 120);
-    });
 
-    channelInput.addEventListener("keydown", (event) => {
-      if (event.key === "ArrowDown") {
-        if (!channelSuggestionsVisible) {
-          refreshChannelSuggestions();
+        if (event.key === "ArrowUp") {
+          if (!channelSuggestionsVisible) {
+            refreshChannelSuggestions();
+          }
+          if (moveActiveChannelSuggestion(-1)) {
+            event.preventDefault();
+          }
+          return;
         }
-        if (moveActiveChannelSuggestion(1)) {
-          event.preventDefault();
-        }
-        return;
-      }
 
-      if (event.key === "ArrowUp") {
-        if (!channelSuggestionsVisible) {
-          refreshChannelSuggestions();
+        if (event.key === "Enter" && event.isComposing !== true) {
+          if (commitActiveChannelSuggestion()) {
+            event.preventDefault();
+          }
+          return;
         }
-        if (moveActiveChannelSuggestion(-1)) {
-          event.preventDefault();
+
+        if (event.key === "Escape") {
+          hideChannelSuggestions();
         }
-        return;
-      }
+      });
 
-      if (event.key === "Enter" && event.isComposing !== true) {
-        if (commitActiveChannelSuggestion()) {
-          event.preventDefault();
+      reminderSelect.addEventListener("change", () => {
+        selectedReminderLeadMinutes = normalizeSlackReminderLeadMinutes(reminderSelect.value);
+        reminderSelect.value = String(selectedReminderLeadMinutes);
+        persistReminderLeadMinutes();
+        refreshPreviewText();
+      });
+
+      copyButton.addEventListener("click", async () => {
+        if (!selectedChannelMention) {
+          commitTypedChannel();
+        } else {
+          persistChannelMention();
+          rememberSlackChannelMention(selectedChannelMention);
+          renderSelectedChannelChip();
         }
-        return;
-      }
+        refreshPreviewText();
+        const copied = await copyTextToClipboard(textarea.value, textarea);
+        if (copied) {
+          status.dataset.state = "success";
+          status.textContent = "복사 완료! Slack 채널에 붙여넣어 주세요.";
+          return;
+        }
 
-      if (event.key === "Escape") {
-        hideChannelSuggestions();
-      }
-    });
+        status.dataset.state = "error";
+        status.textContent = "복사에 실패했습니다. 직접 선택해서 복사해 주세요.";
+      });
 
-    reminderSelect.addEventListener("change", () => {
-      selectedReminderLeadMinutes = normalizeSlackReminderLeadMinutes(
-        reminderSelect.value,
+      setStatusMessage(
+        selectedChannelMention
+          ? `${selectedChannelMention} 채널로 리마인드를 생성합니다.`
+          : "채널을 입력하면 해당 채널용 /remind 명령이 생성됩니다.",
+        selectedChannelMention ? "success" : "idle",
       );
       reminderSelect.value = String(selectedReminderLeadMinutes);
+      persistChannelMention();
       persistReminderLeadMinutes();
+      renderSelectedChannelChip();
       refreshPreviewText();
-    });
 
-    copyButton.addEventListener("click", async () => {
-      if (!selectedChannelMention) {
-        commitTypedChannel();
-      } else {
-        persistChannelMention();
-        rememberSlackChannelMention(selectedChannelMention);
-        renderSelectedChannelChip();
-      }
-      refreshPreviewText();
-      const copied = await copyTextToClipboard(textarea.value, textarea);
-      if (copied) {
-        status.dataset.state = "success";
-        status.textContent = "복사 완료! Slack 채널에 붙여넣어 주세요.";
-        return;
-      }
+      body.append(description, channelRow, textarea);
+      card.append(header, body, footer);
+      overlay.appendChild(card);
 
-      status.dataset.state = "error";
-      status.textContent = "복사에 실패했습니다. 직접 선택해서 복사해 주세요.";
-    });
+      overlay.addEventListener("click", (event) => {
+        if (event.target === overlay) {
+          closeSlackCopyModal();
+        }
+      });
 
-    setStatusMessage(
-      selectedChannelMention
-        ? `${selectedChannelMention} 채널로 리마인드를 생성합니다.`
-        : "채널을 입력하면 해당 채널용 /remind 명령이 생성됩니다.",
-      selectedChannelMention ? "success" : "idle",
-    );
-    reminderSelect.value = String(selectedReminderLeadMinutes);
-    persistChannelMention();
-    persistReminderLeadMinutes();
-    renderSelectedChannelChip();
-    refreshPreviewText();
-
-    body.append(description, channelRow, textarea);
-    card.append(header, body, footer);
-    overlay.appendChild(card);
-
-    overlay.addEventListener("click", (event) => {
-      if (event.target === overlay) {
-        closeSlackCopyModal();
-      }
-    });
-
-    overlay.addEventListener("cancel", (event) => {
-      event.preventDefault();
-      closeSlackCopyModal();
-    });
-
-    document.body.appendChild(overlay);
-    if (
-      overlay instanceof HTMLDialogElement &&
-      typeof overlay.showModal === "function"
-    ) {
-      overlay.showModal();
-    }
-    const keydownHandler = (event) => {
-      if (event.key === "Escape") {
+      overlay.addEventListener("cancel", (event) => {
         event.preventDefault();
         closeSlackCopyModal();
+      });
+
+      document.body.appendChild(overlay);
+      if (overlay instanceof HTMLDialogElement && typeof overlay.showModal === "function") {
+        overlay.showModal();
       }
-    };
-    state.slackModalKeydownHandler = keydownHandler;
-    document.addEventListener("keydown", keydownHandler, true);
-  }
-
-  function closeSlackCopyModal(options = {}) {
-    const restoreMapCalendar =
-      !(options && typeof options === "object") ||
-      options.restoreMapCalendar !== false;
-
-    const modal = document.getElementById(SLACK_COPY_MODAL_ID);
-    if (modal) {
-      modal.remove();
+      const keydownHandler = (event) => {
+        if (event.key === "Escape") {
+          event.preventDefault();
+          closeSlackCopyModal();
+        }
+      };
+      state.slackModalKeydownHandler = keydownHandler;
+      document.addEventListener("keydown", keydownHandler, true);
     }
 
-    if (typeof state.slackModalKeydownHandler === "function") {
-      document.removeEventListener(
-        "keydown",
-        state.slackModalKeydownHandler,
-        true,
-      );
-      state.slackModalKeydownHandler = null;
-    }
+    function closeSlackCopyModal(options = {}) {
+      const restoreMapCalendar =
+        !(options && typeof options === "object") || options.restoreMapCalendar !== false;
 
-    if (restoreMapCalendar) {
-      state.slackModalVisible = false;
-      setMapCalendarSuppressedBySlack(false);
-    }
-  }
+      const modal = document.getElementById(SLACK_COPY_MODAL_ID);
+      if (modal) {
+        modal.remove();
+      }
 
-  async function copyTextToClipboard(textValue, textAreaElement) {
-    if (typeof textValue !== "string" || textValue === "") {
-      return false;
-    }
+      if (typeof state.slackModalKeydownHandler === "function") {
+        document.removeEventListener("keydown", state.slackModalKeydownHandler, true);
+        state.slackModalKeydownHandler = null;
+      }
 
-    if (
-      navigator.clipboard &&
-      typeof navigator.clipboard.writeText === "function"
-    ) {
-      try {
-        await navigator.clipboard.writeText(textValue);
-        return true;
-      } catch (error) {
-        const ignoredError = error;
-        void ignoredError;
+      if (restoreMapCalendar) {
+        state.slackModalVisible = false;
+        setMapCalendarSuppressedBySlack(false);
       }
     }
 
-    if (textAreaElement instanceof HTMLTextAreaElement) {
-      textAreaElement.focus();
-      textAreaElement.select();
-      try {
-        return document.execCommand("copy");
-      } catch (error) {
+    async function copyTextToClipboard(textValue, textAreaElement) {
+      if (typeof textValue !== "string" || textValue === "") {
         return false;
       }
+
+      if (navigator.clipboard && typeof navigator.clipboard.writeText === "function") {
+        try {
+          await navigator.clipboard.writeText(textValue);
+          return true;
+        } catch (error) {
+          const ignoredError = error;
+          void ignoredError;
+        }
+      }
+
+      if (textAreaElement instanceof HTMLTextAreaElement) {
+        textAreaElement.focus();
+        textAreaElement.select();
+        try {
+          return document.execCommand("copy");
+        } catch (error) {
+          return false;
+        }
+      }
+
+      return false;
     }
-
-    return false;
-  }
-
 
     return {
       ensureSlackCopyModalStyle,
