@@ -76,7 +76,13 @@ export function DatePicker({
             title={label}
             data-empty={!selected}
             className={cn(
-              "justify-start text-left font-normal data-[empty=true]:text-muted-foreground",
+              // 너비를 고정한다. 라벨이 "1월 1일 (수)" ~ "10월 28일 (월)" 로
+              // 길이가 달라서, 자동 너비면 날짜를 옮길 때마다 버튼 폭이 바뀌어
+              // 옆 컨트롤이 밀린다.
+              //
+              // 136px 은 가장 긴 라벨 기준 실측값이다
+              // (글자 96 + 아이콘 16 + 간격 4 + 좌우 패딩 16 = 132, 여유 4).
+              "w-[136px] justify-start text-left font-normal data-[empty=true]:text-muted-foreground",
               className,
             )}
           />

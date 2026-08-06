@@ -669,6 +669,44 @@ test("지난 예약 칸은 더 진하고 예약 내용을 알려준다", async (
 //
 // 카드 안(헤더)에 렌더하면 카드가 position: relative + overflow: hidden 이라
 // 팝오버 높이만큼 scrollHeight 가 늘어 레이아웃이 밀린다(155 → 218px).
+// 날짜 버튼은 라벨 길이가 "1월 1일 (수)" ~ "10월 28일 (월)" 로 달라진다.
+// 너비가 자동이면 날짜를 옮길 때마다 버튼이 늘었다 줄어 옆 컨트롤이 밀린다.
+test("날짜를 옮겨도 날짜 버튼 너비가 그대로다", async ({ page }) => {
+  await mountServicePage(page);
+  await page.waitForSelector(`#${MAP_CALENDAR_OVERLAY_ID} [aria-label="지도 날짜 선택"]`, {
+    timeout: 4000,
+  });
+
+  const measure = () =>
+    page.evaluate(() => {
+      const button = window.__zzkQuery('[aria-label="지도 날짜 선택"]');
+      return {
+        width: button.getBoundingClientRect().width,
+        // 글자가 버튼을 넘치면 잘려 보인다.
+        overflows: button.scrollWidth > button.offsetWidth,
+        label: (button.textContent || "").trim(),
+      };
+    });
+
+  const widths = [];
+  // 다음일 버튼을 눌러 날짜를 옮긴다. 한 자리 → 두 자리 날짜로 넘어가는
+  // 구간(9일 → 10일 등)에서 라벨이 길어진다.
+  for (let step = 0; step < 14; step += 1) {
+    const measured = await measure();
+    widths.push(measured.width);
+    expect(measured.overflows, `"${measured.label}" 가 버튼을 넘침`).toBe(false);
+    await page.click(`#${MAP_CALENDAR_OVERLAY_ID} [aria-label^="다음일"]`);
+    await page.waitForFunction(
+      (previous) =>
+        (window.__zzkQuery('[aria-label="지도 날짜 선택"]')?.textContent || "").trim() !== previous,
+      measured.label,
+      { timeout: 3000 },
+    );
+  }
+
+  expect(new Set(widths).size, `너비가 흔들림: ${[...new Set(widths)].join(", ")}`).toBe(1);
+});
+
 // 팝오버·달력은 카드가 아니라 포털 층(position: fixed)에 떠야 한다. 카드 안에
 // 렌더하면 카드가 overflow: hidden + relative 라 scrollHeight 가 늘고 레이아웃이 밀린다.
 test("날짜 달력은 카드 밖 포털 층에 뜬다", async ({ page }) => {
