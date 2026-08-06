@@ -44,6 +44,7 @@ export function ChannelCombobox({
 }: ChannelComboboxProps) {
   const anchor = useComboboxAnchor();
   const [query, setQuery] = React.useState("");
+  const [open, setOpen] = React.useState(false);
 
   const selected = value ? [value] : [];
   const typed = normalizeChannel(query);
@@ -78,6 +79,8 @@ export function ChannelCombobox({
     <Combobox
       multiple
       autoHighlight
+      open={open}
+      onOpenChange={setOpen}
       // 걸러내기는 위에서 직접 한다. Base UI 내부 필터까지 겹치면 이미 고른
       // 채널이 목록에서 빠져(선택된 항목 제외) 아무것도 안 남는다.
       filter={null}
@@ -96,6 +99,9 @@ export function ChannelCombobox({
               <ComboboxChipsInput
                 placeholder={values.length > 0 ? "" : "채널명 입력 (예: #공지)"}
                 aria-label="슬랙 채널"
+                // 클릭뿐 아니라 포커스만 와도 목록을 연다. 키보드(Tab)로 온
+                // 사용자가 저장된 채널을 못 보고 지나치지 않게 한다.
+                onFocus={() => setOpen(true)}
               />
             </React.Fragment>
           )}

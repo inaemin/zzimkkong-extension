@@ -652,7 +652,12 @@ test("입력이 비어 있으면 저장된 채널이 모두 나온다", async ({
   const input = page.locator('[data-slot="combobox-chip-input"]');
   const items = page.locator('[data-slot="combobox-item"]');
 
-  // 1) 처음 열었을 때
+  // 1) 포커스만 와도 열려야 한다. 클릭만 되면 키보드(Tab)로 온 사용자는
+  //    저장된 채널이 있는지도 모른 채 지나친다.
+  await input.focus();
+  await expect(items).toHaveCount(3);
+
+  // 클릭으로도 열린다.
   await input.click();
   await expect(items).toHaveCount(3);
 
