@@ -354,3 +354,44 @@ test("리마인드 시점은 닫힌 상태에서도 라벨을 보여주고 채�
   expect(sideBySide.sameRow).toBe(true);
   expect(sideBySide.rightOfChips).toBe(true);
 });
+
+// 채널 입력과 리마인드 시점은 나란히 놓이므로 높이가 어긋나면 바로 보인다.
+// 칩이 들어와도 같은 높이를 유지해야 한다.
+test("채널 입력과 리마인드 시점의 높이가 같다", async ({ page }) => {
+  await openSlackModalWithHistory(page, "#공지");
+
+  const measure = () =>
+    page.evaluate(() => {
+      const findDeep = (selector) => {
+        const walk = (node) => {
+          const hit = node.querySelector?.(selector);
+          if (hit) return hit;
+          for (const element of node.querySelectorAll?.("*") ?? []) {
+            if (element.shadowRoot) {
+              const found = walk(element.shadowRoot);
+              if (found) return found;
+            }
+          }
+          return null;
+        };
+        return walk(document);
+      };
+      return {
+        chips: Math.round(findDeep('[data-slot="combobox-chips"]').getBoundingClientRect().height),
+        select: Math.round(findDeep('[data-slot="select-trigger"]').getBoundingClientRect().height),
+      };
+    });
+
+  const empty = await measure();
+  expect(empty.chips).toBe(empty.select);
+
+  // 칩이 생겨도 그대로여야 한다(칩이 상자보다 크면 밀려 나온다).
+  const input = page.locator('[data-slot="combobox-chip-input"]');
+  await input.click();
+  await input.fill("공지");
+  await page.locator('[data-slot="combobox-item"]').first().click();
+  await expect(page.locator('[data-slot="combobox-chip"]')).toHaveCount(1);
+
+  const filled = await measure();
+  expect(filled.chips).toBe(filled.select);
+});

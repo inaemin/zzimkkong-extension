@@ -112,7 +112,10 @@ function ComboboxChips({
     <ComboboxPrimitive.Chips
       data-slot="combobox-chips"
       className={cn(
-        "flex min-h-9 w-full flex-wrap items-center gap-1 rounded-md bg-transparent px-2 py-1 text-sm shadow-xs ring-1 ring-foreground/15 transition-[color,box-shadow]",
+        // 높이·모서리는 SelectTrigger 기본(h-8, rounded-lg)에 맞춘다. 나란히
+        // 놓이는 컨트롤이라 어긋나면 바로 눈에 띈다. 칩이 늘면 세로로 커져야
+        // 하므로 고정 h-8 이 아니라 min-h-8 을 쓴다.
+        "flex min-h-8 w-full flex-wrap items-center gap-1 rounded-lg bg-transparent px-2.5 py-1 text-sm shadow-xs ring-1 ring-foreground/15 transition-[color,box-shadow]",
         "focus-within:ring-[3px] focus-within:ring-ring/50",
         "has-disabled:pointer-events-none has-disabled:cursor-not-allowed has-disabled:opacity-50",
         className,
