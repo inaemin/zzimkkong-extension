@@ -60,9 +60,65 @@ const lmsDataNormalizers = createLmsDataNormalizers({
   minuteToHourMinute,
 });
 
-export async function loadSpaceContext(roomType: SpaceTab | null = null): Promise<SpaceContext> {
+// 공간 목록 캐시.
+//
+// fetchAvailability 와 fetchDailySchedule 이 각자 loadSpaceContext 를 부르고,
+// 타임블록을 한 번 누르면 둘 다 돈다. 캐시가 없으면 /api/spaces 가 매번 2번씩
+// 나간다. 공간 목록은 예약과 달리 거의 바뀌지 않지만, 회의실이 추가·비활성화될
+// 수 있으므로 예약과 같은 짧은 TTL 을 쓴다.
+interface SpacesCacheEntry {
+  spaces: unknown[];
+  fetchedAt: number;
+}
+
+// let 이 규칙상 금지라 한 덩어리로 묶어 둔다.
+const spacesState: {
+  cache: SpacesCacheEntry | null;
+  inflight: Promise<unknown[]> | null;
+} = { cache: null, inflight: null };
+
+/** 예약 캐시를 비울 때 공간 목록도 같이 비운다(회의실이 바뀌었을 수 있다). */
+function clearSpacesCache(): void {
+  spacesState.cache = null;
+  spacesState.inflight = null;
+}
+
+async function requestSpaces(): Promise<unknown[]> {
   const spacesResponse = await fetchApiJson(`${LMS_API_BASE_URL}/api/spaces`);
   const spaces = lmsDataNormalizers.normalizeSpaces(spacesResponse);
+  spacesState.cache = { spaces, fetchedAt: Date.now() };
+  return spaces;
+}
+
+/** 그 사이 다른 요청이 자리를 차지했으면 건드리지 않는다. */
+function releaseSpacesInflight(request: Promise<unknown[]>): void {
+  if (spacesState.inflight !== request) {
+    return;
+  }
+  spacesState.inflight = null;
+}
+
+/** TTL 안이면 캐시, 요청이 이미 날아가 있으면 거기 얹는다. */
+async function loadSpaces(): Promise<unknown[]> {
+  const { cache, inflight } = spacesState;
+  if (cache && Date.now() - cache.fetchedAt < RESERVATION_SCHEDULE_STALE_MS) {
+    return cache.spaces;
+  }
+  if (inflight) {
+    return inflight;
+  }
+
+  const request = requestSpaces();
+  spacesState.inflight = request;
+  try {
+    return await request;
+  } finally {
+    releaseSpacesInflight(request);
+  }
+}
+
+export async function loadSpaceContext(roomType: SpaceTab | null = null): Promise<SpaceContext> {
+  const spaces = await loadSpaces();
 
   return {
     mapId: null,
@@ -89,6 +145,7 @@ const reservationInflight = new Map<string, Promise<Reservation[]>>();
 export function clearReservationCache(): void {
   reservationCache.clear();
   reservationInflight.clear();
+  clearSpacesCache();
 }
 
 function readCachedReservations(cacheKey: string): Reservation[] | null {
