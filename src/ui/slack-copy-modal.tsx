@@ -18,7 +18,8 @@ export interface SlackCopyModalDeps {
 
   initialChannel: string;
   channelHistory: string[];
-  onChannelCommitted: (channel: string) => void;
+  /** 채널을 확정한다. 갱신된 최근 목록을 돌려주면 그걸로 화면을 맞춘다. */
+  onChannelCommitted: (channel: string) => string[] | void;
   /** 기록에서 지운다. 남은 목록을 돌려주면 그걸로 화면을 갱신한다. */
   onChannelRemovedFromHistory: (channel: string) => string[] | void;
 
@@ -68,7 +69,10 @@ function SlackCopyModalRoot({ deps, mount }: { deps: SlackCopyModalDeps; mount: 
         setChannel(next);
         // 채널이 바뀌면 조립된 메시지를 다시 따라가게 한다.
         setEditedMessage(null);
-        deps.onChannelCommitted(next);
+        const updated = deps.onChannelCommitted(next);
+        if (Array.isArray(updated)) {
+          setChannelHistory(updated);
+        }
       }}
       channelHistory={channelHistory}
       onRemoveChannelFromHistory={(next) => {

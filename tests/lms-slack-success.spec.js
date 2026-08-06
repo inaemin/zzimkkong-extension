@@ -675,3 +675,31 @@ test("입력이 비어 있으면 저장된 채널이 모두 나온다", async ({
   await input.click();
   await expect(items).toHaveCount(3);
 });
+
+// 새로 추가한 채널도 목록에 바로 반영돼야 한다. 저장소에는 들어가는데
+// 화면이 안 따라오면, 두 개를 넣어도 하나만(또는 아무것도) 보인다.
+test("새로 추가한 채널이 목록에 바로 쌓인다", async ({ page }) => {
+  await openSlackModalWithHistory(page);
+
+  const input = page.locator('[data-slot="combobox-chip-input"]');
+  const items = page.locator('[data-slot="combobox-item"]');
+
+  await input.click();
+  await input.pressSequentially("첫번째");
+  await items.first().click();
+
+  await input.click();
+  await input.pressSequentially("두번째");
+  await items.first().click();
+
+  // 빈 입력으로 열면 둘 다 보여야 한다(최근 것이 위).
+  await input.click();
+  await expect(items).toHaveCount(2);
+  await expect(items.first()).toContainText("#두번째");
+  await expect(items.nth(1)).toContainText("#첫번째");
+
+  // 저장소와도 어긋나면 안 된다.
+  await expect
+    .poll(() => page.evaluate(() => localStorage.getItem("zzk-slack-channel-history-v1")))
+    .toBe("#두번째\n#첫번째");
+});

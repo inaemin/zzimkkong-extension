@@ -32,7 +32,8 @@ type Deps = {
     rootOverride?: Document | HTMLElement | null,
   ) => Record<string, unknown>;
   buildSlackReservationMessage: (context: Record<string, unknown>) => string;
-  rememberSlackChannelMention: (channel: string) => void;
+  /** 기록에 넣고 갱신된 목록을 돌려준다. */
+  rememberSlackChannelMention: (channel: string) => string[];
   /** 기록에서 지우고 남은 목록을 돌려준다. */
   forgetSlackChannelMention: (channel: string) => string[];
 };
@@ -120,9 +121,9 @@ export function createSlackWorkflow(deps: Deps) {
       onChannelCommitted: (channel: string) => {
         state.slackChannelMention = channel;
         writeStoredText(SLACK_CHANNEL_MENTION_STORAGE_KEY, channel);
-        if (channel) {
-          rememberSlackChannelMention(channel);
-        }
+        // 갱신된 목록을 돌려준다. 모달이 이걸로 드롭다운을 맞춘다 —
+        // 안 그러면 방금 추가한 채널이 목록에 안 보인다.
+        return channel ? rememberSlackChannelMention(channel) : state.slackChannelHistory;
       },
       onChannelRemovedFromHistory: (channel: string) => {
         // 저장소에서 지우고 남은 목록을 돌려준다. 모달이 이걸로 목록을 갱신한다.
