@@ -1,9 +1,11 @@
 import { expect, test } from "@playwright/test";
 
 import {
+  buildGridFloorGroups,
   buildSlotStates,
   buildSlotTitle,
   groupRoomsByFloor,
+  resolveAppliedRange,
   resolveSelectionEndIndex,
 } from "../src/features/radar/slot-model.ts";
 
@@ -256,5 +258,95 @@ test.describe("buildSlotTitle", () => {
   test("예약이 없으면 빈 문자열이다(툴팁 자체가 안 뜬다)", () => {
     const [state] = buildSlotStates(makeRoom(), [slot], 0);
     expect(buildSlotTitle(state)).toBe("");
+  });
+});
+
+// 그리드에 넘길 층별 묶음 조립. renderMapCalendarOverlay(305줄) 안에 인라인으로
+// 있던 것을 뺐다. 파란 칸(반영된 선택) 표시 규칙이 여기 들어 있다.
+
+const APPLIED = { date: "2026-08-10", roomId: 3, startMinute: 540, endMinute: 600 };
+
+test.describe("resolveAppliedRange", () => {
+  test("날짜·방·구간이 모두 맞으면 범위를 준다", () => {
+    expect(resolveAppliedRange(APPLIED, 3, "2026-08-10")).toEqual({
+      startMinute: 540,
+      endMinute: 600,
+    });
+  });
+
+  test("다른 방이면 표시하지 않는다", () => {
+    // 남기면 고르지도 않은 방에 파란 칸이 뜬다.
+    expect(resolveAppliedRange(APPLIED, 9, "2026-08-10")).toBeNull();
+  });
+
+  test("날짜를 넘기면 표시하지 않는다", () => {
+    // 어제 고른 구간이 오늘 화면에 남으면 예약된 것처럼 보인다.
+    expect(resolveAppliedRange(APPLIED, 3, "2026-08-11")).toBeNull();
+  });
+
+  test("선택이 없으면 null", () => {
+    expect(resolveAppliedRange(null, 3, "2026-08-10")).toBeNull();
+  });
+
+  test("시작이 끝보다 늦거나 같으면 무시한다", () => {
+    // 길이 0 이하인 구간은 그릴 수 없다.
+    expect(resolveAppliedRange({ ...APPLIED, endMinute: 540 }, 3, "2026-08-10")).toBeNull();
+    expect(resolveAppliedRange({ ...APPLIED, startMinute: 700 }, 3, "2026-08-10")).toBeNull();
+  });
+
+  test("분 값이 정수가 아니면 무시한다", () => {
+    expect(resolveAppliedRange({ ...APPLIED, startMinute: 9.5 }, 3, "2026-08-10")).toBeNull();
+  });
+});
+
+test.describe("buildGridFloorGroups", () => {
+  const timeline = makeTimeline(4);
+  const rooms = [
+    { id: 3, name: "보이저", floorLabel: "12층", reservations: [] },
+    { id: 1, name: "금성", floorLabel: "11층", reservations: [] },
+  ];
+  const resolveFloor = (room) => ({ floorKey: room.floorLabel, floorLabel: room.floorLabel });
+
+  test("층별로 묶고 방마다 슬롯 상태를 채운다", () => {
+    const groups = buildGridFloorGroups({
+      rooms,
+      timeline,
+      earliestSelectableMinute: 0,
+      selectionDate: "2026-08-10",
+      appliedSelection: null,
+      resolveFloor,
+    });
+
+    expect(groups.map((group) => group.floorLabel)).toEqual(["12층", "11층"]);
+    expect(groups[0].rooms[0].slotStates).toHaveLength(timeline.length);
+  });
+
+  test("고른 방에만 선택 범위가 붙는다", () => {
+    const groups = buildGridFloorGroups({
+      rooms,
+      timeline,
+      earliestSelectableMinute: 0,
+      selectionDate: "2026-08-10",
+      appliedSelection: APPLIED,
+      resolveFloor,
+    });
+
+    const voyager = groups.flatMap((group) => group.rooms).find((row) => row.room.id === 3);
+    const venus = groups.flatMap((group) => group.rooms).find((row) => row.room.id === 1);
+    expect(voyager.appliedRange).toEqual({ startMinute: 540, endMinute: 600 });
+    expect(venus.appliedRange).toBeNull();
+  });
+
+  test("방이 없으면 빈 묶음", () => {
+    expect(
+      buildGridFloorGroups({
+        rooms: [],
+        timeline,
+        earliestSelectableMinute: 0,
+        selectionDate: "2026-08-10",
+        appliedSelection: null,
+        resolveFloor,
+      }),
+    ).toEqual([]);
   });
 });

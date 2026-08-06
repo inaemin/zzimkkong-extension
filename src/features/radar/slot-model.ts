@@ -199,3 +199,68 @@ export function buildSlotTitle(slotState: SlotState): string {
     })
     .join("\n");
 }
+
+/** 폼에 반영이 끝난 선택. 그리드가 파란 칸으로 표시한다. */
+export interface AppliedSelection {
+  date: string;
+  roomId: number;
+  startMinute: number;
+  endMinute: number;
+}
+
+/** 그리드 한 칸(회의실 한 줄)에 필요한 것. */
+export interface RoomRow {
+  room: RoomSchedule;
+  slotStates: SlotState[];
+  appliedRange: { startMinute: number; endMinute: number } | null;
+}
+
+/**
+ * 반영된 선택이 이 방·이 날짜의 것인지.
+ *
+ * 날짜를 넘기거나 다른 방을 고른 뒤에도 파란 칸이 남으면, 실제로 예약되지
+ * 않은 구간이 예약된 것처럼 보인다. 그래서 셋이 모두 맞을 때만 인정한다.
+ */
+export function resolveAppliedRange(
+  selection: AppliedSelection | null,
+  roomId: number,
+  selectionDate: string,
+): { startMinute: number; endMinute: number } | null {
+  if (
+    !selection ||
+    selection.date !== selectionDate ||
+    selection.roomId !== roomId ||
+    !Number.isInteger(selection.startMinute) ||
+    !Number.isInteger(selection.endMinute) ||
+    selection.startMinute >= selection.endMinute
+  ) {
+    return null;
+  }
+  return { startMinute: selection.startMinute, endMinute: selection.endMinute };
+}
+
+/** 그리드에 넘길 층별 묶음을 만들 때 필요한 것. */
+export interface GridFloorGroupsInput {
+  rooms: RoomSchedule[];
+  timeline: TimelineSlot[];
+  earliestSelectableMinute: number;
+  selectionDate: string;
+  appliedSelection: AppliedSelection | null;
+  resolveFloor: (room: RoomSchedule) => { floorKey: string; floorLabel: string };
+}
+
+function buildRoomRow(room: RoomSchedule, input: GridFloorGroupsInput): RoomRow {
+  return {
+    room,
+    slotStates: buildSlotStates(room, input.timeline, input.earliestSelectableMinute),
+    appliedRange: resolveAppliedRange(input.appliedSelection, room.id, input.selectionDate),
+  };
+}
+
+/** 그리드에 넘길 층별 묶음. 방마다 슬롯 상태와 선택 표시를 미리 계산한다. */
+export function buildGridFloorGroups(input: GridFloorGroupsInput): FloorGroup<RoomRow>[] {
+  return groupRoomsByFloor(input.rooms, input.resolveFloor).map((floorGroup) => ({
+    ...floorGroup,
+    rooms: floorGroup.rooms.map((room) => buildRoomRow(room, input)),
+  }));
+}

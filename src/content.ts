@@ -54,7 +54,7 @@ import {
   buildHostFieldDescriptor,
   readHostFieldDisplayValue,
 } from "./features/form-fields/shared.js";
-import { buildSlotStates, groupRoomsByFloor } from "./features/radar/slot-model.js";
+import { buildGridFloorGroups } from "./features/radar/slot-model.js";
 import type { PanelElements, RadarState } from "./features/state.js";
 import type { DailyScheduleResult, RoomSchedule } from "./services/lms-data/types.js";
 import { closeFloorMapZoom, openFloorMapZoom } from "./ui/floor-map-zoom-modal.js";
@@ -1211,31 +1211,14 @@ declare global {
     //  - 두 pane 의 각 행은 동일한 고정 높이(--zzk-cal-row-h)로 렌더해 세로 정렬을 맞춘다.
     // 그리드는 React 가 그린다. 슬롯 상태·층 그룹은 순수 함수로 미리 계산해
     // 넘기고, 컴포넌트는 그리기만 한다.
-    const gridRoomsByFloor = groupRoomsByFloor<RoomSchedule>(
+    const gridRoomsByFloor = buildGridFloorGroups({
       rooms,
-      resolveMapCalendarRoomFloor,
-    ).map((floorGroup) => ({
-      ...floorGroup,
-      rooms: floorGroup.rooms.map((room) => {
-        const applied =
-          state.appliedSelection &&
-          state.appliedSelection.date === selectionDate &&
-          state.appliedSelection.roomId === room.id &&
-          Number.isInteger(state.appliedSelection.startMinute) &&
-          Number.isInteger(state.appliedSelection.endMinute) &&
-          state.appliedSelection.startMinute < state.appliedSelection.endMinute
-            ? state.appliedSelection
-            : null;
-
-        return {
-          room,
-          slotStates: buildSlotStates(room, timeline, earliestSelectableMinute),
-          appliedRange: applied
-            ? { startMinute: applied.startMinute, endMinute: applied.endMinute }
-            : null,
-        };
-      }),
-    }));
+      timeline,
+      earliestSelectableMinute,
+      selectionDate,
+      appliedSelection: state.appliedSelection,
+      resolveFloor: resolveMapCalendarRoomFloor,
+    });
 
     flushSync(() => {
       renderRadarGrid(body, {
