@@ -146,7 +146,13 @@ export function SlackCopyDialog({
                 <SelectTrigger id="zzk-slack-reminder-lead" className="w-full">
                   <SelectValue />
                 </SelectTrigger>
-                <SelectContent>
+                {/*
+                  alignItemWithTrigger 를 끈다. 기본값(true)은 고른 항목이
+                  트리거 위에 겹치도록 띄우는데, 그러면 목록이 위로 솟고
+                  shadcn 이 그 모드에서는 애니메이션도 끈다. 트리거 아래에
+                  붙이면 열고 닫는 동작이 자연스럽다.
+                */}
+                <SelectContent alignItemWithTrigger={false}>
                   {reminderLeadItems.map((item) => (
                     <SelectItem key={item.value} value={item.value}>
                       {item.label}

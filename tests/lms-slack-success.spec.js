@@ -279,13 +279,17 @@ test("채널을 새로 고르면 앞의 채널을 밀어낸다(칩은 항상 하
   const input = page.locator('[data-slot="combobox-chip-input"]');
   const chips = page.locator('[data-slot="combobox-chip"]');
 
+  // fill() 은 입력 이벤트를 제대로 흘리지 않아 필터가 안 걸린다. 실제로 친다.
   await input.click();
-  await input.fill("공지");
+  await input.pressSequentially("공지");
   await page.locator('[data-slot="combobox-item"]').first().click();
   await expect(chips).toHaveText(["#공지"]);
 
+  // 고르면 입력이 비고 팝업이 닫힌다. 다시 열어 다른 채널을 친다.
+  await expect(input).toHaveValue("");
   await input.click();
-  await input.fill("개발");
+  await input.pressSequentially("개발");
+  await expect(page.locator('[data-slot="combobox-item"]').first()).toContainText("#개발");
   await page.locator('[data-slot="combobox-item"]').first().click();
 
   // 둘 다 남으면 /remind 대상이 모호해진다.
@@ -297,7 +301,7 @@ test("고른 채널이 /remind 명령에 반영되고, 칩을 지우면 me 로 �
 
   const input = page.locator('[data-slot="combobox-chip-input"]');
   await input.click();
-  await input.fill("개발");
+  await input.pressSequentially("개발");
   await page.locator('[data-slot="combobox-item"]').first().click();
 
   await expect(page.locator("#zzk-slack-message")).toHaveValue(/\/remind #개발 /);
@@ -312,7 +316,7 @@ test("목록에 없는 채널은 새로 추가할 수 있다", async ({ page }) 
 
   const input = page.locator('[data-slot="combobox-chip-input"]');
   await input.click();
-  await input.fill("새채널");
+  await input.pressSequentially("새채널");
 
   // '# 없이' 적어도 #새채널 로 정규화된다.
   await expect(page.locator('[data-slot="combobox-item"]').first()).toContainText("#새채널");
@@ -388,7 +392,7 @@ test("채널 입력과 리마인드 시점의 높이가 같다", async ({ page }
   // 칩이 생겨도 그대로여야 한다(칩이 상자보다 크면 밀려 나온다).
   const input = page.locator('[data-slot="combobox-chip-input"]');
   await input.click();
-  await input.fill("공지");
+  await input.pressSequentially("공지");
   await page.locator('[data-slot="combobox-item"]').first().click();
   await expect(page.locator('[data-slot="combobox-chip"]')).toHaveCount(1);
 
@@ -444,7 +448,7 @@ test("채널 드롭다운에 빈 줄이 없다", async ({ page }) => {
 
   const input = page.locator('[data-slot="combobox-chip-input"]');
   await input.click();
-  await input.fill("8기-poudy");
+  await input.pressSequentially("8기-poudy");
   await page.locator('[data-slot="combobox-item"]').first().waitFor({ state: "visible" });
 
   const rows = await page.evaluate(() => {
@@ -473,4 +477,72 @@ test("채널 드롭다운에 빈 줄이 없다", async ({ page }) => {
   });
 
   expect(rows).toBe(0);
+});
+
+// 팝업은 트리거 폭에 맞고 바로 아래에 붙어야 하며, 열고 닫을 때 애니메이션이
+// 돈다. animate-in/out 유틸리티는 tw-animate-css 에서 온다 — 빠지면 조용히
+// 애니메이션만 사라지므로 여기서 고정한다.
+test("리마인드 시점 팝업이 트리거에 맞춰 뜨고 애니메이션이 돈다", async ({ page }) => {
+  await openSlackModalWithHistory(page);
+
+  const trigger = page.locator('[data-slot="select-trigger"]');
+  await trigger.click();
+  await page.locator('[data-slot="select-item"]').first().waitFor({ state: "visible" });
+
+  // 애니메이션이 도는지는 열리자마자 봐야 한다(끝나면 none 으로 돌아간다).
+  const animation = await page.evaluate(() => {
+    const findDeep = (selector) => {
+      const walk = (node) => {
+        const hit = node.querySelector?.(selector);
+        if (hit) return hit;
+        for (const element of node.querySelectorAll?.("*") ?? []) {
+          if (element.shadowRoot) {
+            const found = walk(element.shadowRoot);
+            if (found) return found;
+          }
+        }
+        return null;
+      };
+      return walk(document);
+    };
+    return getComputedStyle(findDeep('[data-slot="select-content"]')).animationName;
+  });
+
+  // tw-animate-css 가 빠지면 animate-in 이 사라져 none 이 된다.
+  expect(animation).not.toBe("none");
+
+  // 크기·위치는 애니메이션이 끝난 뒤에 잰다(도중에는 zoom 중이라 값이 흔들린다).
+  const layout = await page.evaluate(async () => {
+    const findDeep = (selector) => {
+      const walk = (node) => {
+        const hit = node.querySelector?.(selector);
+        if (hit) return hit;
+        for (const element of node.querySelectorAll?.("*") ?? []) {
+          if (element.shadowRoot) {
+            const found = walk(element.shadowRoot);
+            if (found) return found;
+          }
+        }
+        return null;
+      };
+      return walk(document);
+    };
+    const content = findDeep('[data-slot="select-content"]');
+    const triggerElement = findDeep('[data-slot="select-trigger"]');
+    await Promise.all(document.getAnimations().map((item) => item.finished.catch(() => {})));
+    const contentRect = content.getBoundingClientRect();
+    const triggerRect = triggerElement.getBoundingClientRect();
+    return {
+      popupWidth: Math.round(contentRect.width),
+      triggerWidth: Math.round(triggerRect.width),
+      popupTop: contentRect.top,
+      triggerTop: triggerRect.top,
+    };
+  });
+
+  // 트리거 폭에 맞는다. min-w-36 이 붙어 있으면 16px 넓어지므로 그걸 잡는 게
+  // 목적이다(테두리·서브픽셀 차이는 몇 px 허용).
+  expect(Math.abs(layout.popupWidth - layout.triggerWidth)).toBeLessThan(8);
+  // 트리거 아래에 붙는다(alignItemWithTrigger=false).
+  expect(layout.popupTop).toBeGreaterThan(layout.triggerTop);
 });

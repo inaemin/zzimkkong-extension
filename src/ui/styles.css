@@ -1,4 +1,7 @@
 @import "tailwindcss";
+/* animate-in / animate-out 유틸리티. Tailwind v4 에는 없어서 따로 받는다.
+   shadow root 는 바깥 스타일시트를 차단하므로 @keyframes 도 이 안에 있어야 한다. */
+@import "tw-animate-css";
 
 /* Shadow DOM 안으로 주입되므로 :root 가 아니라 :host 에 토큰을 건다.
    호스트 페이지(lms+)의 색/폰트 변수는 런타임에 읽어 여기에 덮어쓴다

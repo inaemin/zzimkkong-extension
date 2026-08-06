@@ -49,7 +49,17 @@ export function ChannelCombobox({
   const typed = normalizeChannel(query);
   // 적은 값이 목록에 없으면 "추가" 항목을 맨 위에 띄운다.
   const canAddTyped = typed !== "" && !history.includes(typed);
-  const items = canAddTyped ? [typed, ...history] : history;
+  // 걸러내기를 직접 한다. Base UI 내부 필터에 맡기면 칩을 고른 뒤 목록이
+  // 갱신되지 않는 경우가 있다(선택으로 리렌더가 겹칠 때).
+  const matched = query.trim()
+    ? history.filter((channel) =>
+        channel
+          .replace(/^#/, "")
+          .toLowerCase()
+          .includes(query.trim().replace(/^#/, "").toLowerCase()),
+      )
+    : history;
+  const items = canAddTyped ? [typed, ...matched] : matched;
 
   /**
    * multiple 이지만 하나만 남긴다.
@@ -60,17 +70,20 @@ export function ChannelCombobox({
   const handleValueChange = (next: unknown) => {
     const list = Array.isArray(next) ? (next as string[]) : [];
     onChange(normalizeChannel(list[list.length - 1] ?? ""));
-    setQuery("");
+    // 입력값은 Base UI 가 스스로 비운다. 여기서 같이 건드리면 부모 리렌더와
+    // 겹치면서 controlled 값과 DOM 이 어긋나, 그 뒤 타이핑이 반영되지 않는다.
   };
 
   return (
     <Combobox
       multiple
       autoHighlight
+      // 걸러내기는 위에서 직접 한다. Base UI 내부 필터까지 겹치면 이미 고른
+      // 채널이 목록에서 빠져(선택된 항목 제외) 아무것도 안 남는다.
+      filter={null}
       items={items}
       value={selected}
       onValueChange={handleValueChange}
-      inputValue={query}
       onInputValueChange={setQuery}
     >
       <ComboboxChips ref={anchor} className={cn("w-full", className)}>
