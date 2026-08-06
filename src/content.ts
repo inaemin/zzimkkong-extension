@@ -67,6 +67,7 @@ import {
   queryAllRadarOverlay,
   queryRadarOverlay,
   renderRadarOverlay,
+  unmountRadarOverlay,
 } from "./ui/radar-overlay-mount.js";
 import { renderRadarError } from "./ui/radar-error-mount.js";
 import {
@@ -1380,6 +1381,7 @@ declare global {
     getRadarLauncherHost,
 
     queryRadarOverlay,
+    unmountRadarOverlay,
 
     MAP_CALENDAR_OVERLAY_ID,
     MAP_CALENDAR_LAUNCHER_ID,

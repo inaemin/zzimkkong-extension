@@ -109,13 +109,23 @@ export function renderRadarOverlay(node: React.ReactNode): HTMLElement {
 }
 
 /**
- * 팝오버·달력을 띄울 층. 카드 바깥이라 카드 크기에 영향을 주지 않는다.
+ * 오버레이를 걷어낼 때 React 루트도 함께 정리한다.
  *
- * renderRadarOverlay 가 이 층을 포털 컨테이너로 넘긴다. 테스트에서 팝오버가
- * 어디에 떴는지 확인할 때도 쓴다.
+ * host 만 remove() 하면 루트는 살아 있고, 그 안의 타이머(툴팁 지연 등)와
+ * 구독이 계속 돌아간다. 루트 하나가 헤더·그리드를 전부 들고 있어서 예전보다
+ * 새는 양도 크다.
  */
-export function getRadarPortalLayer(): HTMLElement | null {
-  return mount && mount.host.isConnected ? mount.portalLayer : null;
+export function unmountRadarOverlay(): void {
+  if (!mount) {
+    return;
+  }
+  mount.stopThemeBridge();
+  mount.root.unmount();
+  // 포털 층은 루트 바깥(shadowRoot 직속)이라 unmount 가 비워주지 않는다.
+  // 남겨두면 떠 있던 팝오버 노드가 그대로 붙어 있는다.
+  mount.portalLayer.replaceChildren();
+  mount.host.remove();
+  mount = null;
 }
 
 /**

@@ -21,6 +21,7 @@ type Deps = {
   RADAR_LAUNCHER_Z_INDEX: number;
   DEBUG_MODE: boolean;
   queryRadarOverlay: typeof import("../../ui/radar-overlay-mount.js").queryRadarOverlay;
+  unmountRadarOverlay: typeof import("../../ui/radar-overlay-mount.js").unmountRadarOverlay;
   renderRadarLauncher: typeof import("../../ui/radar-launcher-mount.js").renderRadarLauncher;
   removeRadarLauncher: typeof import("../../ui/radar-launcher-mount.js").removeRadarLauncher;
   getRadarLauncherHost: typeof import("../../ui/radar-launcher-mount.js").getRadarLauncherHost;
@@ -56,6 +57,7 @@ export function createRadarWorkflow(deps: Deps) {
     removeRadarLauncher,
     getRadarLauncherHost,
     queryRadarOverlay,
+    unmountRadarOverlay,
     MAP_CALENDAR_OVERLAY_ID,
     MAP_CALENDAR_LAUNCHER_ID,
     SLACK_MODAL_TRIGGER_ID,
@@ -382,6 +384,9 @@ export function createRadarWorkflow(deps: Deps) {
   }
 
   function removeMapCalendarOverlay() {
+    // React 루트까지 정리한다. host 만 지우면 루트가 살아남아 툴팁 지연 타이머
+    // 같은 것이 계속 돈다.
+    unmountRadarOverlay();
     const overlay = document.getElementById(MAP_CALENDAR_OVERLAY_ID);
     if (overlay) {
       overlay.remove();
