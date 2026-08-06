@@ -35,8 +35,6 @@ export interface RadarHeaderProps {
 
   /** 방 태그 범례. 아직 명령형이라 붙일 자리만 내준다. */
   tagLegendRef?: React.Ref<HTMLDivElement>;
-  /** 달력 팝오버를 띄울 컨테이너(오버레이). body 로 나가면 클릭이 막힌다. */
-  popoverContainer?: HTMLElement | null;
 }
 
 export function RadarHeader({
@@ -50,7 +48,6 @@ export function RadarHeader({
   alwaysOpen,
   onAlwaysOpenChange,
   tagLegendRef,
-  popoverContainer,
 }: RadarHeaderProps) {
   // 최소일 이하로는 못 내려간다. 지난 날짜는 예약할 수 없기 때문이다.
   const canGoPrev = !minDate || date > minDate;
@@ -88,7 +85,6 @@ export function RadarHeader({
               min={minDate || undefined}
               aria-label="지도 날짜 선택"
               className="h-7 gap-1 px-2 text-xs"
-              container={popoverContainer}
             />
 
             <Button
@@ -141,7 +137,7 @@ export function RadarHeader({
           </Label>
         </div>
 
-        <RadarLegend container={popoverContainer} />
+        <RadarLegend />
 
         <Button
           type="button"

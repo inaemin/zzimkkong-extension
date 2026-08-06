@@ -73,20 +73,23 @@ test("lms+ 런처는 오른쪽 하단 40x40 원형 아이콘 버튼이다", asyn
   await page.waitForSelector(`#${MAP_CALENDAR_LAUNCHER_ID}`);
 
   const style = await page.evaluate((id) => {
-    const el = document.getElementById(id);
-    const cs = getComputedStyle(el);
-    const rect = el.getBoundingClientRect();
-    const label = el.querySelector(".zzk-map-calendar-radar-label");
+    const host = document.getElementById(id);
+    // 버튼은 shadow root 안에 있다. 위치는 호스트가, 모양은 버튼이 갖는다.
+    const button = host.shadowRoot.querySelector("button");
+    const rect = button.getBoundingClientRect();
     return {
-      position: cs.position,
+      position: getComputedStyle(host).position,
       width: Math.round(rect.width),
       height: Math.round(rect.height),
-      borderRadius: cs.borderRadius,
+      borderRadius: getComputedStyle(button).borderRadius,
       // 오른쪽/아래 여백 24px 근처에 붙어 있는가
       rightGap: Math.round(window.innerWidth - rect.right),
       bottomGap: Math.round(window.innerHeight - rect.bottom),
-      labelHidden: label ? getComputedStyle(label).display === "none" : true,
-      hasIcon: Boolean(el.querySelector(".zzk-map-calendar-radar-icon")),
+      // 아이콘만 있고 글자는 없다.
+      textContent: button.textContent.trim(),
+      hasIcon: Boolean(button.querySelector("svg")),
+      // 토글이므로 눌림 상태를 노출한다.
+      pressed: button.getAttribute("aria-pressed"),
     };
   }, MAP_CALENDAR_LAUNCHER_ID);
 
@@ -97,9 +100,10 @@ test("lms+ 런처는 오른쪽 하단 40x40 원형 아이콘 버튼이다", asyn
   expect(style.rightGap).toBeLessThanOrEqual(28);
   expect(style.bottomGap).toBeGreaterThanOrEqual(20);
   expect(style.bottomGap).toBeLessThanOrEqual(28);
-  // 아이콘만: 텍스트 라벨은 숨김.
-  expect(style.labelHidden).toBe(true);
+  // 아이콘만: 글자는 없다.
+  expect(style.textContent).toBe("");
   expect(style.hasIcon).toBe(true);
+  expect(style.pressed).not.toBeNull();
 });
 
 test("radar launcher toggles the modal closed and open on the new service", async ({ page }) => {
@@ -156,16 +160,14 @@ test("API 403 still renders the modal shell with an error message, not a blank",
     .toBe(true);
 
   const errorText = await page.evaluate(() => {
-    const el = document.querySelector(
-      `#${"zzk-map-calendar-overlay"} .zzk-map-calendar-error-message`,
-    );
+    const el = window.__zzkQuery(".zzk-map-calendar-error-message");
     return el ? el.textContent : null;
   });
   expect(errorText).toContain("로그인");
 
   // 다시 시도 버튼도 있어야 한다.
   const hasRetry = await page.evaluate(() =>
-    Boolean(document.querySelector("#zzk-map-calendar-overlay .zzk-map-calendar-error-retry")),
+    Boolean(window.__zzkQuery(".zzk-map-calendar-error-retry")),
   );
   expect(hasRetry).toBe(true);
 });
@@ -202,7 +204,7 @@ test("층이 바뀌는 경계에는 가로 구분선(floor-divider)이 그려진
   });
 
   const info = await page.evaluate((overlayId) => {
-    const overlay = document.getElementById(overlayId);
+    const overlay = window.__zzkRoot();
     // 층이 바뀌는 그룹에만 floor-divider 가 붙는다(첫 층 그룹에는 없음).
     const divider = overlay.querySelector(".zzk-map-calendar-floor-group.floor-divider");
     if (!divider) return { hasDivider: false };
@@ -234,13 +236,13 @@ test("라벨 pane 은 타임라인 스크롤과 분리돼 타임블록이 침범
 
   // 가로 스크롤이 생기도록 카드 폭을 좁히고, 스크롤을 맨 끝으로 옮긴다.
   await page.evaluate((overlayId) => {
-    const card = document.querySelector(`#${overlayId} .zzk-map-calendar-card`);
+    const card = window.__zzkQuery(".zzk-map-calendar-card");
     if (card) card.style.width = "520px";
   }, MAP_CALENDAR_OVERLAY_ID);
   await page.waitForTimeout(200);
 
   const result = await page.evaluate((overlayId) => {
-    const overlay = document.getElementById(overlayId);
+    const overlay = window.__zzkRoot();
     const labelPane = overlay.querySelector(".zzk-map-calendar-label-pane");
     const pane = overlay.querySelector(".zzk-map-calendar-timeline-pane");
 
@@ -283,13 +285,13 @@ test("07:00 슬롯 앞에는 정시 여백만 있고(다른 정시와 리듬 동
     timeout: 4000,
   });
   await page.evaluate((overlayId) => {
-    const pane = document.querySelector(`#${overlayId} .zzk-map-calendar-timeline-pane`);
+    const pane = window.__zzkQuery(".zzk-map-calendar-timeline-pane");
     pane.scrollLeft = 0;
   }, MAP_CALENDAR_OVERLAY_ID);
   await page.waitForTimeout(200);
 
   const geom = await page.evaluate((overlayId) => {
-    const overlay = document.getElementById(overlayId);
+    const overlay = window.__zzkRoot();
     const row = overlay.querySelector(".zzk-map-calendar-row.zzk-map-calendar-timeline-row");
     const slots = Array.from(row.querySelectorAll(".zzk-map-calendar-slot"));
     const byLabel = (label) => slots.find((s) => s.dataset.zzkSlotStart === label);
@@ -323,7 +325,7 @@ test("회의실↔타임블록 세로 구분선이 헤더~마지막 행까지 �
   });
 
   const geom = await page.evaluate((overlayId) => {
-    const overlay = document.getElementById(overlayId);
+    const overlay = window.__zzkRoot();
     const gw = overlay.querySelector(".zzk-map-calendar-grid-wrap");
     const gwr = gw.getBoundingClientRect();
     // 회의실↔타임블록 세로 구분선 = 라벨 pane 의 오른쪽 border.
@@ -364,7 +366,7 @@ test("lms+ 레이더 하단에 층별 평면도 영역이 기본 접힘으로 �
   });
 
   const initial = await page.evaluate((overlayId) => {
-    const overlay = document.getElementById(overlayId);
+    const overlay = window.__zzkRoot();
     const section = overlay.querySelector(".zzk-map-calendar-floormap-section");
     const header = section.querySelector(".zzk-map-calendar-floormap-header");
     const scroller = section.querySelector(".zzk-map-calendar-floormap-scroller");
@@ -405,7 +407,7 @@ test("평면도 헤더를 누르면 펼쳐지고 가로 스크롤이 생긴다",
   // 넓은 모달에서는 3장이 다 들어가 스크롤이 안 생길 수 있으므로, 카드를 좁혀
   // 평면도가 실제로 넘치는 상황을 만든다.
   await page.evaluate((overlayId) => {
-    const card = document.querySelector(`#${overlayId} .zzk-map-calendar-card`);
+    const card = window.__zzkQuery(".zzk-map-calendar-card");
     if (card) card.style.width = "520px";
   }, MAP_CALENDAR_OVERLAY_ID);
 
@@ -414,9 +416,7 @@ test("평면도 헤더를 누르면 펼쳐지고 가로 스크롤이 생긴다",
     .poll(
       () =>
         page.evaluate((overlayId) => {
-          const scroller = document
-            .getElementById(overlayId)
-            .querySelector(".zzk-map-calendar-floormap-scroller");
+          const scroller = window.__zzkQuery(".zzk-map-calendar-floormap-scroller");
           return scroller ? scroller.scrollWidth - scroller.clientWidth > 2 : false;
         }, MAP_CALENDAR_OVERLAY_ID),
       { timeout: 3000 },
@@ -424,7 +424,7 @@ test("평면도 헤더를 누르면 펼쳐지고 가로 스크롤이 생긴다",
     .toBe(true);
 
   const opened = await page.evaluate((overlayId) => {
-    const overlay = document.getElementById(overlayId);
+    const overlay = window.__zzkRoot();
     const section = overlay.querySelector(".zzk-map-calendar-floormap-section");
     const scroller = section.querySelector(".zzk-map-calendar-floormap-scroller");
     return {
@@ -500,15 +500,13 @@ test("리렌더돼도 평면도 가로 스크롤 위치가 유지된다", async 
   // 평면도를 펼치고, 가로로 넘치도록 카드를 좁힌다.
   await page.click(`#${MAP_CALENDAR_OVERLAY_ID} .zzk-map-calendar-floormap-header`);
   await page.evaluate((overlayId) => {
-    const card = document.querySelector(`#${overlayId} .zzk-map-calendar-card`);
+    const card = window.__zzkQuery(".zzk-map-calendar-card");
     if (card) card.style.width = "520px";
   }, MAP_CALENDAR_OVERLAY_ID);
   await expect
     .poll(() =>
       page.evaluate((overlayId) => {
-        const s = document
-          .getElementById(overlayId)
-          .querySelector(".zzk-map-calendar-floormap-scroller");
+        const s = window.__zzkQuery(".zzk-map-calendar-floormap-scroller");
         return s ? s.scrollWidth - s.clientWidth > 2 : false;
       }, MAP_CALENDAR_OVERLAY_ID),
     )
@@ -516,17 +514,11 @@ test("리렌더돼도 평면도 가로 스크롤 위치가 유지된다", async 
 
   // 평면도를 오른쪽으로 스크롤한다.
   await page.evaluate((overlayId) => {
-    const s = document
-      .getElementById(overlayId)
-      .querySelector(".zzk-map-calendar-floormap-scroller");
+    const s = window.__zzkQuery(".zzk-map-calendar-floormap-scroller");
     s.scrollLeft = s.scrollWidth - s.clientWidth; // 맨 오른쪽(13F)
   }, MAP_CALENDAR_OVERLAY_ID);
   const scrolled = await page.evaluate(
-    (overlayId) =>
-      Math.round(
-        document.getElementById(overlayId).querySelector(".zzk-map-calendar-floormap-scroller")
-          .scrollLeft,
-      ),
+    (overlayId) => Math.round(window.__zzkQuery(".zzk-map-calendar-floormap-scroller").scrollLeft),
     MAP_CALENDAR_OVERLAY_ID,
   );
   expect(scrolled).toBeGreaterThan(0);
@@ -535,7 +527,7 @@ test("리렌더돼도 평면도 가로 스크롤 위치가 유지된다", async 
   await page.evaluate(() => window.__zzkTestApi?.renderScheduleForDate?.("2099-01-02"));
   // 좁힌 카드 폭은 리렌더로 초기화되므로 다시 좁히고, 스크롤 복원(다음 프레임)을 기다린다.
   await page.evaluate((overlayId) => {
-    const card = document.querySelector(`#${overlayId} .zzk-map-calendar-card`);
+    const card = window.__zzkQuery(".zzk-map-calendar-card");
     if (card) card.style.width = "520px";
   }, MAP_CALENDAR_OVERLAY_ID);
 
@@ -544,10 +536,7 @@ test("리렌더돼도 평면도 가로 스크롤 위치가 유지된다", async 
     .poll(() =>
       page.evaluate(
         (overlayId) =>
-          Math.round(
-            document.getElementById(overlayId).querySelector(".zzk-map-calendar-floormap-scroller")
-              .scrollLeft,
-          ),
+          Math.round(window.__zzkQuery(".zzk-map-calendar-floormap-scroller").scrollLeft),
         MAP_CALENDAR_OVERLAY_ID,
       ),
     )
@@ -571,7 +560,7 @@ test("호스트 CSS 가 있어도 달력 배경은 투명하다", async ({ page 
     const host = [...document.head.querySelectorAll("style")].find(
       (style) => !style.id.startsWith("zzk-"),
     );
-    const calendarElement = document.querySelector('[data-slot="calendar"]');
+    const calendarElement = window.__zzkQuery('[data-slot="calendar"]');
     return {
       // 호스트 CSS 가 실제로 로드된 상태에서 검증하는지 확인한다.
       hostStyleHasBgBackground: Boolean(host?.textContent.includes(".bg-background")),
@@ -586,12 +575,20 @@ test("호스트 CSS 가 있어도 달력 배경은 투명하다", async ({ page 
 // 지난 시간이면서 예약도 있었던 칸은 "그냥 비어 있던 과거"와 구분해서 보여준다.
 // 둘 다 못 고르는 건 같지만, 예약이 있었다면 누가 썼는지가 정보로 남는다.
 test("지난 예약 칸은 더 진하고 예약 내용을 알려준다", async ({ page }) => {
-  await stubServiceDocument(page);
+  // 시각을 고정한다. "지금"에 의존하면 실행 시각에 따라 결과가 달라진다 —
+  // 예를 들어 운영 종료(23:00) 뒤에 돌리면 오늘 전체가 과거라 레이더가 다음 날을
+  // 띄우고, 그러면 "지난 칸"이 하나도 안 생긴다.
+  // 날짜는 실제 오늘을 쓰고 시각만 정오로 고정한다. 날짜를 박아두면 언젠가
+  // 만료되고, 시각을 안 고정하면 실행 시각에 따라 결과가 달라진다.
+  const today = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Seoul",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(new Date());
+  await page.clock.setFixedTime(new Date(`${today}T12:00:00+09:00`));
 
-  const now = new Date();
-  const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(
-    now.getDate(),
-  ).padStart(2, "0")}`;
+  await stubServiceDocument(page);
 
   await page.route(`${API_ORIGIN}/api/**`, async (route) => {
     const url = new URL(route.request().url());
@@ -625,7 +622,7 @@ test("지난 예약 칸은 더 진하고 예약 내용을 알려준다", async (
   });
 
   const rendered = await page.evaluate((overlayId) => {
-    const overlay = document.getElementById(overlayId);
+    const overlay = window.__zzkRoot();
     const pastReserved = overlay.querySelector(".zzk-map-calendar-slot.past-reserved");
     const pastEmpty = overlay.querySelector(
       ".zzk-map-calendar-slot.past-blocked:not(.past-reserved)",
@@ -699,16 +696,14 @@ test("에러 화면에서 다시 시도하면 정상 오버레이로 바뀐다",
   await expect
     .poll(() =>
       page.evaluate(
-        (overlayId) =>
-          document.getElementById(overlayId).querySelectorAll(".zzk-map-calendar-slot").length,
+        (overlayId) => window.__zzkQueryAll(".zzk-map-calendar-slot").length,
         MAP_CALENDAR_OVERLAY_ID,
       ),
     )
     .toBeGreaterThan(0);
 
   const stillHasError = await page.evaluate(
-    (overlayId) =>
-      Boolean(document.getElementById(overlayId).querySelector(".zzk-map-calendar-error-message")),
+    (overlayId) => Boolean(window.__zzkQuery(".zzk-map-calendar-error-message")),
     MAP_CALENDAR_OVERLAY_ID,
   );
   expect(stillHasError).toBe(false);
@@ -728,16 +723,14 @@ test("표시할 일정이 없으면 안내 문구가 뜬다", async ({ page }) =
   await expect
     .poll(() =>
       page.evaluate(
-        (overlayId) =>
-          document.getElementById(overlayId)?.querySelector(".zzk-map-calendar-empty")
-            ?.textContent ?? null,
+        (overlayId) => window.__zzkQuery(".zzk-map-calendar-empty")?.textContent ?? null,
         MAP_CALENDAR_OVERLAY_ID,
       ),
     )
     .toContain("표시할");
 
   const rendered = await page.evaluate((overlayId) => {
-    const overlay = document.getElementById(overlayId);
+    const overlay = window.__zzkRoot();
     return {
       slots: overlay.querySelectorAll(".zzk-map-calendar-slot").length,
       hasFloorMaps: Boolean(overlay.querySelector(".zzk-map-calendar-floormap-section")),
@@ -757,13 +750,8 @@ test("항상 열기 스위치가 양방향으로 토글된다", async ({ page })
   await page.waitForSelector(switchSelector, { timeout: 4000 });
 
   const readChecked = () =>
-    page.evaluate(
-      (overlayId) =>
-        document
-          .getElementById(overlayId)
-          ?.querySelector('[aria-label="지도 타임블록 항상 열기"]')
-          ?.getAttribute("aria-checked"),
-      MAP_CALENDAR_OVERLAY_ID,
+    page.evaluate(() =>
+      window.__zzkQuery('[aria-label="지도 타임블록 항상 열기"]')?.getAttribute("aria-checked"),
     );
 
   expect(await readChecked()).toBe("true");
@@ -788,14 +776,12 @@ test("범례는 hover 만으로 열리고 벗어나면 닫힌다", async ({ page
   // 5개 항목(비어 있음/예약 있음/선택한 시간/지난 시간/지난 예약)이 모두 있어야 한다.
   await expect
     .poll(() =>
-      page.evaluate(() => document.querySelectorAll('[data-slot="popover-content"] li').length),
+      page.evaluate(() => window.__zzkQueryAll('[data-slot="popover-content"] li').length),
     )
     .toBe(5);
 
   await page.mouse.move(box.x - 200, box.y + 200);
   await expect
-    .poll(() =>
-      page.evaluate(() => Boolean(document.querySelector('[data-slot="popover-content"]'))),
-    )
+    .poll(() => page.evaluate(() => Boolean(window.__zzkQuery('[data-slot="popover-content"]'))))
     .toBe(false);
 });

@@ -294,9 +294,6 @@ export function parseDateStringAsUTC(dateString: string): Date | null {
   return Number.isNaN(date.getTime()) ? null : date;
 }
 
-
-
-
 export function formatKSTWeekday(dateString: string): string {
   const parsedDate = parseDateStringAsUTC(dateString);
   if (!(parsedDate instanceof Date)) {

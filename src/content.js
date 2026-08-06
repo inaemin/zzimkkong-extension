@@ -67,17 +67,25 @@ import { createElement } from "react";
 import { flushSync } from "react-dom";
 import { closeFloorMapZoom, openFloorMapZoom } from "./ui/floor-map-zoom-modal.js";
 import { RadarShell } from "./ui/components/radar-shell.js";
-import { getRadarOverlayRoot } from "./ui/radar-overlay-mount.js";
+import {
+  ensureRadarOverlayMount,
+  queryAllRadarOverlay,
+  queryRadarOverlay,
+  renderRadarOverlay,
+} from "./ui/radar-overlay-mount.js";
 import { renderRadarHeader } from "./ui/radar-header-mount.js";
 import { renderRadarGrid } from "./ui/radar-grid-mount.js";
 import { renderRadarError } from "./ui/radar-error-mount.js";
-import { ensurePageTailwindStyle } from "./ui/page-styles.js";
+import {
+  getRadarLauncherHost,
+  removeRadarLauncher,
+  renderRadarLauncher,
+} from "./ui/radar-launcher-mount.js";
 import {
   MAP_CALENDAR_OVERLAY_ID,
   MAP_CALENDAR_LAUNCHER_ID,
   SLACK_MODAL_TRIGGER_ID,
   DEBUG_MODE,
-  MAP_CALENDAR_STYLE_ID,
   MAP_CALENDAR_OVERLAY_TAB_MEETING_ID,
   MAP_CALENDAR_OVERLAY_TAB_PAIR_ID,
   PAGE_RESERVATION_EVENT_TYPE,
@@ -122,6 +130,7 @@ import {
   CALENDAR_SIDE_MARGIN,
   DRAG_SAFE_TOP,
   NAV_SAFE_Z_INDEX,
+  RADAR_LAUNCHER_Z_INDEX,
   ROOM_TAG_METADATA,
   ROOM_TAG_METADATA_BY_KEY,
   TARGET_ROOM_METADATA,
@@ -1240,28 +1249,10 @@ import { createSlackSuccessFlow } from "./features/slack/success-flow.js";
       return;
     }
 
-    ensureMapCalendarStyle();
-    ensurePageTailwindStyle();
-
-    let overlay = document.getElementById(MAP_CALENDAR_OVERLAY_ID);
-    if (!(overlay instanceof HTMLElement) || overlay.parentElement !== modalRoot) {
-      if (overlay instanceof HTMLElement) {
-        overlay.remove();
-      }
-      overlay = document.createElement("section");
-      overlay.id = MAP_CALENDAR_OVERLAY_ID;
-      modalRoot.appendChild(overlay);
-    }
-
-    applyMapCalendarOverlayOffset(overlay);
-    updateMapCalendarLauncherState();
-    document
-      .querySelectorAll(".zzk-map-calendar-date-popover-floating")
-      .forEach((element) => element.remove());
-
     const errorRefs = {};
+    let overlay;
     flushSync(() => {
-      renderRadarError(overlay, {
+      overlay = renderRadarError({
         message: errorMessage || "예약 현황을 불러오지 못했습니다.",
         onRetry: () => {
           openMapCalendarModal();
@@ -1276,6 +1267,9 @@ import { createSlackSuccessFlow } from "./features/slack/success-flow.js";
         },
       });
     });
+
+    applyMapCalendarOverlayOffset(overlay);
+    updateMapCalendarLauncherState();
 
     if (errorRefs.header instanceof HTMLElement) {
       bindDraggableHeader({
@@ -1328,26 +1322,14 @@ import { createSlackSuccessFlow } from "./features/slack/success-flow.js";
       return;
     }
 
-    ensureMapCalendarStyle();
-    ensurePageTailwindStyle();
-
-    let overlay = document.getElementById(MAP_CALENDAR_OVERLAY_ID);
-    if (overlay instanceof HTMLElement && overlay.parentElement !== modalRoot) {
-      overlay.remove();
-      overlay = null;
-    }
-
-    if (!(overlay instanceof HTMLElement)) {
-      overlay = document.createElement("section");
-      overlay.id = MAP_CALENDAR_OVERLAY_ID;
-      modalRoot.appendChild(overlay);
-    }
+    // 오버레이는 shadow root 마운트가 소유한다. CSS 도 그 안에 함께 들어간다.
+    const overlay = ensureRadarOverlayMount().host;
 
     // 리렌더 시 가로 스크롤 위치를 유지하려면, 스크롤이 실제로 일어나는 요소
     // (2-pane 의 timeline-pane)의 scrollLeft 를 보존해야 한다. body 를 읽으면 항상 0 이라
     // 리렌더마다 맨 앞으로 튀는 버그가 생긴다.
     const previousScrollEl = getMapCalendarScrollElement(overlay);
-    const previousBody = overlay.querySelector(".zzk-map-calendar-body");
+    const previousBody = queryRadarOverlay(".zzk-map-calendar-body");
     const preservedBodyScroll = {
       left: previousScrollEl instanceof HTMLElement ? previousScrollEl.scrollLeft : 0,
       top: previousBody instanceof HTMLElement ? previousBody.scrollTop : 0,
@@ -1356,9 +1338,6 @@ import { createSlackSuccessFlow } from "./features/slack/success-flow.js";
     applyMapCalendarOverlayOffset(overlay);
     updateMapCalendarLauncherState();
 
-    document
-      .querySelectorAll(".zzk-map-calendar-date-popover-floating")
-      .forEach((element) => element.remove());
     // overlay 는 이제 React 루트다. textContent 로 비우면 React 가 자기 DOM 이
     // 사라진 줄 모른 채 다음 렌더에서 없는 노드를 건드린다. 트리 갱신은 React 에
     // 맡기고, 아직 명령형인 본문만 아래에서 새로 만들어 붙인다.
@@ -1420,7 +1399,7 @@ import { createSlackSuccessFlow } from "./features/slack/success-flow.js";
     // 밀어낸다. flushSync(() => {}) 처럼 빈 콜백을 주면 대기 중인 렌더는 밀려나지
     // 않는다 — render 호출 자체가 안에 들어가야 한다.
     flushSync(() => {
-      getRadarOverlayRoot(overlay).render(
+      renderRadarOverlay(
         createElement(RadarShell, {
           spaceTab: normalizeMapCalendarSpaceTab(state.mapCalendarSpaceTab),
           onSpaceTabChange: (tab) => {
@@ -1518,8 +1497,6 @@ import { createSlackSuccessFlow } from "./features/slack/success-flow.js";
         tagLegendRef: (node) => {
           headerRefs.tagLegend = node;
         },
-        // 달력을 body 로 내보내면 오버레이가 inert 처리돼 날짜 클릭이 막힌다.
-        popoverContainer: overlay,
       });
     });
 
@@ -1656,8 +1633,8 @@ import { createSlackSuccessFlow } from "./features/slack/success-flow.js";
       return;
     }
 
-    const gridWrap = overlay.querySelector(".zzk-map-calendar-grid-wrap");
-    const axisRow = overlay.querySelector(".zzk-map-calendar-axis-row");
+    const gridWrap = queryRadarOverlay(".zzk-map-calendar-grid-wrap");
+    const axisRow = queryRadarOverlay(".zzk-map-calendar-axis-row");
     if (!(gridWrap instanceof HTMLElement) || !(axisRow instanceof HTMLElement)) {
       return;
     }
@@ -1778,1232 +1755,6 @@ import { createSlackSuccessFlow } from "./features/slack/success-flow.js";
     };
   }
 
-  function ensureMapCalendarStyle() {
-    if (document.getElementById(MAP_CALENDAR_STYLE_ID)) {
-      return;
-    }
-
-    const style = document.createElement("style");
-    style.id = MAP_CALENDAR_STYLE_ID;
-    style.textContent = `
-      #${MAP_CALENDAR_OVERLAY_ID} {
-        position: fixed;
-        left: auto;
-        right: 16px;
-        top: auto;
-        bottom: 16px;
-        width: max-content;
-        max-width: calc(100vw - 24px);
-        max-height: calc(100vh - 24px);
-        z-index: 2147483647;
-        pointer-events: auto;
-        overflow: visible;
-        display: flex;
-        flex-direction: column;
-        align-items: flex-end;
-      }
-
-      #${MAP_CALENDAR_OVERLAY_ID} .zzk-map-calendar-shell {
-        display: flex;
-        flex-direction: column;
-        align-items: flex-start;
-        width: max-content;
-        max-width: calc(100vw - 24px);
-        pointer-events: auto;
-        position: relative;
-      }
-
-      #${MAP_CALENDAR_OVERLAY_ID} .zzk-map-calendar-shell > .zzk-map-calendar-space-tabs {
-        display: inline-grid;
-        grid-template-columns: 1fr 1fr;
-        gap: 2px;
-        width: fit-content;
-        margin-left: 12px;
-        margin-bottom: -4px;
-        padding: 0;
-        border: none;
-        border-radius: 0;
-        background: transparent;
-        box-shadow: none;
-        pointer-events: auto;
-        position: relative;
-        z-index: 3;
-      }
-
-      #${MAP_CALENDAR_OVERLAY_ID} .zzk-map-calendar-shell > .zzk-map-calendar-space-tabs::after {
-        content: "";
-        position: absolute;
-        left: 0;
-        right: 0;
-        bottom: -1px;
-        height: 2px;
-        background: rgba(255, 255, 255, 0.94);
-        pointer-events: none;
-      }
-
-      #${MAP_CALENDAR_OVERLAY_ID} {
-        /* 슬롯 색. 범례가 이 변수를 그대로 참조하므로 한쪽만 바뀌지 않는다. */
-        --zzk-slot-free: rgba(34, 197, 94, 0.32);
-        --zzk-slot-busy: rgba(239, 68, 68, 0.45);
-        --zzk-slot-past: rgba(148, 163, 184, 0.32);
-        --zzk-slot-past-reserved: rgba(100, 116, 139, 0.55);
-        --zzk-slot-selected: rgba(14, 165, 233, 0.38);
-      }
-
-      #${MAP_CALENDAR_OVERLAY_ID} .zzk-map-calendar-card {
-        --zzk-floor-col-width: ${CALENDAR_FLOOR_COL_WIDTH}px;
-        --zzk-room-col-width: ${CALENDAR_ROOM_COL_WIDTH}px;
-        --zzk-row-gap: ${CALENDAR_ROW_GAP}px;
-        --zzk-slot-gap: ${CALENDAR_SLOT_GAP}px;
-        --zzk-timeline-side-margin: ${CALENDAR_SIDE_MARGIN}px;
-        --zzk-boundary-color: rgba(15, 23, 42, 0.3);
-        --zzk-section-divider-color: rgba(15, 23, 42, 0.18);
-        --zzk-section-divider: 1px solid var(--zzk-section-divider-color);
-        border: 1px solid rgba(15, 23, 42, 0.15);
-        border-radius: 18px;
-        background: rgba(255, 255, 255, 0.94);
-        box-shadow: 0 10px 24px rgba(15, 23, 42, 0.2);
-        backdrop-filter: blur(7px);
-        color: #0f172a;
-        font-family: "SUIT Variable", "Pretendard", "Noto Sans KR", "Apple SD Gothic Neo", sans-serif;
-        padding: 10px 10px 10px 14px;
-        display: flex;
-        flex-direction: column;
-        min-height: 0;
-        position: relative;
-        box-sizing: border-box;
-        width: max-content;
-        min-width: ${MAP_CALENDAR_MIN_WIDTH}px;
-        max-width: calc(100vw - ${MAP_CALENDAR_VIEWPORT_MARGIN}px);
-        max-height: calc(100vh - 24px);
-        pointer-events: auto;
-        overflow: hidden;
-      }
-
-      #${MAP_CALENDAR_OVERLAY_ID} .zzk-map-calendar-card.collapsed .zzk-map-calendar-body {
-        display: none;
-      }
-
-      #${MAP_CALENDAR_OVERLAY_ID} .zzk-map-calendar-card.collapsed .zzk-map-calendar-header {
-        margin-bottom: 0;
-      }
-
-      #${MAP_CALENDAR_OVERLAY_ID} .zzk-map-calendar-header {
-        display: flex;
-        align-items: flex-start;
-        justify-content: space-between;
-        gap: 12px;
-        margin-bottom: 8px;
-        cursor: move;
-        user-select: none;
-      }
-
-      #${MAP_CALENDAR_OVERLAY_ID} .zzk-map-calendar-title-controls {
-        display: grid;
-        gap: 6px;
-        min-width: 0;
-      }
-
-      #${MAP_CALENDAR_OVERLAY_ID} .zzk-map-calendar-space-tab {
-        min-width: 84px;
-        min-height: 40px;
-        padding: 0 12px;
-        border: 1px solid rgba(15, 23, 42, 0.12);
-        border-bottom: none;
-        border-radius: 18px 18px 0 0;
-        background: rgba(217, 216, 220, 0.72);
-        color: #7b7b84;
-        font-size: 13px;
-        font-weight: 800;
-        line-height: 1;
-        cursor: pointer;
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-        position: relative;
-        transition: background-color 120ms ease, color 120ms ease, box-shadow 120ms ease,
-          transform 120ms ease;
-      }
-
-      #${MAP_CALENDAR_OVERLAY_ID} .zzk-map-calendar-space-tab::after {
-        content: "";
-        position: absolute;
-        left: 0;
-        right: 0;
-        bottom: 0;
-        height: 0;
-        background: inherit;
-        pointer-events: none;
-      }
-
-      #${MAP_CALENDAR_OVERLAY_ID} .zzk-map-calendar-space-tab[aria-selected="true"] {
-        background: rgba(255, 255, 255, 1);
-        color: #ff8833;
-        box-shadow: none;
-        transform: translateY(0);
-        z-index: 2;
-      }
-
-      #${MAP_CALENDAR_OVERLAY_ID} .zzk-map-calendar-space-tab[aria-selected="true"]::after {
-        bottom: -1px;
-        height: 2px;
-      }
-
-      #${MAP_CALENDAR_OVERLAY_ID} .zzk-map-calendar-space-tab[aria-selected="false"] {
-        background: rgba(217, 216, 220, 0.72);
-        z-index: 1;
-      }
-
-      #${MAP_CALENDAR_OVERLAY_ID} .zzk-map-calendar-space-tab:focus-visible {
-        outline: 2px solid rgba(255, 136, 51, 0.18);
-        outline-offset: 2px;
-      }
-
-      #${MAP_CALENDAR_OVERLAY_ID} .zzk-map-calendar-controls {
-        display: flex;
-        align-items: center;
-        gap: 6px;
-        flex-wrap: nowrap;
-      }
-
-      #${MAP_CALENDAR_OVERLAY_ID} .zzk-map-calendar-date-row {
-        display: grid;
-        grid-template-columns: auto minmax(0, 1fr) auto auto;
-        align-items: stretch;
-        gap: 4px;
-        min-width: 0;
-        padding-bottom: 2px;
-      }
-
-      #${MAP_CALENDAR_OVERLAY_ID} .zzk-map-calendar-date-display-wrap {
-        position: relative;
-        display: block;
-        min-width: 136px;
-      }
-
-      #${MAP_CALENDAR_OVERLAY_ID} .zzk-map-calendar-date-display-wrap.is-open .zzk-map-calendar-date-display {
-        outline: 2px solid rgba(14, 116, 144, 0.3);
-        outline-offset: 0;
-        border-color: rgba(14, 116, 144, 0.45);
-      }
-
-      .zzk-map-calendar-date-popover-floating {
-        position: fixed;
-        top: 0;
-        left: 0;
-        z-index: 2147483647;
-        width: 236px;
-        padding: 8px;
-        border: 1px solid rgba(15, 23, 42, 0.14);
-        border-radius: 12px;
-        background: rgba(255, 255, 255, 0.98);
-        box-shadow: 0 12px 28px rgba(15, 23, 42, 0.16);
-        backdrop-filter: blur(10px);
-      }
-
-      .zzk-map-calendar-date-popover-floating[hidden] {
-        display: none;
-      }
-
-      .zzk-map-calendar-date-popover-floating .zzk-map-calendar-date-popover-header {
-        display: grid;
-        grid-template-columns: 28px 1fr 28px;
-        align-items: center;
-        gap: 4px;
-        margin-bottom: 6px;
-      }
-
-      .zzk-map-calendar-date-popover-floating .zzk-map-calendar-date-popover-title {
-        font-size: 13px;
-        font-weight: 800;
-        color: #0f172a;
-        text-align: center;
-      }
-
-      .zzk-map-calendar-date-popover-floating .zzk-map-calendar-date-popover-nav {
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-        width: 28px;
-        height: 28px;
-        padding: 0;
-        border: 1px solid rgba(15, 23, 42, 0.12);
-        border-radius: 8px;
-        background: #ffffff;
-        color: #475569;
-        cursor: pointer;
-      }
-
-      .zzk-map-calendar-date-popover-floating .zzk-map-calendar-date-popover-nav svg {
-        width: 12px;
-        height: 12px;
-      }
-
-      .zzk-map-calendar-date-popover-floating .zzk-map-calendar-date-popover-weekdays,
-      .zzk-map-calendar-date-popover-floating .zzk-map-calendar-date-popover-grid {
-        display: grid;
-        grid-template-columns: repeat(7, 1fr);
-        gap: 2px;
-      }
-
-      .zzk-map-calendar-date-popover-floating .zzk-map-calendar-date-popover-weekdays {
-        margin-bottom: 4px;
-      }
-
-      .zzk-map-calendar-date-popover-floating .zzk-map-calendar-date-popover-weekdays span {
-        font-size: 11px;
-        font-weight: 700;
-        color: #64748b;
-        text-align: center;
-      }
-
-      .zzk-map-calendar-date-popover-floating .zzk-map-calendar-date-popover-day {
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-        min-width: 26px;
-        min-height: 26px;
-        padding: 0;
-        border: 1px solid transparent;
-        border-radius: 8px;
-        background: transparent;
-        color: #0f172a;
-        font-size: 12px;
-        font-weight: 700;
-        cursor: pointer;
-      }
-
-      .zzk-map-calendar-date-popover-floating .zzk-map-calendar-date-popover-day.is-outside-month {
-        color: #cbd5e1;
-      }
-
-      .zzk-map-calendar-date-popover-floating .zzk-map-calendar-date-popover-day.is-today {
-        border-color: rgba(255, 136, 51, 0.28);
-        color: #ff8833;
-      }
-
-      .zzk-map-calendar-date-popover-floating .zzk-map-calendar-date-popover-day.is-selected {
-        background: #ff8833;
-        color: #ffffff;
-      }
-
-      .zzk-map-calendar-date-popover-floating .zzk-map-calendar-date-popover-day:disabled {
-        color: #cbd5e1;
-        cursor: default;
-      }
-
-      #${MAP_CALENDAR_OVERLAY_ID} .zzk-map-calendar-date-nav {
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-        min-width: 32px;
-        min-height: 32px;
-        padding: 0;
-        border-radius: 8px;
-        border: 1px solid rgba(15, 23, 42, 0.18);
-        background: #ffffff;
-        color: #475569;
-        cursor: pointer;
-        transition: background-color 120ms ease, border-color 120ms ease, color 120ms ease,
-          box-shadow 120ms ease;
-      }
-
-      #${MAP_CALENDAR_OVERLAY_ID} .zzk-map-calendar-date-nav svg {
-        width: 14px;
-        height: 14px;
-        display: block;
-      }
-
-      #${MAP_CALENDAR_OVERLAY_ID} .zzk-map-calendar-date-nav.prev:hover:not(:disabled),
-      #${MAP_CALENDAR_OVERLAY_ID} .zzk-map-calendar-date-nav.next:hover:not(:disabled) {
-        border-color: rgba(14, 116, 144, 0.35);
-        background: #f0f9ff;
-        color: #0f172a;
-        box-shadow: 0 0 0 1px rgba(14, 116, 144, 0.14);
-      }
-
-      #${MAP_CALENDAR_OVERLAY_ID} .zzk-map-calendar-date-nav:focus,
-      #${MAP_CALENDAR_OVERLAY_ID} .zzk-map-calendar-date-nav:focus-visible {
-        outline: 2px solid rgba(14, 116, 144, 0.3);
-        outline-offset: 0;
-        border-color: rgba(14, 116, 144, 0.45);
-      }
-
-      #${MAP_CALENDAR_OVERLAY_ID} .zzk-map-calendar-date-nav.prev:focus:not(:disabled),
-      #${MAP_CALENDAR_OVERLAY_ID} .zzk-map-calendar-date-nav.prev:focus-visible:not(:disabled),
-      #${MAP_CALENDAR_OVERLAY_ID} .zzk-map-calendar-date-nav.next:focus:not(:disabled),
-      #${MAP_CALENDAR_OVERLAY_ID} .zzk-map-calendar-date-nav.next:focus-visible:not(:disabled) {
-        background: #ecfeff;
-        color: #0f172a;
-        box-shadow: 0 0 0 1px rgba(14, 116, 144, 0.2);
-      }
-
-      #${MAP_CALENDAR_OVERLAY_ID} .zzk-map-calendar-date-nav:disabled {
-        cursor: default;
-        border-color: rgba(148, 163, 184, 0.3);
-        background: #f8fafc;
-        color: #94a3b8;
-      }
-
-      #${MAP_CALENDAR_OVERLAY_ID} .zzk-map-calendar-date-nav.today {
-        min-width: 46px;
-        padding: 0 8px;
-        font-size: 12px;
-        font-weight: 700;
-        line-height: 1;
-        white-space: nowrap;
-      }
-
-      #${MAP_CALENDAR_OVERLAY_ID} .zzk-map-calendar-date-display {
-        display: inline-flex;
-        align-items: center;
-        min-height: 32px;
-        width: 100%;
-        padding: 0 10px;
-        border-radius: 8px;
-        border: 1px solid rgba(15, 23, 42, 0.18);
-        background: #ffffff;
-        color: #0f172a;
-        font-size: 12px;
-        font-weight: 700;
-        line-height: 1;
-        white-space: nowrap;
-        text-align: center;
-      }
-
-      #${MAP_CALENDAR_OVERLAY_ID} .zzk-map-calendar-date-display .zzk-date-display-weekday.is-saturday {
-        color: #2563eb;
-      }
-
-      #${MAP_CALENDAR_OVERLAY_ID} .zzk-map-calendar-date-display .zzk-date-display-weekday.is-sunday {
-        color: #dc2626;
-      }
-
-      #${MAP_CALENDAR_OVERLAY_ID}
-        .zzk-map-calendar-date-display-wrap
-        .zzk-map-calendar-control.zzk-date.zzk-map-calendar-date-native {
-        position: absolute;
-        inset: 0;
-        width: 100%;
-        height: 100%;
-        opacity: 0;
-        margin: 0;
-        padding: 0;
-        border: none;
-        cursor: pointer;
-        z-index: 2;
-      }
-
-      #${MAP_CALENDAR_OVERLAY_ID} .zzk-map-calendar-date-display-wrap:focus-within .zzk-map-calendar-date-display {
-        outline: 2px solid rgba(14, 116, 144, 0.3);
-        outline-offset: 0;
-        border-color: rgba(14, 116, 144, 0.45);
-      }
-
-      #${MAP_CALENDAR_OVERLAY_ID} .zzk-map-calendar-control {
-        border: 1px solid rgba(15, 23, 42, 0.18);
-        border-radius: 8px;
-        background: #ffffff;
-        color: #0f172a;
-        font-size: 14px;
-        font-weight: 600;
-        line-height: 1.2;
-        padding: 4px 7px;
-      }
-
-      #${MAP_CALENDAR_OVERLAY_ID} .zzk-map-calendar-control,
-      #${MAP_CALENDAR_OVERLAY_ID} .zzk-map-calendar-control.zzk-date {
-        min-width: 122px;
-      }
-
-      #${MAP_CALENDAR_OVERLAY_ID} .zzk-map-calendar-control.zzk-time {
-        min-width: 88px;
-      }
-
-      #${MAP_CALENDAR_OVERLAY_ID} .zzk-map-calendar-control.zzk-time.zzk-time-readonly {
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-        background: #f8fafc;
-        color: #0f172a;
-        border-color: rgba(15, 23, 42, 0.2);
-        font-variant-numeric: tabular-nums;
-        cursor: default;
-        user-select: none;
-      }
-
-      #${MAP_CALENDAR_OVERLAY_ID} .zzk-map-calendar-control:focus {
-        outline: 2px solid rgba(14, 116, 144, 0.28);
-        outline-offset: 0;
-        border-color: rgba(14, 116, 144, 0.4);
-      }
-
-      #${MAP_CALENDAR_OVERLAY_ID} .zzk-map-calendar-header-right {
-        display: flex;
-        align-items: center;
-        gap: 8px;
-        margin-left: auto;
-      }
-
-      #${MAP_CALENDAR_OVERLAY_ID} .zzk-map-calendar-always-open {
-        display: inline-flex;
-        align-items: center;
-        gap: 4px;
-        font-size: 13px;
-        font-weight: 700;
-        color: #334155;
-        white-space: nowrap;
-        user-select: none;
-      }
-
-      #${MAP_CALENDAR_OVERLAY_ID} .zzk-map-calendar-always-open input {
-        margin: 0;
-        cursor: pointer;
-        accent-color: #0284c7;
-      }
-
-      #${MAP_CALENDAR_OVERLAY_ID} .zzk-map-calendar-header strong {
-        font-size: 14px;
-      }
-
-      #${MAP_CALENDAR_OVERLAY_ID} .zzk-room-tag-legend[hidden] {
-        display: none !important;
-      }
-
-      #${MAP_CALENDAR_OVERLAY_ID} .zzk-room-tag-legend {
-        display: flex;
-        flex-wrap: wrap;
-        gap: 6px;
-        margin-top: 6px;
-      }
-
-      #${MAP_CALENDAR_OVERLAY_ID} .zzk-room-tag-legend-item {
-        display: inline-flex;
-        align-items: center;
-        gap: 6px;
-        font-size: 11px;
-        color: #475569;
-      }
-
-      #${MAP_CALENDAR_OVERLAY_ID} .zzk-room-tag-badge {
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-        flex: none;
-        min-width: 18px;
-        min-height: 18px;
-        padding: 0 2px;
-        border-radius: 4px;
-        background: rgba(14, 165, 233, 0.14);
-        border: 1px solid rgba(14, 165, 233, 0.22);
-        color: #0369a1;
-        font-size: 10px;
-        font-weight: 800;
-        line-height: 1;
-        letter-spacing: 0.01em;
-      }
-
-      #${MAP_CALENDAR_OVERLAY_ID} .zzk-room-tag-badge::before {
-        content: attr(data-label);
-      }
-
-      #${MAP_CALENDAR_OVERLAY_ID} .zzk-room-name-text {
-        min-width: 0;
-        overflow: hidden;
-        text-overflow: ellipsis;
-      }
-
-      #${MAP_CALENDAR_OVERLAY_ID} .zzk-map-calendar-control.zzk-date {
-        min-width: 122px;
-      }
-
-      #${MAP_CALENDAR_OVERLAY_ID} .zzk-map-calendar-control.zzk-time {
-        min-width: 88px;
-      }
-
-      #${MAP_CALENDAR_OVERLAY_ID} .zzk-map-calendar-control.zzk-time.zzk-time-readonly {
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-        background: #f8fafc;
-        color: #0f172a;
-        border-color: rgba(15, 23, 42, 0.2);
-        font-variant-numeric: tabular-nums;
-        cursor: default;
-        user-select: none;
-      }
-
-      #${MAP_CALENDAR_OVERLAY_ID} .zzk-map-calendar-control:focus {
-        outline: 2px solid rgba(14, 116, 144, 0.28);
-        outline-offset: 0;
-        border-color: rgba(14, 116, 144, 0.4);
-      }
-
-      #${MAP_CALENDAR_OVERLAY_ID} .zzk-map-calendar-header-right {
-        display: flex;
-        align-items: center;
-        gap: 8px;
-        margin-left: auto;
-      }
-
-      #${MAP_CALENDAR_OVERLAY_ID} .zzk-map-calendar-always-open {
-        display: inline-flex;
-        align-items: center;
-        gap: 4px;
-        font-size: 13px;
-        font-weight: 700;
-        color: #334155;
-        white-space: nowrap;
-        user-select: none;
-      }
-
-      #${MAP_CALENDAR_OVERLAY_ID} .zzk-map-calendar-always-open input {
-        margin: 0;
-        cursor: pointer;
-        accent-color: #0284c7;
-      }
-
-      #${MAP_CALENDAR_OVERLAY_ID} .zzk-map-calendar-header strong {
-        font-size: 14px;
-      }
-
-      #${MAP_CALENDAR_OVERLAY_ID} .zzk-room-tag-legend[hidden] {
-        display: none !important;
-      }
-
-      #${MAP_CALENDAR_OVERLAY_ID} .zzk-room-tag-legend {
-        display: flex;
-        flex-wrap: wrap;
-        gap: 6px;
-        margin-top: 6px;
-      }
-
-      #${MAP_CALENDAR_OVERLAY_ID} .zzk-room-tag-legend-item {
-        display: inline-flex;
-        align-items: center;
-        gap: 6px;
-        font-size: 11px;
-        color: #475569;
-      }
-
-      #${MAP_CALENDAR_OVERLAY_ID} .zzk-room-tag-badge {
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-        flex: none;
-        min-width: 18px;
-        min-height: 18px;
-        padding: 0 2px;
-        border-radius: 4px;
-        background: rgba(14, 165, 233, 0.14);
-        border: 1px solid rgba(14, 165, 233, 0.22);
-        color: #0369a1;
-        font-size: 10px;
-        font-weight: 800;
-        line-height: 1;
-        letter-spacing: 0.01em;
-      }
-
-      #${MAP_CALENDAR_OVERLAY_ID} .zzk-room-tag-badge::before {
-        content: attr(data-label);
-      }
-
-      #${MAP_CALENDAR_OVERLAY_ID} .zzk-room-name-text {
-        min-width: 0;
-        overflow: hidden;
-        text-overflow: ellipsis;
-      }
-
-      #${MAP_CALENDAR_OVERLAY_ID} .zzk-map-calendar-resize-handle {
-        position: absolute;
-        left: 0;
-        top: 0;
-        bottom: 0;
-        width: 10px;
-        cursor: ew-resize;
-        z-index: 6;
-        touch-action: none;
-        border-top-left-radius: 18px;
-        border-bottom-left-radius: 18px;
-      }
-
-      #${MAP_CALENDAR_OVERLAY_ID} .zzk-map-calendar-resize-handle::after {
-        content: "";
-        position: absolute;
-        left: 3px;
-        top: 50%;
-        transform: translateY(-50%);
-        width: 4px;
-        height: 44px;
-        border-radius: 999px;
-        background: rgba(15, 23, 42, 0.18);
-        transition: background 120ms ease;
-      }
-
-      #${MAP_CALENDAR_OVERLAY_ID} .zzk-map-calendar-resize-handle:hover::after,
-      #${MAP_CALENDAR_OVERLAY_ID} .zzk-map-calendar-resize-handle.is-resizing::after {
-        background: rgba(2, 132, 199, 0.75);
-      }
-
-      @media (prefers-reduced-motion: reduce) {
-        #${MAP_CALENDAR_OVERLAY_ID} .zzk-map-calendar-resize-handle::after {
-          transition: none;
-        }
-      }
-
-      #${MAP_CALENDAR_OVERLAY_ID} .zzk-map-calendar-body {
-        flex: 1 1 auto;
-        min-height: 0;
-        max-height: none;
-        position: relative;
-        /* 가로 스크롤은 안쪽 timeline-pane 에서 처리한다. body 는 세로만. */
-        overflow-x: hidden;
-        overflow-y: hidden;
-        box-sizing: border-box;
-      }
-
-      #${MAP_CALENDAR_OVERLAY_ID} .zzk-map-calendar-body.zzk-map-calendar-body-scrollable {
-        overflow-y: auto;
-      }
-
-      #${MAP_CALENDAR_OVERLAY_ID} .zzk-map-calendar-body.zzk-map-calendar-error-body {
-        overflow: hidden;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        padding: 28px 20px;
-      }
-
-      #${MAP_CALENDAR_OVERLAY_ID} .zzk-map-calendar-error {
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-        gap: 14px;
-        max-width: 320px;
-        text-align: center;
-      }
-
-      #${MAP_CALENDAR_OVERLAY_ID} .zzk-map-calendar-error-message {
-        margin: 0;
-        font-size: 13px;
-        line-height: 1.6;
-        color: #b91c1c;
-        white-space: pre-line;
-        word-break: keep-all;
-      }
-
-      #${MAP_CALENDAR_OVERLAY_ID} .zzk-map-calendar-error-retry {
-        appearance: none;
-        border: 1px solid rgba(2, 132, 199, 0.5);
-        background: #ffffff;
-        color: #0284c7;
-        font-size: 12px;
-        font-weight: 700;
-        padding: 7px 16px;
-        border-radius: 8px;
-        cursor: pointer;
-        transition: background 120ms ease, color 120ms ease;
-      }
-
-      #${MAP_CALENDAR_OVERLAY_ID} .zzk-map-calendar-error-retry:hover {
-        background: #0284c7;
-        color: #ffffff;
-      }
-
-      #${MAP_CALENDAR_OVERLAY_ID} .zzk-map-calendar-loading-overlay {
-        position: absolute;
-        inset: 0;
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-        gap: 8px;
-        opacity: 0;
-        pointer-events: none;
-        color: #0f172a;
-        font-size: 13px;
-        font-weight: 700;
-        background: linear-gradient(180deg, rgba(248, 250, 252, 0.72), rgba(248, 250, 252, 0.84));
-        backdrop-filter: blur(1px);
-        transition: opacity 120ms ease;
-        z-index: 5;
-      }
-
-      #${MAP_CALENDAR_OVERLAY_ID} .zzk-map-calendar-loading-spinner {
-        width: 14px;
-        height: 14px;
-        border-radius: 999px;
-        border: 2px solid rgba(14, 116, 144, 0.22);
-        border-top-color: #0284c7;
-        animation: zzk-map-calendar-loading-spin 720ms linear infinite;
-      }
-
-      #${MAP_CALENDAR_OVERLAY_ID} .zzk-map-calendar-body.zzk-map-calendar-body-loading .zzk-map-calendar-loading-overlay {
-        opacity: 1;
-        pointer-events: auto;
-        cursor: progress;
-      }
-
-      #${MAP_CALENDAR_OVERLAY_ID} .zzk-map-calendar-body.zzk-map-calendar-body-loading .zzk-map-calendar-grid-wrap {
-        opacity: 0.58;
-      }
-
-      /* 층별 평면도 영역 — 타임라인 아래에 접이식으로 붙는다. */
-      #${MAP_CALENDAR_OVERLAY_ID} .zzk-map-calendar-floormap-section {
-        border-top: 1px solid var(--zzk-section-divider-color);
-        margin-top: 8px;
-        padding-top: 8px;
-      }
-
-      #${MAP_CALENDAR_OVERLAY_ID} .zzk-map-calendar-floormap-header {
-        display: flex;
-        align-items: center;
-        gap: 6px;
-        width: 100%;
-        padding: 6px 4px;
-        background: none;
-        border: none;
-        cursor: pointer;
-        font-size: 13px;
-        font-weight: 700;
-        color: #1e293b;
-        text-align: left;
-      }
-
-      #${MAP_CALENDAR_OVERLAY_ID} .zzk-map-calendar-floormap-caret {
-        font-size: 11px;
-        color: #64748b;
-        line-height: 1;
-      }
-
-      /* 접힌 상태에서는 평면도 스크롤 영역을 숨긴다(기본). */
-      #${MAP_CALENDAR_OVERLAY_ID} .zzk-map-calendar-floormap-scroller {
-        display: none;
-        gap: 12px;
-        overflow-x: auto;
-        overflow-y: hidden;
-        padding: 6px 4px 10px;
-      }
-
-      #${MAP_CALENDAR_OVERLAY_ID} .zzk-map-calendar-floormap-section.open .zzk-map-calendar-floormap-scroller {
-        display: flex;
-      }
-
-      #${MAP_CALENDAR_OVERLAY_ID} .zzk-map-calendar-floormap-card {
-        flex: 0 0 auto;
-        margin: 0;
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-        gap: 4px;
-      }
-
-      #${MAP_CALENDAR_OVERLAY_ID} .zzk-map-calendar-floormap-image {
-        display: block;
-        height: 220px;
-        width: auto;
-        max-width: none;
-        border: 1px solid var(--zzk-section-divider-color);
-        border-radius: 8px;
-        background: #ffffff;
-        cursor: zoom-in;
-      }
-
-      #${MAP_CALENDAR_OVERLAY_ID} .zzk-map-calendar-floormap-caption {
-        font-size: 12px;
-        font-weight: 600;
-        color: #475569;
-      }
-
-      @keyframes zzk-map-calendar-loading-spin {
-        from {
-          transform: rotate(0deg);
-        }
-        to {
-          transform: rotate(360deg);
-        }
-      }
-
-      @media (prefers-reduced-motion: reduce) {
-        #${MAP_CALENDAR_OVERLAY_ID} .zzk-map-calendar-loading-overlay {
-          transition: none;
-        }
-
-        #${MAP_CALENDAR_OVERLAY_ID} .zzk-map-calendar-loading-spinner {
-          animation: none;
-        }
-      }
-
-      /*
-       * === 2-pane 레이아웃 ===
-       * grid-wrap 을 좌우 flex 로 나눈다.
-       *  - label-pane: 층/회의실 라벨(스크롤 밖, 고정)
-       *  - timeline-pane: 정시 헤더 + 타임블록(가로 스크롤). 스크롤바가 이 pane 아래에만 생긴다.
-       * 두 pane 의 각 행은 같은 고정 높이(--zzk-cal-row-h)로 그려 세로 정렬을 맞춘다.
-       */
-      #${MAP_CALENDAR_OVERLAY_ID} .zzk-map-calendar-grid-wrap {
-        position: relative;
-        display: flex;
-        align-items: stretch;
-        --zzk-cal-row-h: 26px;
-        --zzk-cal-header-h: 24px;
-        --zzk-hscroll-gutter: 12px;
-      }
-
-      #${MAP_CALENDAR_OVERLAY_ID} .zzk-map-calendar-label-pane {
-        /* 층 + gap + 회의실 열 고정 너비. */
-        flex: 0 0 calc(
-          var(--zzk-floor-col-width) + var(--zzk-row-gap) + var(--zzk-room-col-width)
-        );
-        width: calc(
-          var(--zzk-floor-col-width) + var(--zzk-row-gap) + var(--zzk-room-col-width)
-        );
-        position: relative;
-        z-index: 2;
-        background: #ffffff;
-        /* 라벨 열 고정 폭 밖으로는 어떤 것도(타임블록 등) 넘치지 못하게 잘라낸다. */
-        overflow: hidden;
-        /* 회의실↔타임블록 경계 세로선(오른쪽 테두리). */
-        border-right: 1px solid var(--zzk-section-divider-color);
-      }
-
-      #${MAP_CALENDAR_OVERLAY_ID} .zzk-map-calendar-timeline-pane {
-        flex: 1 1 auto;
-        min-width: 0;
-        overflow-x: auto;
-        overflow-y: hidden;
-      }
-
-      /* 가로 스크롤이 생길 때만 트랙 하단에 스크롤바 전용 공백(gutter)을 둔다.
-         가로 스크롤바가 이 빈 공간에 놓여 마지막 타임블록 행의 클릭을 방해하지 않는다.
-         이 gutter 는 세로 스크롤 판정에서 제외된다(syncMapCalendarBodyScrollState). */
-      #${MAP_CALENDAR_OVERLAY_ID} .zzk-map-calendar-timeline-pane-hscroll
-        .zzk-map-calendar-timeline-track {
-        padding-bottom: var(--zzk-hscroll-gutter, 12px);
-      }
-
-      /* 정시 세로선이 빈 gutter 까지 내려가지 않고 마지막 행에서 멈추게 한다. */
-      #${MAP_CALENDAR_OVERLAY_ID} .zzk-map-calendar-timeline-pane-hscroll
-        .zzk-map-calendar-hour-boundary-layer {
-        bottom: var(--zzk-hscroll-gutter, 12px);
-      }
-
-      #${MAP_CALENDAR_OVERLAY_ID} .zzk-map-calendar-timeline-track {
-        position: relative;
-      }
-
-      /* 정시 세로 경계선 레이어 — 타임블록 트랙 전체에 절대배치. */
-      #${MAP_CALENDAR_OVERLAY_ID} .zzk-map-calendar-hour-boundary-layer {
-        position: absolute;
-        top: 0;
-        left: 0;
-        right: 0;
-        bottom: 0;
-        z-index: 1;
-        pointer-events: none;
-        /* 정시선이 시각 텍스트 아래까지만 올라오도록 위쪽을 잘라낸다. */
-        clip-path: inset(
-          var(--zzk-hour-boundary-clip-top, var(--zzk-cal-header-h, 24px)) 0 0 0
-        );
-      }
-
-      #${MAP_CALENDAR_OVERLAY_ID} .zzk-map-calendar-hour-boundary-track {
-        display: grid;
-        grid-template-rows: minmax(0, 1fr);
-        height: 100%;
-        width: 100%;
-        padding-left: var(--zzk-timeline-side-margin);
-        padding-right: var(--zzk-timeline-side-margin);
-        box-sizing: border-box;
-      }
-
-      #${MAP_CALENDAR_OVERLAY_ID} .zzk-map-calendar-hour-boundary-cell {
-        grid-row: 1;
-        height: 100%;
-        align-self: stretch;
-        justify-self: stretch;
-        width: 100%;
-        border-radius: 1px;
-        background: var(--zzk-section-divider-color);
-        pointer-events: none;
-        z-index: 0;
-      }
-
-      #${MAP_CALENDAR_OVERLAY_ID} .zzk-map-calendar-grid {
-        position: relative;
-        z-index: 2;
-        display: grid;
-        gap: 0;
-      }
-
-      /* 층↔회의실 세로 구분선(라벨 pane 안, 왼쪽으로 2px 이동). */
-      #${MAP_CALENDAR_OVERLAY_ID} .zzk-map-calendar-divider-layer {
-        position: absolute;
-        top: 0;
-        bottom: 0;
-        left: calc(var(--zzk-floor-col-width) + (var(--zzk-row-gap) * 0.5) - 2px);
-        width: 1px;
-        pointer-events: none;
-        z-index: 5;
-      }
-
-      #${MAP_CALENDAR_OVERLAY_ID} .zzk-map-calendar-divider-track {
-        width: 1px;
-        height: 100%;
-        background: var(--zzk-section-divider-color);
-      }
-
-      /* 헤더(축) 행: 라벨 pane 은 [층][회의실], 타임블록 pane 은 정시 라벨. */
-      #${MAP_CALENDAR_OVERLAY_ID} .zzk-map-calendar-axis-row {
-        position: relative;
-        height: var(--zzk-cal-header-h, 24px);
-        box-sizing: border-box;
-        border-bottom: 1px solid var(--zzk-section-divider-color);
-      }
-
-      #${MAP_CALENDAR_OVERLAY_ID} .zzk-map-calendar-axis-row.zzk-map-calendar-label-row {
-        display: grid;
-        grid-template-columns: var(--zzk-floor-col-width) var(--zzk-room-col-width);
-        align-items: center;
-        gap: var(--zzk-row-gap);
-      }
-
-      #${MAP_CALENDAR_OVERLAY_ID} .zzk-map-calendar-axis-row.zzk-map-calendar-timeline-row {
-        display: block;
-      }
-
-      /* 층 그룹: 라벨 pane 은 [층][회의실 행들], 타임블록 pane 은 [슬롯 행들]. */
-      #${MAP_CALENDAR_OVERLAY_ID} .zzk-map-calendar-floor-group {
-        display: grid;
-        /* 라벨 열은 고정 너비(층 + 회의실). 1fr 을 쓰면 pane 이 무한정 늘어난다. */
-        grid-template-columns: var(--zzk-floor-col-width) var(--zzk-room-col-width);
-        align-items: stretch;
-        column-gap: var(--zzk-row-gap);
-        row-gap: 0;
-        position: relative;
-      }
-
-      #${MAP_CALENDAR_OVERLAY_ID} .zzk-map-calendar-floor-group.zzk-map-calendar-floor-group-timeline {
-        display: block;
-      }
-
-      /* 실제 층이 바뀌는 경계에만 가로 구분선. */
-      #${MAP_CALENDAR_OVERLAY_ID} .zzk-map-calendar-floor-group.floor-divider::before {
-        content: "";
-        position: absolute;
-        top: 0;
-        left: 0;
-        right: 0;
-        height: 1px;
-        background: var(--zzk-section-divider-color);
-        pointer-events: none;
-        z-index: 6;
-      }
-
-      #${MAP_CALENDAR_OVERLAY_ID} .zzk-map-calendar-floor-rooms {
-        display: grid;
-        gap: 0;
-      }
-
-      /* 행(라벨/타임블록 공통): 같은 고정 높이로 정렬. */
-      #${MAP_CALENDAR_OVERLAY_ID} .zzk-map-calendar-row {
-        height: var(--zzk-cal-row-h, 26px);
-        box-sizing: border-box;
-        transition: background-color 120ms ease;
-      }
-
-      #${MAP_CALENDAR_OVERLAY_ID} .zzk-map-calendar-row.zzk-map-calendar-label-row {
-        display: flex;
-        align-items: center;
-      }
-
-      #${MAP_CALENDAR_OVERLAY_ID} .zzk-map-calendar-row.zzk-map-calendar-timeline-row {
-        display: block;
-      }
-
-      #${MAP_CALENDAR_OVERLAY_ID} .zzk-map-calendar-row.hovered {
-        background: rgba(14, 165, 233, 0.12);
-      }
-
-      #${MAP_CALENDAR_OVERLAY_ID} .zzk-map-calendar-row.hovered .zzk-map-calendar-room-name {
-        color: #0f172a;
-        background: #e3f4fd;
-      }
-
-      #${MAP_CALENDAR_OVERLAY_ID} .zzk-map-calendar-row.room-locked-disabled {
-        filter: grayscale(0.94) saturate(0.28);
-        opacity: 0.62;
-        background: rgba(148, 163, 184, 0.14);
-      }
-
-      #${MAP_CALENDAR_OVERLAY_ID} .zzk-map-calendar-row.room-locked-disabled .zzk-map-calendar-room-name {
-        color: #64748b;
-      }
-
-      #${MAP_CALENDAR_OVERLAY_ID} .zzk-map-calendar-floor-name,
-      #${MAP_CALENDAR_OVERLAY_ID} .zzk-map-calendar-room-name {
-        font-size: 13px;
-        font-weight: 700;
-        color: #1e293b;
-        white-space: nowrap;
-      }
-
-      #${MAP_CALENDAR_OVERLAY_ID} .zzk-map-calendar-floor-name {
-        display: flex;
-        align-items: center;
-        align-self: stretch;
-        min-height: 100%;
-        padding-right: 4px;
-        box-sizing: border-box;
-      }
-
-      #${MAP_CALENDAR_OVERLAY_ID} .zzk-map-calendar-room-name {
-        display: flex;
-        align-items: center;
-        gap: 4px;
-        min-width: 0;
-        padding-left: 4px;
-        box-sizing: border-box;
-      }
-
-      #${MAP_CALENDAR_OVERLAY_ID} .zzk-map-calendar-floor-name.axis,
-      #${MAP_CALENDAR_OVERLAY_ID} .zzk-map-calendar-room-name.axis {
-        color: #475569;
-      }
-
-      #${MAP_CALENDAR_OVERLAY_ID} .zzk-map-calendar-slots {
-        display: grid;
-        gap: 0;
-        height: 100%;
-        /* 슬롯(16px)을 행 높이 안에서 세로 가운데 정렬한다. */
-        align-items: center;
-        align-content: center;
-        padding-left: var(--zzk-timeline-side-margin);
-        padding-right: var(--zzk-timeline-side-margin);
-        box-sizing: border-box;
-        position: relative;
-      }
-
-      /* 헤더의 정시 라벨 슬롯은 여백 없이 꽉 채운다. */
-      #${MAP_CALENDAR_OVERLAY_ID} .zzk-map-calendar-axis-row .zzk-map-calendar-slots {
-        height: 100%;
-        padding-top: 0;
-        padding-bottom: 0;
-        align-items: end;
-      }
-
-      #${MAP_CALENDAR_OVERLAY_ID} .zzk-map-calendar-hour-label {
-        font-size: 11px;
-        color: #64748b;
-        text-align: left;
-        /* 정시 텍스트가 세로 구분선/경계선에 바싹 붙어 잘리지 않도록 살짝 들여쓴다. */
-        padding-left: 2px;
-        min-height: 10px;
-        position: relative;
-        z-index: 1;
-      }
-
-      #${MAP_CALENDAR_OVERLAY_ID} .zzk-map-calendar-hour-label.hour-boundary {
-        color: #1e293b;
-        font-weight: 700;
-      }
-
-      #${MAP_CALENDAR_OVERLAY_ID} .zzk-map-calendar-slot {
-        height: 16px;
-        box-sizing: border-box;
-        border-radius: 3px;
-        border: 1px solid rgba(15, 23, 42, 0.12);
-        position: relative;
-        z-index: 1;
-      }
-
-      #${MAP_CALENDAR_OVERLAY_ID} .zzk-map-calendar-slot.free {
-        background: var(--zzk-slot-free);
-      }
-      #${MAP_CALENDAR_OVERLAY_ID} .zzk-map-calendar-slot.busy {
-        background: var(--zzk-slot-busy);
-      }
-      #${MAP_CALENDAR_OVERLAY_ID} .zzk-map-calendar-slot.past-blocked {
-        background: var(--zzk-slot-past);
-        border-color: rgba(100, 116, 139, 0.2);
-      }
-
-      /* 지난 시간 + 예약 있었음. 빈 과거보다 진하게 해서 "그때 누가 썼다"를 보여준다. */
-      #${MAP_CALENDAR_OVERLAY_ID} .zzk-map-calendar-slot.past-blocked.past-reserved {
-        background: var(--zzk-slot-past-reserved);
-        border-color: rgba(71, 85, 105, 0.4);
-      }
-
-      #${MAP_CALENDAR_OVERLAY_ID} .zzk-map-calendar-slot.selected {
-        outline: 1.5px solid rgba(14, 116, 144, 0.95);
-        outline-offset: -1px;
-        background: var(--zzk-slot-selected);
-      }
-
-      #${MAP_CALENDAR_OVERLAY_ID} .zzk-map-calendar-slot.selectable {
-        cursor: pointer;
-        box-shadow: inset 0 0 0 1px rgba(14, 116, 144, 0.22);
-      }
-
-      #${MAP_CALENDAR_OVERLAY_ID} .zzk-map-calendar-slot.anchor {
-        outline: 2px solid rgba(2, 132, 199, 0.9);
-        outline-offset: -1px;
-      }
-
-      #${MAP_CALENDAR_OVERLAY_ID} .zzk-map-calendar-slot.preview {
-        background: rgba(14, 165, 233, 0.28);
-      }
-
-      #${MAP_CALENDAR_OVERLAY_ID} .zzk-map-calendar-slot.hover-preview {
-        background: rgba(14, 165, 233, 0.24);
-        box-shadow: inset 0 0 0 1px rgba(2, 132, 199, 0.28);
-      }
-
-      #${MAP_CALENDAR_OVERLAY_ID} .zzk-map-calendar-slot.room-locked-disabled {
-        cursor: not-allowed;
-      }
-
-      #${MAP_CALENDAR_OVERLAY_ID} .zzk-map-calendar-slot.busy {
-        cursor: not-allowed;
-      }
-
-      #${MAP_CALENDAR_OVERLAY_ID} .zzk-map-calendar-slot.past-blocked {
-        cursor: not-allowed;
-      }
-
-      #${MAP_CALENDAR_OVERLAY_ID} .zzk-map-calendar-empty {
-        margin: 0;
-        font-size: 14px;
-        color: #64748b;
-      }
-
-      @media (max-width: 920px) {
-        #${MAP_CALENDAR_OVERLAY_ID} {
-          left: auto;
-          right: 8px;
-          top: auto;
-          bottom: 8px;
-          max-width: calc(100vw - 16px);
-          max-height: calc(100vh - 16px);
-        }
-
-        #${MAP_CALENDAR_OVERLAY_ID} .zzk-map-calendar-card {
-          max-width: calc(100vw - 16px);
-          max-height: calc(100vh - 16px);
-        }
-
-        #${MAP_CALENDAR_OVERLAY_ID} .zzk-map-calendar-header {
-          flex-wrap: wrap;
-        }
-
-        #${MAP_CALENDAR_OVERLAY_ID} .zzk-map-calendar-controls {
-          flex-wrap: wrap;
-        }
-      }
-    `;
-
-    document.head.appendChild(style);
-  }
-
   function getMapRootElement() {
     const mapSvg = Array.from(document.querySelectorAll("svg")).find(
       (svg) => svg.querySelectorAll("g[data-testid]").length > 0,
@@ -3025,10 +1776,7 @@ import { createSlackSuccessFlow } from "./features/slack/success-flow.js";
   }
 
   const {
-    createMapCalendarLauncherIcon,
-    ensureMapCalendarLauncherContent,
     ensureSlackModalTrigger,
-    getMapCalendarLauncherMountTarget,
     ensureMapCalendarLoadingOverlay,
     syncMapCalendarBodyLoadingState,
     ensureMapCalendarLauncher,
@@ -3039,12 +1787,19 @@ import { createSlackSuccessFlow } from "./features/slack/success-flow.js";
     removeMapCalendarOverlay,
   } = createRadarWorkflow({
     state,
+    renderRadarLauncher,
+    removeRadarLauncher,
+    getRadarLauncherHost,
+
+    queryRadarOverlay,
+
     MAP_CALENDAR_OVERLAY_ID,
     MAP_CALENDAR_LAUNCHER_ID,
     SLACK_MODAL_TRIGGER_ID,
     DEBUG_MODE,
     MAP_CALENDAR_ALWAYS_OPEN_STORAGE_KEY,
     NAV_SAFE_Z_INDEX,
+    RADAR_LAUNCHER_Z_INDEX,
     TARGET_ROOM_NAMES,
     findGuestReservationTabContainer,
     findGuestReservationTabStyleSource,
@@ -3218,7 +1973,7 @@ import { createSlackSuccessFlow } from "./features/slack/success-flow.js";
       return;
     }
 
-    const card = overlay.querySelector(".zzk-map-calendar-card");
+    const card = queryRadarOverlay(".zzk-map-calendar-card");
     if (!(card instanceof HTMLElement)) {
       return;
     }
@@ -3303,11 +2058,11 @@ import { createSlackSuccessFlow } from "./features/slack/success-flow.js";
     if (!(overlay instanceof HTMLElement)) {
       return null;
     }
-    const pane = overlay.querySelector(".zzk-map-calendar-timeline-pane");
+    const pane = queryRadarOverlay(".zzk-map-calendar-timeline-pane");
     if (pane instanceof HTMLElement) {
       return pane;
     }
-    const body = overlay.querySelector(".zzk-map-calendar-body");
+    const body = queryRadarOverlay(".zzk-map-calendar-body");
     return body instanceof HTMLElement ? body : null;
   }
 
@@ -3376,7 +2131,7 @@ import { createSlackSuccessFlow } from "./features/slack/success-flow.js";
 
   function measureMapCalendarTrackMetrics(overlay) {
     // 찜꽁 화면 구조 변경에 대비해 값을 하드코딩하지 않고 실제 DOM에서 측정한다.
-    const slotCells = overlay.querySelectorAll(
+    const slotCells = queryAllRadarOverlay(
       ".zzk-map-calendar-axis-row .zzk-map-calendar-slots .zzk-map-calendar-hour-label",
     );
     if (slotCells.length < 2) {
