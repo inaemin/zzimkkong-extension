@@ -246,3 +246,76 @@ test("Slack 모달이 shadcn 기본 구성을 따른다", async ({ page }) => {
   await page.getByRole("button", { name: "취소" }).click();
   await expect(dialog).toBeHidden();
 });
+
+/** 개발 플래그를 켜고 Slack 모달을 연다. */
+async function openSlackModalWithHistory(page, history = "") {
+  await page.addInitScript((seed) => {
+    globalThis.__ZZK_DEBUG_MODE__ = true;
+    try {
+      localStorage.setItem("zzk-manual-slack-modal-trigger-v1", "1");
+      if (seed) {
+        localStorage.setItem("zzk-slack-channel-history-v1", seed);
+      }
+    } catch {
+      /* 저장소를 못 쓰면 그냥 넘어간다 */
+    }
+  }, history);
+  await mountLmsPage(page);
+  await page.evaluate(() => window.__zzkTestApi?.syncGuestUi?.());
+  await page.evaluate(() => {
+    const shadow = document.getElementById("zzk-map-calendar-radar-launcher")?.shadowRoot;
+    [...(shadow?.querySelectorAll("button") ?? [])]
+      .find((button) => button.getAttribute("aria-label")?.includes("Slack"))
+      ?.click();
+  });
+  await page.locator('[data-slot="dialog-content"]').waitFor({ state: "visible" });
+}
+
+// 채널 선택은 chip 이 들어가는 입력 상자다. 버튼을 눌러 여는 게 아니라 상자에
+// 바로 적는다. multiple 모드를 쓰지만 채널은 하나만 걸 수 있어야 한다.
+test("채널을 새로 고르면 앞의 채널을 밀어낸다(칩은 항상 하나)", async ({ page }) => {
+  await openSlackModalWithHistory(page, "#공지\n#개발");
+
+  const input = page.locator('[data-slot="combobox-chip-input"]');
+  const chips = page.locator('[data-slot="combobox-chip"]');
+
+  await input.click();
+  await input.fill("공지");
+  await page.locator('[data-slot="combobox-item"]').first().click();
+  await expect(chips).toHaveText(["#공지"]);
+
+  await input.click();
+  await input.fill("개발");
+  await page.locator('[data-slot="combobox-item"]').first().click();
+
+  // 둘 다 남으면 /remind 대상이 모호해진다.
+  await expect(chips).toHaveText(["#개발"]);
+});
+
+test("고른 채널이 /remind 명령에 반영되고, 칩을 지우면 me 로 돌아온다", async ({ page }) => {
+  await openSlackModalWithHistory(page, "#개발");
+
+  const input = page.locator('[data-slot="combobox-chip-input"]');
+  await input.click();
+  await input.fill("개발");
+  await page.locator('[data-slot="combobox-item"]').first().click();
+
+  await expect(page.locator("#zzk-slack-message")).toHaveValue(/\/remind #개발 /);
+
+  await page.locator('[data-slot="combobox-chip-remove"]').first().click();
+  await expect(page.locator('[data-slot="combobox-chip"]')).toHaveCount(0);
+  await expect(page.locator("#zzk-slack-message")).toHaveValue(/\/remind me /);
+});
+
+test("목록에 없는 채널은 새로 추가할 수 있다", async ({ page }) => {
+  await openSlackModalWithHistory(page);
+
+  const input = page.locator('[data-slot="combobox-chip-input"]');
+  await input.click();
+  await input.fill("새채널");
+
+  // '# 없이' 적어도 #새채널 로 정규화된다.
+  await expect(page.locator('[data-slot="combobox-item"]').first()).toContainText("#새채널");
+  await page.locator('[data-slot="combobox-item"]').first().click();
+  await expect(page.locator('[data-slot="combobox-chip"]')).toHaveText(["#새채널"]);
+});
