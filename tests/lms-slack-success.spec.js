@@ -395,3 +395,44 @@ test("채널 입력과 리마인드 시점의 높이가 같다", async ({ page }
   const filled = await measure();
   expect(filled.chips).toBe(filled.select);
 });
+
+// select 팝업은 항목이 모서리에 닿으면 안 된다. 여백이 없으면 하이라이트가
+// 가장자리까지 번지고 둥근 모서리도 잘려 보인다.
+test("리마인드 시점 팝업의 항목이 모서리에 닿지 않는다", async ({ page }) => {
+  await openSlackModalWithHistory(page);
+  await page.locator('[data-slot="select-trigger"]').click();
+  await page.locator('[data-slot="select-item"]').first().waitFor({ state: "visible" });
+
+  const inset = await page.evaluate(() => {
+    const findDeep = (selector) => {
+      const walk = (node) => {
+        const hit = node.querySelector?.(selector);
+        if (hit) return hit;
+        for (const element of node.querySelectorAll?.("*") ?? []) {
+          if (element.shadowRoot) {
+            const found = walk(element.shadowRoot);
+            if (found) return found;
+          }
+        }
+        return null;
+      };
+      return walk(document);
+    };
+    const popup = findDeep('[data-slot="select-content"]');
+    const items = [...popup.querySelectorAll('[data-slot="select-item"]')];
+    const popupRect = popup.getBoundingClientRect();
+    const first = items[0].getBoundingClientRect();
+    const last = items[items.length - 1].getBoundingClientRect();
+    return {
+      count: items.length,
+      top: Math.round(first.top - popupRect.top),
+      bottom: Math.round(popupRect.bottom - last.bottom),
+      left: Math.round(first.left - popupRect.left),
+    };
+  });
+
+  expect(inset.count).toBeGreaterThan(1);
+  expect(inset.top).toBeGreaterThan(0);
+  expect(inset.bottom).toBeGreaterThan(0);
+  expect(inset.left).toBeGreaterThan(0);
+});
