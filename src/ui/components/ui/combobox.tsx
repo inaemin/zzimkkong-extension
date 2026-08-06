@@ -1,0 +1,205 @@
+"use client";
+
+import * as React from "react";
+import { Combobox as ComboboxPrimitive } from "@base-ui/react";
+import { CheckIcon, XIcon } from "lucide-react";
+
+import { useShadowContainer } from "@/ui/shadow-root-context";
+import { cn } from "@/ui/lib/utils";
+import { Button } from "@/ui/components/ui/button";
+
+// shadcn combobox(base-ui 판)를 이 저장소에 맞게 옮긴 것.
+//
+// 공식 소스는 스타일을 cn-* CSS 레이어에 두고 아이콘도 내부 placeholder 를
+// 쓴다. 여기서는 그 레이어를 들여올 수 없으므로 Tailwind 클래스와 lucide
+// 아이콘으로 같은 모양을 낸다. 구조·prop 이름은 공식 그대로 둔다.
+
+const Combobox = ComboboxPrimitive.Root;
+
+function ComboboxValue({ ...props }: ComboboxPrimitive.Value.Props) {
+  return <ComboboxPrimitive.Value data-slot="combobox-value" {...props} />;
+}
+
+function ComboboxContent({
+  className,
+  side = "bottom",
+  sideOffset = 6,
+  align = "start",
+  alignOffset = 0,
+  anchor,
+  ...props
+}: ComboboxPrimitive.Popup.Props &
+  Pick<
+    ComboboxPrimitive.Positioner.Props,
+    "side" | "align" | "sideOffset" | "alignOffset" | "anchor"
+  >) {
+  // shadow root 안에서는 팝업도 그 안에 렌더돼야 스타일이 닿는다.
+  const shadowContainer = useShadowContainer();
+  return (
+    <ComboboxPrimitive.Portal container={shadowContainer ?? undefined}>
+      <ComboboxPrimitive.Positioner
+        side={side}
+        sideOffset={sideOffset}
+        align={align}
+        alignOffset={alignOffset}
+        anchor={anchor}
+        className="isolate z-50"
+      >
+        <ComboboxPrimitive.Popup
+          data-slot="combobox-content"
+          data-chips={!!anchor}
+          className={cn(
+            // 테두리는 popover·select 와 같이 ring 으로 준다. border 유틸리티는
+            // 이 shadow root 안에서 색 토큰을 못 받아 검은 선이 그려진다.
+            "max-h-(--available-height) w-(--anchor-width) max-w-(--available-width) origin-(--transform-origin)",
+            "overflow-hidden rounded-lg bg-popover p-1 text-popover-foreground shadow-md ring-1 ring-foreground/10 outline-hidden",
+            "data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95 data-closed:animate-out data-closed:fade-out-0 data-closed:zoom-out-95",
+            className,
+          )}
+          {...props}
+        />
+      </ComboboxPrimitive.Positioner>
+    </ComboboxPrimitive.Portal>
+  );
+}
+
+function ComboboxList({ className, ...props }: ComboboxPrimitive.List.Props) {
+  return (
+    <ComboboxPrimitive.List
+      data-slot="combobox-list"
+      className={cn("max-h-56 overflow-y-auto overflow-x-hidden", className)}
+      {...props}
+    />
+  );
+}
+
+function ComboboxItem({ className, children, ...props }: ComboboxPrimitive.Item.Props) {
+  return (
+    <ComboboxPrimitive.Item
+      data-slot="combobox-item"
+      className={cn(
+        "relative flex cursor-default items-center gap-2 rounded-sm px-2 py-1.5 text-sm outline-none select-none",
+        "data-highlighted:bg-accent data-highlighted:text-accent-foreground",
+        "data-disabled:pointer-events-none data-disabled:opacity-50",
+        className,
+      )}
+      {...props}
+    >
+      <ComboboxPrimitive.ItemIndicator className="flex size-4 shrink-0 items-center justify-center">
+        <CheckIcon className="size-4" />
+      </ComboboxPrimitive.ItemIndicator>
+      {/*
+        children 을 감싸는 이 span 이 남는 폭을 다 갖는다. 안쪽도 flex 로 펴서,
+        항목이 [이름][버튼] 처럼 여러 조각이면 버튼이 오른쪽 끝으로 간다.
+      */}
+      <span className="flex flex-1 items-center gap-2">{children}</span>
+    </ComboboxPrimitive.Item>
+  );
+}
+
+/**
+ * 일치하는 항목이 없을 때의 문구.
+ *
+ * Base UI 는 목록이 비지 않으면 이 요소의 텍스트만 비우고 노드는 남긴다
+ * (role=status 로 변경을 읽어줘야 해서다). 그래서 여백을 무조건 주면 항목이
+ * 있을 때도 빈 줄이 하나 생긴다. 내용이 있을 때만 여백을 준다.
+ */
+function ComboboxEmpty({ className, ...props }: ComboboxPrimitive.Empty.Props) {
+  return (
+    <ComboboxPrimitive.Empty
+      data-slot="combobox-empty"
+      className={cn(
+        "text-center text-sm text-muted-foreground empty:hidden not-empty:py-4",
+        className,
+      )}
+      {...props}
+    />
+  );
+}
+
+/** 칩이 들어가는 입력 상자. 생김새는 Input 과 맞춘다. */
+function ComboboxChips({
+  className,
+  ...props
+}: React.ComponentPropsWithRef<typeof ComboboxPrimitive.Chips> & ComboboxPrimitive.Chips.Props) {
+  return (
+    <ComboboxPrimitive.Chips
+      data-slot="combobox-chips"
+      className={cn(
+        // SelectTrigger 와 같은 방식으로 그린다(border-input + 안쪽 1px).
+        // ring 으로 그리면 테두리가 박스 바깥에 얹혀 시각적 높이가 34px 이 되고
+        // 옆의 select(32px)와 어긋나 보인다.
+        //
+        // 칩이 늘면 세로로 커져야 하므로 고정 h-8 이 아니라 min-h-8 을 쓴다.
+        "flex min-h-8 w-full flex-wrap items-center gap-1 rounded-lg border border-input bg-transparent px-2.5 py-1 text-sm transition-colors",
+        "focus-within:border-ring focus-within:ring-3 focus-within:ring-ring/50",
+        "has-disabled:pointer-events-none has-disabled:cursor-not-allowed has-disabled:opacity-50",
+        className,
+      )}
+      {...props}
+    />
+  );
+}
+
+function ComboboxChip({
+  className,
+  children,
+  showRemove = true,
+  ...props
+}: ComboboxPrimitive.Chip.Props & {
+  showRemove?: boolean;
+}) {
+  return (
+    <ComboboxPrimitive.Chip
+      data-slot="combobox-chip"
+      className={cn(
+        "flex items-center gap-1 rounded-sm bg-secondary py-0.5 pr-0.5 pl-2 text-xs text-secondary-foreground",
+        "has-disabled:pointer-events-none has-disabled:cursor-not-allowed has-disabled:opacity-50",
+        className,
+      )}
+      {...props}
+    >
+      {children}
+      {showRemove && (
+        <ComboboxPrimitive.ChipRemove
+          data-slot="combobox-chip-remove"
+          render={<Button variant="ghost" size="icon-xs" />}
+          className="size-4 rounded-sm opacity-70 hover:opacity-100"
+        >
+          <XIcon className="pointer-events-none size-3" />
+        </ComboboxPrimitive.ChipRemove>
+      )}
+    </ComboboxPrimitive.Chip>
+  );
+}
+
+function ComboboxChipsInput({ className, ...props }: ComboboxPrimitive.Input.Props) {
+  return (
+    <ComboboxPrimitive.Input
+      data-slot="combobox-chip-input"
+      className={cn(
+        "min-w-16 flex-1 bg-transparent outline-none placeholder:text-muted-foreground",
+        className,
+      )}
+      {...props}
+    />
+  );
+}
+
+/** 칩 상자를 팝업의 기준점으로 쓴다(공식과 동일). */
+function useComboboxAnchor() {
+  return React.useRef<HTMLDivElement | null>(null);
+}
+
+export {
+  Combobox,
+  ComboboxChip,
+  ComboboxChips,
+  ComboboxChipsInput,
+  ComboboxContent,
+  ComboboxEmpty,
+  ComboboxItem,
+  ComboboxList,
+  ComboboxValue,
+  useComboboxAnchor,
+};

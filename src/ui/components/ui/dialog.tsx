@@ -97,7 +97,9 @@ function DialogFooter({
     <div
       data-slot="dialog-footer"
       className={cn(
-        "-mx-4 -mb-4 flex flex-col-reverse gap-2 rounded-b-xl border-t bg-muted/50 p-4 sm:flex-row sm:justify-end",
+        // 공식(base-ui) 과 동일하게 배치만 잡는다. 예전에는 여기에 border-t +
+        // bg-muted/50 과 음수 마진으로 회색 띠를 그렸는데 공식에는 없는 장식이다.
+        "flex flex-col-reverse gap-2 sm:flex-row sm:justify-end",
         className,
       )}
       {...props}

@@ -63,6 +63,9 @@ function createMount(): OverlayMount {
   portalLayer.dataset.zzkPortalLayer = "";
   portalLayer.style.position = "fixed";
   portalLayer.style.inset = "0";
+  // 층 자체는 화면 전체를 덮으므로 클릭이 통과해야 한다. 다만 실제로 떠 있는
+  // 팝오버·달력은 눌려야 하므로 자식에서 되살린다. 안 그러면 달력이 보이기만
+  // 하고 날짜·월 이동이 전부 먹히지 않는다.
   portalLayer.style.pointerEvents = "none";
   portalLayer.style.zIndex = "1";
   shadowRoot.appendChild(portalLayer);
@@ -93,23 +96,39 @@ export function ensureRadarOverlayMount(): OverlayMount {
   return mount;
 }
 
-/** 오버레이 안에 컴포넌트를 그린다. 포털도 이 shadow root 안에 갇힌다. */
+/**
+ * 오버레이 안에 컴포넌트를 그린다. 포털도 이 shadow root 안에 갇힌다.
+ *
+ * 포털 컨테이너로 카드가 아니라 포털 층을 준다. 카드 안에 렌더하면 팝오버·달력이
+ * 카드의 scrollHeight 를 늘려 레이아웃이 밀린다(카드가 position: relative +
+ * overflow: hidden 이다). 포털 층은 position: fixed 라 카드 크기에 영향이 없다.
+ */
 export function renderRadarOverlay(node: React.ReactNode): HTMLElement {
   const current = ensureRadarOverlayMount();
   current.root.render(
-    <ShadowRootProvider container={current.container}>{node}</ShadowRootProvider>,
+    <ShadowRootProvider container={current.portalLayer}>{node}</ShadowRootProvider>,
   );
   return current.host;
 }
 
 /**
- * 팝오버·달력을 띄울 층. 카드 바깥이라 카드 크기에 영향을 주지 않는다.
+ * 오버레이를 걷어낼 때 React 루트도 함께 정리한다.
  *
- * 헤더는 자체 React 루트라 오버레이의 컨텍스트가 이어지지 않는다. 그래서
- * 헤더 안의 포털은 기본값으로 두면 헤더(=카드 안)에 렌더돼 레이아웃을 민다.
+ * host 만 remove() 하면 루트는 살아 있고, 그 안의 타이머(툴팁 지연 등)와
+ * 구독이 계속 돌아간다. 루트 하나가 헤더·그리드를 전부 들고 있어서 예전보다
+ * 새는 양도 크다.
  */
-export function getRadarPortalLayer(): HTMLElement | null {
-  return mount && mount.host.isConnected ? mount.portalLayer : null;
+export function unmountRadarOverlay(): void {
+  if (!mount) {
+    return;
+  }
+  mount.stopThemeBridge();
+  mount.root.unmount();
+  // 포털 층은 루트 바깥(shadowRoot 직속)이라 unmount 가 비워주지 않는다.
+  // 남겨두면 떠 있던 팝오버 노드가 그대로 붙어 있는다.
+  mount.portalLayer.replaceChildren();
+  mount.host.remove();
+  mount = null;
 }
 
 /**

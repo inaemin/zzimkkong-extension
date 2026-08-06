@@ -7,6 +7,14 @@ import { DatePicker } from "@/ui/components/date-picker";
 import { RadarLegend } from "@/ui/components/radar-legend";
 import { Label } from "@/ui/components/ui/label";
 import { Switch } from "@/ui/components/ui/switch";
+import { Tabs, TabsList, TabsTrigger } from "@/ui/components/ui/tabs";
+import {
+  MAP_CALENDAR_OVERLAY_TAB_MEETING_ID,
+  MAP_CALENDAR_OVERLAY_TAB_PAIR_ID,
+  MAP_CALENDAR_SPACE_TAB_MEETING,
+  MAP_CALENDAR_SPACE_TAB_PAIR,
+  type SpaceTab,
+} from "@/constants/runtime";
 
 // 레이더 헤더의 컨트롤 줄.
 //
@@ -18,6 +26,10 @@ import { Switch } from "@/ui/components/ui/switch";
 // 날짜 계산(최소일·오늘·하루 이동)은 프레임워크 무관 함수라 그대로 주입받는다.
 
 export interface RadarHeaderProps {
+  /** 지금 보고 있는 공간 유형(회의실/페어룸). */
+  spaceTab: SpaceTab;
+  onSpaceTabChange: (tab: SpaceTab) => void;
+
   /** 현재 선택된 날짜("YYYY-MM-DD"). */
   date: string;
   /** 이 날짜보다 이전은 고를 수 없다. */
@@ -37,6 +49,8 @@ export interface RadarHeaderProps {
 }
 
 export function RadarHeader({
+  spaceTab,
+  onSpaceTabChange,
   date,
   minDate,
   todayDate,
@@ -63,6 +77,30 @@ export function RadarHeader({
             align-items:stretch + 1fr 컬럼이라 버튼이 늘어나 정방형이 깨진다.
           */}
           <div className="flex items-center gap-1">
+            {/* 공간 유형 전환. 날짜 컨트롤 왼쪽에 둔다. */}
+            <Tabs
+              className="mr-1"
+              value={spaceTab}
+              onValueChange={(next) => onSpaceTabChange(next as SpaceTab)}
+            >
+              <TabsList className="h-7" aria-label="공간 유형 선택">
+                <TabsTrigger
+                  id={MAP_CALENDAR_OVERLAY_TAB_MEETING_ID}
+                  className="h-6 text-xs"
+                  value={MAP_CALENDAR_SPACE_TAB_MEETING}
+                >
+                  회의실
+                </TabsTrigger>
+                <TabsTrigger
+                  id={MAP_CALENDAR_OVERLAY_TAB_PAIR_ID}
+                  className="h-6 text-xs"
+                  value={MAP_CALENDAR_SPACE_TAB_PAIR}
+                >
+                  페어룸
+                </TabsTrigger>
+              </TabsList>
+            </Tabs>
+
             <Button
               type="button"
               variant="outline"

@@ -5,6 +5,7 @@ import {
   API_ORIGIN,
   WEB_ORIGIN,
   ensureExtensionBuild,
+  getContentBundlePath,
   getBackgroundBundlePath,
   loadBackgroundBundle,
   loadContentBundle,
@@ -269,4 +270,16 @@ test("번들된 content script 가 레이더 UI 를 실제로 마운트한다", 
   await expect
     .poll(() => page.evaluate(() => Boolean(document.getElementById("zzk-map-calendar-overlay"))))
     .toBe(true);
+});
+
+// Slack 모달 테스트 버튼은 개발 빌드 전용이다. 배포 빌드(`npm run build`)에서는
+// DEV_BUILD 가 false 리터럴로 박혀 버튼이 붙지 않아야 한다.
+//
+// 테스트 스위트는 기본 빌드(= 배포 모드)를 쓰므로 여기서 확인할 수 있다.
+test("배포 빌드에는 개발 플래그가 꺼진 채로 박힌다", () => {
+  const bundle = fs.readFileSync(getContentBundlePath(), "utf8");
+
+  // vite define 이 리터럴로 치환한다. true 로 박히면 사용자에게 테스트 버튼이 보인다.
+  expect(bundle).toContain("DEV_BUILD: false");
+  expect(bundle).not.toContain("DEV_BUILD: true");
 });

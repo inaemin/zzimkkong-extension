@@ -1,4 +1,4 @@
-import { DEBUG_MODE } from "./debug.js";
+import { DEBUG_MODE, DEV_BUILD } from "./debug.js";
 
 export function normalizeRoomTagKey(value: unknown): string {
   return typeof value === "string" ? value.trim().toLowerCase() : "";
@@ -12,8 +12,7 @@ export const MAP_CALENDAR_OVERLAY_ID = "zzk-map-calendar-overlay";
 /** Slack 복사 모달의 shadow root 호스트. */
 export const SLACK_COPY_MODAL_MOUNT_ID = "zzk-slack-copy-root";
 export const MAP_CALENDAR_LAUNCHER_ID = "zzk-map-calendar-radar-launcher";
-export const SLACK_MODAL_TRIGGER_ID = "zzk-slack-modal-trigger";
-export { DEBUG_MODE };
+export { DEBUG_MODE, DEV_BUILD };
 export const MAP_CALENDAR_OVERLAY_TAB_MEETING_ID = "zzk-map-calendar-overlay-tab-meeting";
 export const MAP_CALENDAR_OVERLAY_TAB_PAIR_ID = "zzk-map-calendar-overlay-tab-pair";
 export const PAGE_RESERVATION_EVENT_TYPE = "ZZK_RESERVATION_NETWORK_EVENT";

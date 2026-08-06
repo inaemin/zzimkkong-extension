@@ -31,10 +31,14 @@ async function mountWithRequestCounter(page) {
   await stubServiceDocument(page);
 
   const reservationRequests = [];
+  const spacesRequests = [];
   await page.route(`${API_ORIGIN}/api/**`, async (route) => {
     const url = new URL(route.request().url());
     if (url.pathname === "/api/space-reservations") {
       reservationRequests.push(url.searchParams.get("spaceId"));
+    }
+    if (url.pathname === "/api/spaces") {
+      spacesRequests.push(url.href);
     }
     await route.fulfill(jsonResponse(url.pathname === "/api/spaces" ? SPACES : []));
   });
@@ -45,6 +49,7 @@ async function mountWithRequestCounter(page) {
     timeout: 6000,
   });
 
+  reservationRequests.spaces = spacesRequests;
   return reservationRequests;
 }
 
@@ -161,4 +166,21 @@ test("예약 성공 시 TTL 을 기다리지 않고 캐시가 즉시 무효화�
   await page.waitForTimeout(500);
 
   expect(reservationRequests.length).toBeGreaterThan(afterMount);
+});
+
+// fetchAvailability 와 fetchDailySchedule 이 각자 loadSpaceContext 를 부른다.
+// 타임블록을 한 번 누르면 둘 다 도는데, 공간 목록에 캐시가 없으면 /api/spaces
+// 가 매번 2번씩 나갔다(preflight 까지 치면 4번).
+test("한 번의 조회에서 /api/spaces 를 두 번 부르지 않는다", async ({ page }) => {
+  const requests = await mountWithRequestCounter(page);
+
+  // 마운트 때 이미 한 번 돌았다. TTL 이 지난 뒤 다시 조회시켜 실제 요청을 낸다.
+  await page.waitForTimeout(3200);
+  requests.spaces.length = 0;
+
+  await page.evaluate(() => window.__zzkTestApi?.refreshAvailability?.());
+  await page.waitForTimeout(800);
+
+  // availability 와 dailySchedule 이 같은 공간 목록을 공유해야 한다.
+  expect(requests.spaces).toHaveLength(1);
 });

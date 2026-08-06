@@ -648,6 +648,22 @@ test("지난 예약 칸은 더 진하고 예약 내용을 알려준다", async (
   const tooltip = page.locator('[data-slot="tooltip-content"]');
   await expect(tooltip).toContainText("아무개");
   await expect(tooltip).toHaveText(/^\d{2}:\d{2}~\d{2}:\d{2} /);
+
+  // 예약 목적은 줄을 바꿔 붙인다(누가 썼는지 다음에 무엇 때문인지).
+  await expect(tooltip).toHaveText(/\n학습$/);
+
+  // 여러 줄이어도 가운데 정렬이라야 읽기 편하다. items-center 만으로는
+  // 세로만 가운데가 되고 글자는 왼쪽에 붙는다.
+  const alignment = await page.evaluate(() => {
+    const popup =
+      window.__zzkQuery('[data-slot="tooltip-content"]') ??
+      document.querySelector('[data-slot="tooltip-content"]');
+    const style = getComputedStyle(popup);
+    return { textAlign: style.textAlign, whiteSpace: style.whiteSpace };
+  });
+  expect(alignment.textAlign).toBe("center");
+  // 줄바꿈이 살아야 목적이 다음 줄로 간다.
+  expect(alignment.whiteSpace).toBe("pre-line");
   await expect(tooltip).not.toContainText("지난 예약");
 
   // 예약이 없는 칸은 툴팁을 띄우지 않는다. "예약 없음"도 "선택 불가(현재 시간
@@ -669,6 +685,115 @@ test("지난 예약 칸은 더 진하고 예약 내용을 알려준다", async (
 //
 // 카드 안(헤더)에 렌더하면 카드가 position: relative + overflow: hidden 이라
 // 팝오버 높이만큼 scrollHeight 가 늘어 레이아웃이 밀린다(155 → 218px).
+// 날짜 버튼은 라벨 길이가 "1월 1일 (수)" ~ "10월 28일 (월)" 로 달라진다.
+// 너비가 자동이면 날짜를 옮길 때마다 버튼이 늘었다 줄어 옆 컨트롤이 밀린다.
+test("날짜를 옮겨도 날짜 버튼 너비가 그대로다", async ({ page }) => {
+  await mountServicePage(page);
+  await page.waitForSelector(`#${MAP_CALENDAR_OVERLAY_ID} [aria-label="지도 날짜 선택"]`, {
+    timeout: 4000,
+  });
+
+  const measure = () =>
+    page.evaluate(() => {
+      const button = window.__zzkQuery('[aria-label="지도 날짜 선택"]');
+      return {
+        width: button.getBoundingClientRect().width,
+        // 글자가 버튼을 넘치면 잘려 보인다.
+        overflows: button.scrollWidth > button.offsetWidth,
+        label: (button.textContent || "").trim(),
+      };
+    });
+
+  const widths = [];
+  // 다음일 버튼을 눌러 날짜를 옮긴다. 한 자리 → 두 자리 날짜로 넘어가는
+  // 구간(9일 → 10일 등)에서 라벨이 길어진다.
+  for (let step = 0; step < 14; step += 1) {
+    const measured = await measure();
+    widths.push(measured.width);
+    expect(measured.overflows, `"${measured.label}" 가 버튼을 넘침`).toBe(false);
+    await page.click(`#${MAP_CALENDAR_OVERLAY_ID} [aria-label^="다음일"]`);
+    await page.waitForFunction(
+      (previous) =>
+        (window.__zzkQuery('[aria-label="지도 날짜 선택"]')?.textContent || "").trim() !== previous,
+      measured.label,
+      { timeout: 3000 },
+    );
+  }
+
+  expect(new Set(widths).size, `너비가 흔들림: ${[...new Set(widths)].join(", ")}`).toBe(1);
+});
+
+// 달력은 포털 층에 뜨는데, 그 층은 화면 전체를 덮으므로 pointer-events: none 이다.
+// 자식에서 되살리지 않으면 달력이 보이기만 하고 클릭이 전부 통과해 버린다.
+test("달력에서 날짜를 고르면 반영되고 월 이동도 된다", async ({ page }) => {
+  await mountServicePage(page);
+  await page.waitForSelector(`#${MAP_CALENDAR_OVERLAY_ID} [aria-label="지도 날짜 선택"]`, {
+    timeout: 4000,
+  });
+
+  const readLabel = () =>
+    page.evaluate(() =>
+      (window.__zzkQuery('[aria-label="지도 날짜 선택"]')?.textContent || "").trim(),
+    );
+  const readMonth = () =>
+    page.evaluate(() =>
+      (window.__zzkQuery('[data-slot="calendar"]')?.textContent || "").slice(0, 20),
+    );
+
+  const before = await readLabel();
+  await page.click(`#${MAP_CALENDAR_OVERLAY_ID} [aria-label="지도 날짜 선택"]`);
+  await page.locator('[data-slot="calendar"]').waitFor({ state: "visible" });
+
+  // 월 이동 화살표가 실제로 먹히는지.
+  const monthBefore = await readMonth();
+  await page.click('[aria-label="Go to the Next Month"]');
+  await expect.poll(readMonth).not.toBe(monthBefore);
+
+  // 날짜 칸을 눌러 실제로 선택이 반영되는지.
+  await page.evaluate(() => {
+    const days = [...window.__zzkQueryAll('[data-slot="calendar"] button')].filter(
+      (button) => /^\d+$/.test((button.textContent || "").trim()) && !button.disabled,
+    );
+    days[15]?.click();
+  });
+
+  await expect.poll(readLabel).not.toBe(before);
+});
+
+// 팝오버·달력은 카드가 아니라 포털 층(position: fixed)에 떠야 한다. 카드 안에
+// 렌더하면 카드가 overflow: hidden + relative 라 scrollHeight 가 늘고 레이아웃이 밀린다.
+test("날짜 달력은 카드 밖 포털 층에 뜬다", async ({ page }) => {
+  await mountServicePage(page);
+  await page.waitForSelector(`#${MAP_CALENDAR_OVERLAY_ID} [aria-label="지도 날짜 선택"]`, {
+    timeout: 4000,
+  });
+
+  const measure = () =>
+    page.evaluate(() => {
+      const card = window.__zzkQuery('[data-testid="radar-card"]');
+      return { scrollHeight: card.scrollHeight, scrollWidth: card.scrollWidth };
+    });
+  const before = await measure();
+
+  await page.click(`#${MAP_CALENDAR_OVERLAY_ID} [aria-label="지도 날짜 선택"]`);
+  await page.locator('[data-slot="calendar"]').waitFor({ state: "visible" });
+
+  // 달력이 카드 안에 들어갔으면 여기서 크기가 달라진다.
+  expect(await measure()).toEqual(before);
+
+  const inPortalLayer = await page.evaluate(() => {
+    const calendar = window.__zzkQuery('[data-slot="calendar"]');
+    const card = window.__zzkQuery('[data-testid="radar-card"]');
+    return {
+      hasPortalLayerAncestor: Boolean(calendar?.closest("[data-zzk-portal-layer]")),
+      insideCard: Boolean(card?.contains(calendar)),
+    };
+  });
+
+  expect(inPortalLayer.hasPortalLayerAncestor).toBe(true);
+  expect(inPortalLayer.insideCard).toBe(false);
+});
+
 test("범례 팝오버가 카드 크기를 바꾸지 않는다", async ({ page }) => {
   await mountServicePage(page);
   await page.waitForSelector(`#${MAP_CALENDAR_OVERLAY_ID} .zzk-map-calendar-slot`, {
@@ -810,4 +935,56 @@ test("범례는 hover 만으로 열리고 벗어나면 닫힌다", async ({ page
   await expect
     .poll(() => page.evaluate(() => Boolean(window.__zzkQuery('[data-slot="popover-content"]'))))
     .toBe(false);
+});
+
+// 공간 유형 전환(회의실 ↔ 페어룸). 손으로 만든 파일 폴더 탭을 shadcn Tabs 로
+// 바꿨다 — 고른 탭에 표시가 나야 하고, 실제로 목록이 바뀌어야 한다.
+test("공간 유형 탭을 바꾸면 표시와 목록이 함께 바뀐다", async ({ page }) => {
+  await mountServicePage(page);
+  await page.waitForSelector(`#${MAP_CALENDAR_OVERLAY_ID} [data-slot="tabs-trigger"]`, {
+    timeout: 4000,
+  });
+
+  // data-active 만 보면 안 된다 — Base UI 가 붙여주는 속성이라 우리 CSS 가
+  // 안 걸려도 통과한다. 실제로 배경이 칠해지는지(고른 탭만 불투명)까지 본다.
+  const readTabs = () =>
+    page.evaluate(() =>
+      [...window.__zzkQueryAll('[data-slot="tabs-trigger"]')].map((tab) => ({
+        text: (tab.textContent || "").trim(),
+        active: tab.hasAttribute("data-active"),
+        filled: getComputedStyle(tab).backgroundColor !== "rgba(0, 0, 0, 0)",
+      })),
+    );
+
+  // 처음에는 회의실이 켜져 있다.
+  expect(await readTabs()).toEqual([
+    { text: "회의실", active: true, filled: true },
+    { text: "페어룸", active: false, filled: false },
+  ]);
+
+  await page.evaluate(() => {
+    [...window.__zzkQueryAll('[data-slot="tabs-trigger"]')]
+      .find((tab) => (tab.textContent || "").includes("페어룸"))
+      ?.click();
+  });
+
+  // 표시가 옮겨간다(data-active 를 안 보면 눌러도 그대로처럼 보인다).
+  await expect.poll(readTabs).toEqual([
+    { text: "회의실", active: false, filled: false },
+    { text: "페어룸", active: true, filled: true },
+  ]);
+
+  // 탭은 모달 카드 안, 날짜 컨트롤 왼쪽에 같은 줄로 선다.
+  const placement = await page.evaluate(() => {
+    const list = window.__zzkQuery('[data-slot="tabs-list"]').getBoundingClientRect();
+    const picker = window.__zzkQuery('[aria-label="지도 날짜 선택"]').getBoundingClientRect();
+    const card = window.__zzkQuery('[data-testid="radar-card"]').getBoundingClientRect();
+    return {
+      insideCard: list.top >= card.top && list.bottom <= card.bottom,
+      leftOfPicker: list.right <= picker.left + 2,
+      sameRow: Math.abs(list.top - picker.top) < 20,
+    };
+  });
+
+  expect(placement).toEqual({ insideCard: true, leftOfPicker: true, sameRow: true });
 });

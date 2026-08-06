@@ -18,8 +18,10 @@ export interface SlackCopyModalDeps {
 
   initialChannel: string;
   channelHistory: string[];
-  onChannelCommitted: (channel: string) => void;
-  onChannelRemovedFromHistory: (channel: string) => void;
+  /** 채널을 확정한다. 갱신된 최근 목록을 돌려주면 그걸로 화면을 맞춘다. */
+  onChannelCommitted: (channel: string) => string[] | void;
+  /** 기록에서 지운다. 남은 목록을 돌려주면 그걸로 화면을 갱신한다. */
+  onChannelRemovedFromHistory: (channel: string) => string[] | void;
 
   initialReminderLeadMinutes: number;
   reminderLeadOptions: number[];
@@ -33,6 +35,9 @@ export interface SlackCopyModalDeps {
 function SlackCopyModalRoot({ deps, mount }: { deps: SlackCopyModalDeps; mount: ShadowMount }) {
   const [open, setOpen] = React.useState(true);
   const [channel, setChannel] = React.useState(deps.initialChannel);
+  // 목록은 상태로 들고 있어야 삭제가 화면에 반영된다. deps.channelHistory 는
+  // 모달을 열 때의 스냅샷이라 그대로 쓰면 지워도 그대로 남는다.
+  const [channelHistory, setChannelHistory] = React.useState(deps.channelHistory);
   const [reminderLeadMinutes, setReminderLeadMinutes] = React.useState(
     deps.initialReminderLeadMinutes,
   );
@@ -64,10 +69,19 @@ function SlackCopyModalRoot({ deps, mount }: { deps: SlackCopyModalDeps; mount: 
         setChannel(next);
         // 채널이 바뀌면 조립된 메시지를 다시 따라가게 한다.
         setEditedMessage(null);
-        deps.onChannelCommitted(next);
+        const updated = deps.onChannelCommitted(next);
+        if (Array.isArray(updated)) {
+          setChannelHistory(updated);
+        }
       }}
-      channelHistory={deps.channelHistory}
-      onRemoveChannelFromHistory={deps.onChannelRemovedFromHistory}
+      channelHistory={channelHistory}
+      onRemoveChannelFromHistory={(next) => {
+        // 저장소에서 지우고, 그 결과(남은 목록)로 화면도 맞춘다.
+        const remaining = deps.onChannelRemovedFromHistory(next);
+        setChannelHistory(
+          Array.isArray(remaining) ? remaining : channelHistory.filter((token) => token !== next),
+        );
+      }}
       reminderLeadMinutes={reminderLeadMinutes}
       reminderLeadOptions={deps.reminderLeadOptions}
       onReminderLeadChange={(next) => {

@@ -255,6 +255,45 @@ test.describe("buildSlotTitle", () => {
     expect(buildSlotTitle(state)).toBe("07:00~08:00 1번\n07:00~08:00 2번");
   });
 
+  test("예약 목적이 있으면 줄을 바꿔 붙인다", () => {
+    const [state] = buildSlotStates(
+      makeRoom([
+        {
+          startMinute: 420,
+          endMinute: 480,
+          startTime: "07:00",
+          endTime: "08:00",
+          owner: "에버(조성진)",
+          title: "플젝 회의",
+        },
+      ]),
+      [slot],
+      0,
+    );
+
+    expect(buildSlotTitle(state)).toBe("07:00~08:00 에버(조성진)\n플젝 회의");
+  });
+
+  test("목적이 자리표시자('예약')면 줄을 늘리지 않는다", () => {
+    // normalizer 가 빈 목적을 "예약"으로 채운다. 그건 정보가 아니다.
+    const [state] = buildSlotStates(
+      makeRoom([
+        {
+          startMinute: 420,
+          endMinute: 480,
+          startTime: "07:00",
+          endTime: "08:00",
+          owner: "아무개",
+          title: "예약",
+        },
+      ]),
+      [slot],
+      0,
+    );
+
+    expect(buildSlotTitle(state)).toBe("07:00~08:00 아무개");
+  });
+
   test("예약이 없으면 빈 문자열이다(툴팁 자체가 안 뜬다)", () => {
     const [state] = buildSlotStates(makeRoom(), [slot], 0);
     expect(buildSlotTitle(state)).toBe("");
