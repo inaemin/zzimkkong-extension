@@ -206,7 +206,6 @@ declare global {
   let reservationAttemptSequence = 0;
 
   const state: RadarState = {
-    mounted: false,
     loading: false,
     availabilityInflightToken: null,
     // 같은 조건(날짜·시간·탭)으로 다시 조회할 때 재사용할 마지막 응답.
@@ -216,10 +215,8 @@ declare global {
     // 아직 응답이 안 온 조회. TTL 캐시는 응답이 온 뒤에만 유효하므로,
     // 응답 전에 다시 눌린 경우는 같은 Promise 에 합류시켜 중복 요청을 막는다.
     availabilityInflightByToken: new Map(),
-    pendingAvailabilityRefresh: false,
     latestRooms: [],
     latestRoomsBySpaceTab: new Map(),
-    scheduleOverlayEnabled: true,
     scheduleCache: new Map(),
     scheduleCacheFetchedAtByDate: new Map(),
     scheduleInflightByDate: new Map(),
@@ -300,7 +297,6 @@ declare global {
     if (isRadarSupportedPage()) {
       queueSlackModalFromPersistedEditSubmitIfNeeded("boot-ready");
       if (state.mapCalendarAlwaysOpen) {
-        state.scheduleOverlayEnabled = true;
         state.mapCalendarVisible = true;
       }
       ensureTopNavigationClickability();
@@ -400,7 +396,6 @@ declare global {
     if (sharingMapId && state.currentSharingMapId !== sharingMapId) {
       syncMapCalendarAlwaysOpenPreference();
       if (state.mapCalendarAlwaysOpen) {
-        state.scheduleOverlayEnabled = true;
         if (state.elements?.scheduleToggle instanceof HTMLInputElement) {
           state.elements.scheduleToggle.checked = true;
         }
@@ -417,7 +412,6 @@ declare global {
       }
     }
     if (
-      state.scheduleOverlayEnabled &&
       isMapCalendarModalOpenRequested() &&
       state.activeScheduleDate &&
       !document.getElementById(MAP_CALENDAR_OVERLAY_ID)
@@ -429,12 +423,11 @@ declare global {
   function ensurePanel() {
     ensureTopNavigationClickability();
 
-    if (state.mounted && state.elements) {
+    if (state.elements) {
       return;
     }
 
     state.elements = createRuntimePanelStateElements();
-    state.mounted = true;
     initializeDefaults(state.elements);
     syncMapCalendarSpaceTabButtons();
 
@@ -442,7 +435,6 @@ declare global {
     if (sharingMapId && state.currentSharingMapId !== sharingMapId) {
       syncMapCalendarAlwaysOpenPreference();
       if (state.mapCalendarAlwaysOpen) {
-        state.scheduleOverlayEnabled = true;
         if (state.elements?.scheduleToggle instanceof HTMLInputElement) {
           state.elements.scheduleToggle.checked = true;
         }
@@ -589,7 +581,6 @@ declare global {
       const isSharingMapSwitch = Boolean(previousSharingMapId);
       state.currentSharingMapId = sharingMapId;
       state.availabilityInflightToken = null;
-      state.pendingAvailabilityRefresh = false;
       state.latestRoomsBySpaceTab.clear();
       if (isSharingMapSwitch) {
         state.scheduleCache.clear();
@@ -632,12 +623,10 @@ declare global {
     if (cachedAvailability) {
       pushDebugEvent("availability", "cache-hit", { token: availabilityToken });
       applyAvailabilityData(cachedAvailability, { roomType });
-      if (state.scheduleOverlayEnabled) {
-        try {
-          await refreshDailySchedule(date);
-        } catch {
-          removeMapCalendarOverlay();
-        }
+      try {
+        await refreshDailySchedule(date);
+      } catch {
+        removeMapCalendarOverlay();
       }
       return;
     }
@@ -652,7 +641,6 @@ declare global {
     }
 
     state.loading = true;
-    state.pendingAvailabilityRefresh = false;
 
     const inflight = sendMessage({
       type: "ZZK_FETCH_AVAILABILITY",
@@ -688,12 +676,10 @@ declare global {
       writeAvailabilityCache(state, availabilityToken, data);
       applyAvailabilityData(data, { roomType });
 
-      if (state.scheduleOverlayEnabled) {
-        try {
-          await refreshDailySchedule(date);
-        } catch {
-          removeMapCalendarOverlay();
-        }
+      try {
+        await refreshDailySchedule(date);
+      } catch {
+        removeMapCalendarOverlay();
       }
     } catch {
       // 사용자에게 보이는 에러는 React 오버레이가 그린다.
@@ -705,12 +691,6 @@ declare global {
         state.availabilityInflightToken = null;
       }
       state.loading = false;
-      // 조건이 바뀌어 대기 중인 갱신이 있으면 그때만 다시 돈다.
-      // (같은 조건 반복은 위의 inflight/TTL 에서 이미 걸러진다)
-      if (state.pendingAvailabilityRefresh) {
-        state.pendingAvailabilityRefresh = false;
-        void refreshAvailability();
-      }
     }
   }
 
@@ -858,7 +838,7 @@ declare global {
   }
 
   async function refreshDailySchedule(date: string) {
-    if (!isRadarSupportedPage() || !state.scheduleOverlayEnabled || !date) {
+    if (!isRadarSupportedPage() || !date) {
       return;
     }
 
@@ -977,7 +957,7 @@ declare global {
   // 예약 현황을 못 불러와도(예: 인증 실패로 API가 403) 모달 껍데기는 떠야 한다.
   // 데이터 대신 에러 메시지와 다시 시도 버튼을 담은 최소 모달을 그린다.
   function renderMapCalendarErrorOverlay(errorMessage: string) {
-    if (!state.scheduleOverlayEnabled || !isMapCalendarModalOpenRequested()) {
+    if (!isMapCalendarModalOpenRequested()) {
       return;
     }
     if (state.mapCalendarSuppressedBySlack) {
@@ -1028,12 +1008,6 @@ declare global {
   }
 
   function renderMapCalendarOverlay(scheduleData: DailyScheduleResult | null) {
-    if (!state.scheduleOverlayEnabled) {
-      removeMapCalendarOverlay();
-      updateMapCalendarLauncherState();
-      return;
-    }
-
     if (state.mapCalendarSuppressedBySlack) {
       state.mapCalendarVisible = false;
       state.lastAutoOpenPath = null;
@@ -1475,11 +1449,7 @@ declare global {
       return;
     }
 
-    if (
-      !isRadarSupportedPage() ||
-      !state.scheduleOverlayEnabled ||
-      !isMapCalendarModalOpenRequested()
-    ) {
+    if (!isRadarSupportedPage() || !isMapCalendarModalOpenRequested()) {
       updateMapCalendarLauncherState();
       return;
     }
@@ -1902,7 +1872,6 @@ declare global {
     normalizeTimeInput(elements.startInput);
     normalizeTimeInput(elements.endInput);
     elements.scheduleToggle.checked = true;
-    state.scheduleOverlayEnabled = true;
   }
 
   function applyPanelDateChange(nextDate: unknown) {
@@ -1963,7 +1932,7 @@ declare global {
   }
 
   function syncScheduleOverlayToDate(date: string) {
-    if (!state.scheduleOverlayEnabled || !date) {
+    if (!date) {
       return;
     }
 
@@ -2561,11 +2530,7 @@ declare global {
   function scheduleCalendarOverlayRefresh() {
     cancelTimer(state.autoScheduleRefreshTimer);
     state.autoScheduleRefreshTimer = window.setTimeout(() => {
-      if (
-        !state.scheduleOverlayEnabled ||
-        !isMapCalendarModalOpenRequested() ||
-        !state.activeScheduleDate
-      ) {
+      if (!isMapCalendarModalOpenRequested() || !state.activeScheduleDate) {
         return;
       }
 
@@ -2598,7 +2563,6 @@ declare global {
     ensureMapCalendarLauncher();
     const openedPendingSlackModal = tryOpenPendingSlackCopyModal();
     if (state.mapCalendarAlwaysOpen) {
-      state.scheduleOverlayEnabled = true;
       if (state.elements?.scheduleToggle instanceof HTMLInputElement) {
         state.elements.scheduleToggle.checked = true;
       }
@@ -2642,7 +2606,6 @@ declare global {
 
     removeMapCalendarLauncher();
     state.elements = null;
-    state.mounted = false;
     state.currentSharingMapId = null;
     state.latestRooms = [];
     state.latestRoomsBySpaceTab.clear();
@@ -3882,7 +3845,6 @@ declare global {
         ) {
           state.elements.dateInput.value = hostDateInput.value;
         }
-        state.scheduleOverlayEnabled = true;
         if (state.elements?.scheduleToggle instanceof HTMLInputElement) {
           state.elements.scheduleToggle.checked = true;
         }
@@ -3902,7 +3864,6 @@ declare global {
         ) {
           state.elements.dateInput.value = hostDateInput.value;
         }
-        state.scheduleOverlayEnabled = true;
         if (state.elements?.scheduleToggle instanceof HTMLInputElement) {
           state.elements.scheduleToggle.checked = true;
         }
@@ -3928,7 +3889,6 @@ declare global {
         if (state.elements?.dateInput instanceof HTMLInputElement) {
           state.elements.dateInput.value = normalizedDate;
         }
-        state.scheduleOverlayEnabled = true;
         state.mapCalendarVisible = true;
         state.activeScheduleDate = normalizedDate;
         await refreshDailySchedule(normalizedDate);

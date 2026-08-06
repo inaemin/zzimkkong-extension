@@ -91,17 +91,6 @@ export function createRadarWorkflow(deps: Deps) {
     return DEBUG_MODE || manualVerificationEnabled;
   }
 
-  /** 처음 열 때 한 번만 스케줄 오버레이를 켠다. */
-  function enableScheduleOverlayOnce() {
-    if (state.scheduleOverlayEnabled) {
-      return;
-    }
-    state.scheduleOverlayEnabled = true;
-    if (state.elements?.scheduleToggle instanceof HTMLInputElement) {
-      state.elements.scheduleToggle.checked = true;
-    }
-  }
-
   function createSlackTrigger(): HTMLButtonElement {
     const trigger = document.createElement("button");
     trigger.id = SLACK_MODAL_TRIGGER_ID;
@@ -151,7 +140,6 @@ export function createRadarWorkflow(deps: Deps) {
 
   /** 런처를 눌렀을 때. 열면 오버레이를 띄우고 닫으면 걷는다. */
   function toggleMapCalendar(nextOpen: boolean) {
-    enableScheduleOverlayOnce();
     state.mapCalendarVisible = nextOpen;
     if (nextOpen) {
       openMapCalendarModal();
@@ -167,10 +155,7 @@ export function createRadarWorkflow(deps: Deps) {
       return;
     }
 
-    const isOpen =
-      !state.mapCalendarSuppressedBySlack &&
-      isMapCalendarModalOpenRequested() &&
-      state.scheduleOverlayEnabled;
+    const isOpen = !state.mapCalendarSuppressedBySlack && isMapCalendarModalOpenRequested();
 
     const launcher = renderRadarLauncher({ open: isOpen, onOpenChange: toggleMapCalendar });
 
@@ -292,7 +277,6 @@ export function createRadarWorkflow(deps: Deps) {
     return (
       state.scheduleLoadingDate === state.activeScheduleDate &&
       state.scheduleLoadingTab === state.activeScheduleTab &&
-      state.scheduleOverlayEnabled &&
       isMapCalendarModalOpenRequested()
     );
   }
@@ -343,7 +327,7 @@ export function createRadarWorkflow(deps: Deps) {
 
   /** 지금 오버레이를 띄워도 되는지. 안 되면 정리까지 하고 false. */
   function canOpenMapCalendarModal() {
-    if (!isRadarSupportedPage() || !state.scheduleOverlayEnabled) {
+    if (!isRadarSupportedPage()) {
       updateMapCalendarLauncherState();
       return false;
     }

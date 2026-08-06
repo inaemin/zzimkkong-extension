@@ -23,7 +23,6 @@ export interface PanelElements {
 }
 
 export interface RadarState {
-  mounted: boolean;
   loading: boolean;
 
   // 예약 현황 조회 캐시. 같은 조건이면 TTL 안에서 재사용한다.
@@ -31,12 +30,10 @@ export interface RadarState {
   availabilityCache: Map<string, unknown>;
   availabilityCacheFetchedAt: Map<string, number>;
   availabilityInflightByToken: Map<string, Promise<unknown>>;
-  pendingAvailabilityRefresh: boolean;
   latestRooms: RoomSchedule[];
   latestRoomsBySpaceTab: Map<string, unknown>;
 
   // 일별 스케줄(타임블록) 캐시.
-  scheduleOverlayEnabled: boolean;
   scheduleCache: Map<string, DailyScheduleResult>;
   scheduleCacheFetchedAtByDate: Map<string, number>;
   scheduleInflightByDate: Map<string, Promise<unknown>>;

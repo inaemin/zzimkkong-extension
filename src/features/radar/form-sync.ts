@@ -191,7 +191,7 @@ export function createRadarFormSync(deps: Deps) {
 
   /** 캐시가 살아 있으면 서버 응답을 기다리지 않고 먼저 그린다. */
   function renderCachedOverlayForDate(normalizedDate: string) {
-    const cached = state.scheduleOverlayEnabled ? getFreshScheduleCache(normalizedDate) : null;
+    const cached = getFreshScheduleCache(normalizedDate);
     if (!cached) {
       return;
     }
