@@ -1,5 +1,6 @@
 import * as React from "react";
 
+import { Tabs, TabsList, TabsTrigger } from "@/ui/components/ui/tabs";
 import {
   MAP_CALENDAR_OVERLAY_TAB_MEETING_ID,
   MAP_CALENDAR_OVERLAY_TAB_PAIR_ID,
@@ -110,28 +111,27 @@ export function RadarShell({
 
   return (
     <div className="zzk-map-calendar-shell">
-      <div className="zzk-map-calendar-space-tabs" role="tablist" aria-label="공간 유형 선택">
-        <button
-          type="button"
-          id={MAP_CALENDAR_OVERLAY_TAB_MEETING_ID}
-          className="zzk-map-calendar-space-tab"
-          role="tab"
-          aria-selected={spaceTab === MAP_CALENDAR_SPACE_TAB_MEETING}
-          onClick={() => onSpaceTabChange(MAP_CALENDAR_SPACE_TAB_MEETING)}
-        >
-          회의실
-        </button>
-        <button
-          type="button"
-          id={MAP_CALENDAR_OVERLAY_TAB_PAIR_ID}
-          className="zzk-map-calendar-space-tab"
-          role="tab"
-          aria-selected={spaceTab === MAP_CALENDAR_SPACE_TAB_PAIR}
-          onClick={() => onSpaceTabChange(MAP_CALENDAR_SPACE_TAB_PAIR)}
-        >
-          페어룸
-        </button>
-      </div>
+      {/*
+        공간 유형 전환. 손으로 만든 파일 폴더 탭(전용 CSS 75줄)을 shadcn Tabs 로
+        바꿨다. 값·전환은 바깥에서 준다(제어 컴포넌트).
+      */}
+      <Tabs
+        className="zzk-map-calendar-space-tabs"
+        value={spaceTab}
+        onValueChange={(next) => onSpaceTabChange(next as SpaceTab)}
+      >
+        <TabsList aria-label="공간 유형 선택">
+          <TabsTrigger
+            id={MAP_CALENDAR_OVERLAY_TAB_MEETING_ID}
+            value={MAP_CALENDAR_SPACE_TAB_MEETING}
+          >
+            회의실
+          </TabsTrigger>
+          <TabsTrigger id={MAP_CALENDAR_OVERLAY_TAB_PAIR_ID} value={MAP_CALENDAR_SPACE_TAB_PAIR}>
+            페어룸
+          </TabsTrigger>
+        </TabsList>
+      </Tabs>
 
       <div
         className={collapsed ? "zzk-map-calendar-card collapsed" : "zzk-map-calendar-card"}

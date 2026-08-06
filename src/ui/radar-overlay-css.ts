@@ -44,34 +44,6 @@ export const RADAR_OVERLAY_CSS = `
   position: relative;
 }
 
-:host .zzk-map-calendar-shell > .zzk-map-calendar-space-tabs {
-  display: inline-grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 2px;
-  width: fit-content;
-  margin-left: 12px;
-  margin-bottom: -4px;
-  padding: 0;
-  border: none;
-  border-radius: 0;
-  background: transparent;
-  box-shadow: none;
-  pointer-events: auto;
-  position: relative;
-  z-index: 3;
-}
-
-:host .zzk-map-calendar-shell > .zzk-map-calendar-space-tabs::after {
-  content: "";
-  position: absolute;
-  left: 0;
-  right: 0;
-  bottom: -1px;
-  height: 2px;
-  background: rgba(255, 255, 255, 0.94);
-  pointer-events: none;
-}
-
 :host {
   /* 슬롯 색. 범례가 이 변수를 그대로 참조하므로 한쪽만 바뀌지 않는다. */
   --zzk-slot-free: rgba(34, 197, 94, 0.32);
@@ -84,6 +56,13 @@ export const RADAR_OVERLAY_CSS = `
 /* 포털 층은 클릭이 통과해야 하지만(화면 전체를 덮는다), 그 안에 뜬
    팝오버·달력·툴팁은 눌려야 한다. */
 :host [data-zzk-portal-layer] > * {
+  pointer-events: auto;
+}
+
+/* 공간 유형 탭. 모양은 shadcn Tabs 가 내고 여기서는 자리만 잡는다.
+   (예전에는 카드에 이어 붙는 파일 폴더 모양이라 CSS 가 75줄이었다.) */
+:host .zzk-map-calendar-space-tabs {
+  margin: 0 0 6px 2px;
   pointer-events: auto;
 }
 
@@ -138,63 +117,6 @@ export const RADAR_OVERLAY_CSS = `
   gap: 6px;
   min-width: 0;
 }
-
-:host .zzk-map-calendar-space-tab {
-  min-width: 84px;
-  min-height: 40px;
-  padding: 0 12px;
-  border: 1px solid rgba(15, 23, 42, 0.12);
-  border-bottom: none;
-  border-radius: 18px 18px 0 0;
-  background: rgba(217, 216, 220, 0.72);
-  color: #7b7b84;
-  font-size: 13px;
-  font-weight: 800;
-  line-height: 1;
-  cursor: pointer;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  position: relative;
-  transition: background-color 120ms ease, color 120ms ease, box-shadow 120ms ease,
-transform 120ms ease;
-}
-
-:host .zzk-map-calendar-space-tab::after {
-  content: "";
-  position: absolute;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  height: 0;
-  background: inherit;
-  pointer-events: none;
-}
-
-:host .zzk-map-calendar-space-tab[aria-selected="true"] {
-  background: rgba(255, 255, 255, 1);
-  color: #ff8833;
-  box-shadow: none;
-  transform: translateY(0);
-  z-index: 2;
-}
-
-:host .zzk-map-calendar-space-tab[aria-selected="true"]::after {
-  bottom: -1px;
-  height: 2px;
-}
-
-:host .zzk-map-calendar-space-tab[aria-selected="false"] {
-  background: rgba(217, 216, 220, 0.72);
-  z-index: 1;
-}
-
-:host .zzk-map-calendar-space-tab:focus-visible {
-  outline: 2px solid rgba(255, 136, 51, 0.18);
-  outline-offset: 2px;
-}
-
-
 
 :host .zzk-map-calendar-header-right {
   display: flex;

@@ -920,3 +920,41 @@ test("범례는 hover 만으로 열리고 벗어나면 닫힌다", async ({ page
     .poll(() => page.evaluate(() => Boolean(window.__zzkQuery('[data-slot="popover-content"]'))))
     .toBe(false);
 });
+
+// 공간 유형 전환(회의실 ↔ 페어룸). 손으로 만든 파일 폴더 탭을 shadcn Tabs 로
+// 바꿨다 — 고른 탭에 표시가 나야 하고, 실제로 목록이 바뀌어야 한다.
+test("공간 유형 탭을 바꾸면 표시와 목록이 함께 바뀐다", async ({ page }) => {
+  await mountServicePage(page);
+  await page.waitForSelector(`#${MAP_CALENDAR_OVERLAY_ID} [data-slot="tabs-trigger"]`, {
+    timeout: 4000,
+  });
+
+  // data-active 만 보면 안 된다 — Base UI 가 붙여주는 속성이라 우리 CSS 가
+  // 안 걸려도 통과한다. 실제로 배경이 칠해지는지(고른 탭만 불투명)까지 본다.
+  const readTabs = () =>
+    page.evaluate(() =>
+      [...window.__zzkQueryAll('[data-slot="tabs-trigger"]')].map((tab) => ({
+        text: (tab.textContent || "").trim(),
+        active: tab.hasAttribute("data-active"),
+        filled: getComputedStyle(tab).backgroundColor !== "rgba(0, 0, 0, 0)",
+      })),
+    );
+
+  // 처음에는 회의실이 켜져 있다.
+  expect(await readTabs()).toEqual([
+    { text: "회의실", active: true, filled: true },
+    { text: "페어룸", active: false, filled: false },
+  ]);
+
+  await page.evaluate(() => {
+    [...window.__zzkQueryAll('[data-slot="tabs-trigger"]')]
+      .find((tab) => (tab.textContent || "").includes("페어룸"))
+      ?.click();
+  });
+
+  // 표시가 옮겨간다(data-active 를 안 보면 눌러도 그대로처럼 보인다).
+  await expect.poll(readTabs).toEqual([
+    { text: "회의실", active: false, filled: false },
+    { text: "페어룸", active: true, filled: true },
+  ]);
+});
