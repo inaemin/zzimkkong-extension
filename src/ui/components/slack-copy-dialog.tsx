@@ -3,6 +3,7 @@ import * as React from "react";
 import { Button } from "@/ui/components/ui/button";
 import {
   Dialog,
+  DialogClose,
   DialogContent,
   DialogDescription,
   DialogFooter,
@@ -105,11 +106,7 @@ export function SlackCopyDialog({
       <DialogContent className="sm:max-w-lg">
         <DialogHeader>
           <DialogTitle>슬랙 메시지 복사</DialogTitle>
-          <DialogDescription className="whitespace-pre-line">
-            {
-              "Slack에 붙여넣기 전에 내용을 한 번만 확인해 주세요.\n채널을 입력하면 해당 채널을 대상으로 한 줄짜리 /remind 명령을 생성합니다.\n내가 받은 리마인더는 Later 탭에서 볼 수 있고, /remind list에는 채널 리마인더만 보여요."
-            }
-          </DialogDescription>
+          <DialogDescription>Slack에 붙여넣기 전에 내용을 확인해 주세요.</DialogDescription>
         </DialogHeader>
 
         <div className="grid gap-4">
@@ -121,6 +118,9 @@ export function SlackCopyDialog({
               history={channelHistory}
               onRemoveFromHistory={onRemoveChannelFromHistory}
             />
+            <p className="text-xs text-muted-foreground">
+              비워두면 나에게만 보내고, 채널을 고르면 그 채널에 리마인드를 겁니다.
+            </p>
           </div>
 
           <div className="grid gap-2">
@@ -151,25 +151,25 @@ export function SlackCopyDialog({
               rows={6}
               className="font-mono text-xs"
             />
+            {/*
+              상태 문구는 DialogDescription 을 쓰지 않는다. Base UI 는 Description 을
+              컨텍스트로 등록해 aria-describedby 에 물리는데, 두 개를 두면 나중 것이
+              이겨서 헤더의 안내문 대신 이 한 줄만 읽힌다("무엇을 하는 창인지"가 사라짐).
+              변경 알림은 role=status(aria-live)로 따로 처리한다.
+            */}
+            <p
+              data-state={status}
+              role="status"
+              aria-live="polite"
+              className="text-xs text-muted-foreground data-[state=error]:text-destructive"
+            >
+              {statusMessage}
+            </p>
           </div>
         </div>
 
-        <DialogFooter className="sm:justify-between">
-          {/*
-            상태 문구는 DialogDescription 을 쓰지 않는다. Base UI 는 Description 을
-            컨텍스트로 등록해 aria-describedby 에 물리는데, 두 개를 두면 나중 것이
-            이겨서 헤더의 안내문 대신 이 한 줄만 읽힌다("무엇을 하는 창인지"가 사라짐).
-            모양은 dialog-description 과 같은 클래스로 맞추고, 변경 알림은 role=status
-            (aria-live)로 따로 처리한다.
-          */}
-          <p
-            data-state={status}
-            role="status"
-            aria-live="polite"
-            className="text-xs text-muted-foreground data-[state=error]:text-destructive"
-          >
-            {statusMessage}
-          </p>
+        <DialogFooter>
+          <DialogClose render={<Button type="button" variant="outline" />}>취소</DialogClose>
           <Button type="button" onClick={handleCopy} disabled={copying}>
             {copying ? <Spinner /> : null}
             복사하기

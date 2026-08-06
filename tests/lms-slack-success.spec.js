@@ -187,3 +187,39 @@ test("개발 플래그가 없으면 Slack 모달 버튼이 뜨지 않는다", as
 
   expect(labels).not.toContain("Slack 모달 테스트 (개발 전용)");
 });
+
+// 모달 구성이 shadcn 기본형을 따르는지. 설명문은 한 줄, 푸터는 [취소][주 버튼]
+// 순서로 오른쪽에 모인다. 취소는 실제로 닫혀야 한다(모양만 있으면 안 된다).
+test("Slack 모달이 shadcn 기본 구성을 따른다", async ({ page }) => {
+  await page.addInitScript(() => {
+    globalThis.__ZZK_DEBUG_MODE__ = true;
+    try {
+      localStorage.setItem("zzk-manual-slack-modal-trigger-v1", "1");
+    } catch {
+      /* 저장소를 못 쓰면 그냥 넘어간다 */
+    }
+  });
+  await mountLmsPage(page);
+  await page.evaluate(() => window.__zzkTestApi?.syncGuestUi?.());
+  await page.evaluate(() => {
+    const shadow = document.getElementById("zzk-map-calendar-radar-launcher")?.shadowRoot;
+    [...(shadow?.querySelectorAll("button") ?? [])]
+      .find((button) => button.getAttribute("aria-label")?.includes("Slack"))
+      ?.click();
+  });
+
+  const dialog = page.locator('[data-slot="dialog-content"]');
+  await expect(dialog).toBeVisible();
+
+  // 설명문은 한 줄. 예전에는 3줄이 헤더에 몰려 있어 본문이 밀렸다.
+  await expect(page.locator('[data-slot="dialog-description"]')).toHaveText(
+    "Slack에 붙여넣기 전에 내용을 확인해 주세요.",
+  );
+
+  // 푸터는 취소 → 주 버튼 순서.
+  const footerButtons = page.locator('[data-slot="dialog-footer"] button');
+  await expect(footerButtons).toHaveText(["취소", "복사하기"]);
+
+  await page.getByRole("button", { name: "취소" }).click();
+  await expect(dialog).toBeHidden();
+});
