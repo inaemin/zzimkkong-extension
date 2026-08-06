@@ -1,5 +1,6 @@
 import type { RadarState } from "../state.js";
-import { cancelTimer, pushDebugEvent, toDisplayString } from "../../utils/shared.js";
+import { cancelTimer, pushDebugEvent } from "../../utils/shared.js";
+import { getStorageErrorMessage } from "../../utils/storage.js";
 
 /** sessionStorage 에 넣어두는 대기 모달 상태. */
 interface PersistedSlackModalState {
@@ -269,13 +270,6 @@ export function createSlackSuccessFlow(deps: Deps) {
       key: storageKey,
       error: getStorageErrorMessage(error),
     });
-  }
-
-  function getStorageErrorMessage(error: unknown) {
-    if (error instanceof Error && error.message) {
-      return error.message;
-    }
-    return toDisplayString(error) || "unknown storage error";
   }
 
   // lms+ 에는 예약 수정 페이지가 없어 "수정 제출 후 복귀" 흐름 자체가 존재하지 않는다.

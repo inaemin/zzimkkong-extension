@@ -568,6 +568,7 @@ declare global {
       ensurePanel();
     }
     if (!state.elements) {
+      // ensurePanel 로도 못 만들었으면 호스트 화면이 아직 준비되지 않은 것이다.
       return;
     }
 

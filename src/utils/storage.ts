@@ -9,7 +9,7 @@ function reportStorageFailure(event: string, storageKey: unknown, error: unknown
   debugWarn("storage", event, detail);
 }
 
-function getStorageErrorMessage(error: unknown): string {
+export function getStorageErrorMessage(error: unknown): string {
   if (error instanceof Error && error.message) {
     return error.message;
   }

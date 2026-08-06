@@ -1,6 +1,6 @@
 // CRXJS 는 서비스워커를 "type": "module" 로 등록한다.
 // ES 모듈이라 importScripts() 는 쓸 수 없다.
-import { DEBUG_MODE } from "./constants/debug.js";
+import { debugLog, getErrorMessage } from "./utils/shared.js";
 import {
   KST_DATE_PARTS_FORMATTER,
   LMS_API_BASE_URL,
@@ -8,6 +8,7 @@ import {
   normalizeFetchRoomType as normalizeRoomType,
   normalizeTargetRoomName,
 } from "./constants/runtime.js";
+import { minuteToHourMinute } from "./utils/date-time.js";
 import { createLmsDataNormalizers } from "./services/lms-data/normalizers.js";
 import type { SpaceTab } from "./constants/runtime.js";
 import type {
@@ -60,17 +61,6 @@ interface SpaceContext {
       timelineSlotMinutes: LMS_TIME_STEP_MINUTES,
       minuteToHourMinute,
     });
-
-    function debugLog(scope: string, message: string, detail?: unknown): void {
-      if (!DEBUG_MODE || typeof console === "undefined" || typeof console.log !== "function") {
-        return;
-      }
-      if (typeof detail === "undefined") {
-        console.log("[찜꽁 레이더][debug]", scope, message);
-        return;
-      }
-      console.log("[찜꽁 레이더][debug]", scope, message, detail);
-    }
 
     registerRuntimeMessageListener();
 
@@ -266,17 +256,6 @@ interface SpaceContext {
       return normalizedName.startsWith("페") ? "pair" : "meeting";
     }
 
-    function minuteToHourMinute(totalMinute: number): string {
-      if (!Number.isFinite(totalMinute)) {
-        return "00:00";
-      }
-
-      const minute = ((Math.trunc(totalMinute) % (24 * 60)) + 24 * 60) % (24 * 60);
-      const hour = Math.floor(minute / 60);
-      const remainMinute = minute % 60;
-      return `${String(hour).padStart(2, "0")}:${String(remainMinute).padStart(2, "0")}`;
-    }
-
     async function fetchJson(url: string): Promise<unknown> {
       const response = await fetch(url, {
         headers: {
@@ -357,13 +336,6 @@ interface SpaceContext {
       }
 
       return `${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}`;
-    }
-
-    function getErrorMessage(error: unknown): string {
-      if (error instanceof Error && error.message) {
-        return error.message;
-      }
-      return "알 수 없는 오류가 발생했습니다.";
     }
   } catch (error) {
     reportBootstrapFailure(error);
