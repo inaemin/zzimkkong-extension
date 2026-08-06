@@ -648,6 +648,22 @@ test("지난 예약 칸은 더 진하고 예약 내용을 알려준다", async (
   const tooltip = page.locator('[data-slot="tooltip-content"]');
   await expect(tooltip).toContainText("아무개");
   await expect(tooltip).toHaveText(/^\d{2}:\d{2}~\d{2}:\d{2} /);
+
+  // 예약 목적은 줄을 바꿔 붙인다(누가 썼는지 다음에 무엇 때문인지).
+  await expect(tooltip).toHaveText(/\n학습$/);
+
+  // 여러 줄이어도 가운데 정렬이라야 읽기 편하다. items-center 만으로는
+  // 세로만 가운데가 되고 글자는 왼쪽에 붙는다.
+  const alignment = await page.evaluate(() => {
+    const popup =
+      window.__zzkQuery('[data-slot="tooltip-content"]') ??
+      document.querySelector('[data-slot="tooltip-content"]');
+    const style = getComputedStyle(popup);
+    return { textAlign: style.textAlign, whiteSpace: style.whiteSpace };
+  });
+  expect(alignment.textAlign).toBe("center");
+  // 줄바꿈이 살아야 목적이 다음 줄로 간다.
+  expect(alignment.whiteSpace).toBe("pre-line");
   await expect(tooltip).not.toContainText("지난 예약");
 
   // 예약이 없는 칸은 툴팁을 띄우지 않는다. "예약 없음"도 "선택 불가(현재 시간
