@@ -6,7 +6,6 @@ import {
   ComboboxChips,
   ComboboxChipsInput,
   ComboboxContent,
-  ComboboxEmpty,
   ComboboxItem,
   ComboboxList,
   ComboboxValue,
@@ -90,8 +89,12 @@ export function ChannelCombobox({
         </ComboboxValue>
       </ComboboxChips>
 
+      {/*
+        ComboboxEmpty 를 두지 않는다. 뭐라도 치면 항상 "추가" 항목이 생겨서
+        (canAddTyped) 목록이 빌 일이 없고, 아무것도 안 쳤을 때는 Base UI 가
+        빈 상태를 띄우지 않는다. 그래서 노드만 남아 빈 줄로 보였다.
+      */}
       <ComboboxContent anchor={anchor}>
-        <ComboboxEmpty>일치하는 채널이 없습니다.</ComboboxEmpty>
         <ComboboxList>
           {(channel: string) => (
             <ComboboxItem key={channel} value={channel}>

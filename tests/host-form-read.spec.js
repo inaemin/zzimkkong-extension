@@ -282,3 +282,32 @@ test.describe("getHostReservationRoot", () => {
     expect(narrowed).toBe(true);
   });
 });
+
+// 회의실 드롭다운은 점수로 고르는 추측이라, 회의실이 아닌 드롭다운(예약자
+// 선택 등)이 뽑힐 수 있다. 그 이름이 Slack 메시지의 "at ..." 자리에 들어가면
+// 회의실 대신 사람 이름이 나간다.
+test("회의실이 아닌 드롭다운은 회의실 이름으로 쓰지 않는다", async ({ page }) => {
+  const name = await readFrom(
+    page,
+    `<form>
+       <button type="button" aria-expanded="false" aria-label="예약자 선택">애니(민인애)</button>
+     </form>`,
+    () => window.__zzkTestApi.readHostRoomName(document.getElementById("host-form")),
+  );
+
+  // 아는 회의실 이름이 아니므로 비워야 한다.
+  expect(name).toBeFalsy();
+});
+
+test("회의실 드롭다운이 함께 있으면 그쪽을 고른다", async ({ page }) => {
+  const name = await readFrom(
+    page,
+    `<form>
+       <button type="button" aria-expanded="false" aria-label="예약자 선택">애니(민인애)</button>
+       <button type="button" aria-expanded="false" aria-label="회의실 선택">보이저</button>
+     </form>`,
+    () => window.__zzkTestApi.readHostRoomName(document.getElementById("host-form")),
+  );
+
+  expect(name).toBe("보이저");
+});

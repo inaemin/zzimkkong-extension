@@ -436,3 +436,41 @@ test("리마인드 시점 팝업의 항목이 모서리에 닿지 않는다", as
   expect(inset.bottom).toBeGreaterThan(0);
   expect(inset.left).toBeGreaterThan(0);
 });
+
+// 드롭다운에 내용 없는 줄이 끼면 안 된다. ComboboxEmpty 는 목록이 비지 않아도
+// 노드가 남아서, 여백을 무조건 주면 빈 줄 하나가 생겼다.
+test("채널 드롭다운에 빈 줄이 없다", async ({ page }) => {
+  await openSlackModalWithHistory(page);
+
+  const input = page.locator('[data-slot="combobox-chip-input"]');
+  await input.click();
+  await input.fill("8기-poudy");
+  await page.locator('[data-slot="combobox-item"]').first().waitFor({ state: "visible" });
+
+  const rows = await page.evaluate(() => {
+    const findDeep = (selector) => {
+      const walk = (node) => {
+        const hit = node.querySelector?.(selector);
+        if (hit) return hit;
+        for (const element of node.querySelectorAll?.("*") ?? []) {
+          if (element.shadowRoot) {
+            const found = walk(element.shadowRoot);
+            if (found) return found;
+          }
+        }
+        return null;
+      };
+      return walk(document);
+    };
+    const popup = findDeep('[data-slot="combobox-content"]');
+    // 화면을 차지하는데 글자가 없는 자식이 있으면 빈 줄이다.
+    return [...popup.children]
+      .flatMap((child) => [child, ...child.children])
+      .filter((node) => {
+        const rect = node.getBoundingClientRect();
+        return rect.height > 4 && (node.textContent || "").trim() === "";
+      }).length;
+  });
+
+  expect(rows).toBe(0);
+});

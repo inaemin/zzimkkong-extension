@@ -93,11 +93,21 @@ function ComboboxItem({ className, children, ...props }: ComboboxPrimitive.Item.
   );
 }
 
+/**
+ * 일치하는 항목이 없을 때의 문구.
+ *
+ * Base UI 는 목록이 비지 않으면 이 요소의 텍스트만 비우고 노드는 남긴다
+ * (role=status 로 변경을 읽어줘야 해서다). 그래서 여백을 무조건 주면 항목이
+ * 있을 때도 빈 줄이 하나 생긴다. 내용이 있을 때만 여백을 준다.
+ */
 function ComboboxEmpty({ className, ...props }: ComboboxPrimitive.Empty.Props) {
   return (
     <ComboboxPrimitive.Empty
       data-slot="combobox-empty"
-      className={cn("py-4 text-center text-sm text-muted-foreground", className)}
+      className={cn(
+        "text-center text-sm text-muted-foreground empty:hidden not-empty:py-4",
+        className,
+      )}
       {...props}
     />
   );
@@ -112,11 +122,13 @@ function ComboboxChips({
     <ComboboxPrimitive.Chips
       data-slot="combobox-chips"
       className={cn(
-        // 높이·모서리는 SelectTrigger 기본(h-8, rounded-lg)에 맞춘다. 나란히
-        // 놓이는 컨트롤이라 어긋나면 바로 눈에 띈다. 칩이 늘면 세로로 커져야
-        // 하므로 고정 h-8 이 아니라 min-h-8 을 쓴다.
-        "flex min-h-8 w-full flex-wrap items-center gap-1 rounded-lg bg-transparent px-2.5 py-1 text-sm shadow-xs ring-1 ring-foreground/15 transition-[color,box-shadow]",
-        "focus-within:ring-[3px] focus-within:ring-ring/50",
+        // SelectTrigger 와 같은 방식으로 그린다(border-input + 안쪽 1px).
+        // ring 으로 그리면 테두리가 박스 바깥에 얹혀 시각적 높이가 34px 이 되고
+        // 옆의 select(32px)와 어긋나 보인다.
+        //
+        // 칩이 늘면 세로로 커져야 하므로 고정 h-8 이 아니라 min-h-8 을 쓴다.
+        "flex min-h-8 w-full flex-wrap items-center gap-1 rounded-lg border border-input bg-transparent px-2.5 py-1 text-sm transition-colors",
+        "focus-within:border-ring focus-within:ring-3 focus-within:ring-ring/50",
         "has-disabled:pointer-events-none has-disabled:cursor-not-allowed has-disabled:opacity-50",
         className,
       )}

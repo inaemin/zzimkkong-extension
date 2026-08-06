@@ -51,6 +51,7 @@ import {
   normalizeHostReservationOwnerCandidate,
   normalizeHostRoomCandidate,
   extractKnownRoomName,
+  isKnownRoomName,
   buildHostFieldDescriptor,
   readHostFieldDisplayValue,
 } from "./features/form-fields/shared.js";
@@ -1866,8 +1867,16 @@ declare global {
       return false;
     }
 
+    // 날짜 형식이 아니면 여기서 끝낸다. clampDateToMin 은 값이 날짜가 아니면
+    // 최소일을 돌려주므로, 먼저 걸러내지 않으면 "내일" 같은 입력이 오늘로
+    // 둔갑해 조회가 나간다.
+    const requestedDate = normalizeDateString(nextDate);
+    if (!requestedDate) {
+      return false;
+    }
+
     const normalizedDate = clampDateToMin(
-      normalizeDateString(nextDate),
+      requestedDate,
       getMinimumSelectableDateForCurrentContext(nextDate),
     );
     if (!normalizedDate) {
@@ -3085,11 +3094,15 @@ declare global {
       }
     }
 
+    // 드롭다운 버튼은 점수로 고르는 추측이라 회의실이 아닌 것(예약자 선택 등)이
+    // 뽑힐 수 있다. 아는 회의실 이름일 때만 받아들인다 — extractKnownRoomName 은
+    // 못 찾으면 원문을 그대로 돌려주므로 그것만으로는 걸러지지 않는다.
     const dropdownButton = findHostRoomDropdownButton(root);
     if (dropdownButton instanceof HTMLButtonElement) {
       const buttonName = normalizeHostRoomCandidate(dropdownButton.textContent || "");
-      if (buttonName) {
-        return extractKnownRoomName(buttonName);
+      const knownRoom = buttonName ? extractKnownRoomName(buttonName) : "";
+      if (knownRoom && isKnownRoomName(knownRoom)) {
+        return knownRoom;
       }
     }
 

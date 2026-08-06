@@ -91,6 +91,15 @@ export function normalizeHostRoomCandidate(rawName: unknown): string {
   return isPlaceholder ? "" : normalizedName;
 }
 
+/** 표에 있는 회의실 이름인가. 추측으로 고른 후보를 걸러낼 때 쓴다. */
+export function isKnownRoomName(rawName: unknown): boolean {
+  const normalized = normalizeTextForMatch(rawName);
+  return (
+    normalized !== "" &&
+    TARGET_ROOM_NAMES.some((roomName) => normalizeTextForMatch(roomName) === normalized)
+  );
+}
+
 export function extractKnownRoomName(rawName: unknown): string {
   const normalized = normalizeTextForMatch(rawName);
   const matchedKnownRoom = TARGET_ROOM_NAMES.find((roomName) => {
