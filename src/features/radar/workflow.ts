@@ -16,7 +16,6 @@ type Deps = {
   state: RadarState;
   MAP_CALENDAR_OVERLAY_ID: string;
   MAP_CALENDAR_LAUNCHER_ID: string;
-  SLACK_MODAL_TRIGGER_ID: string;
   MAP_CALENDAR_ALWAYS_OPEN_STORAGE_KEY: string;
   RADAR_LAUNCHER_Z_INDEX: number;
   DEBUG_MODE: boolean;
@@ -61,7 +60,6 @@ export function createRadarWorkflow(deps: Deps) {
     unmountRadarOverlay,
     MAP_CALENDAR_OVERLAY_ID,
     MAP_CALENDAR_LAUNCHER_ID,
-    SLACK_MODAL_TRIGGER_ID,
     DEBUG_MODE,
     DEV_BUILD,
     MAP_CALENDAR_ALWAYS_OPEN_STORAGE_KEY,
@@ -106,53 +104,6 @@ export function createRadarWorkflow(deps: Deps) {
     }
   }
 
-  function createSlackTrigger(): HTMLButtonElement {
-    const trigger = document.createElement("button");
-    trigger.id = SLACK_MODAL_TRIGGER_ID;
-    trigger.type = "button";
-    trigger.textContent = "모달 테스트";
-    trigger.addEventListener("click", () => {
-      showSlackCopyModal(buildSlackReservationContext());
-    });
-    return trigger;
-  }
-
-  /** 호스트 탭 버튼의 생김새를 그대로 빌린다(우리 버튼이 튀지 않게). */
-  function copyTabButtonStyle(trigger: HTMLButtonElement, styleSource: HTMLButtonElement | null) {
-    if (!(styleSource instanceof HTMLButtonElement)) {
-      return;
-    }
-    trigger.className = styleSource.className;
-    trigger.style.font = styleSource.style.font;
-    trigger.style.fontFamily = styleSource.style.fontFamily;
-    trigger.style.fontSize = styleSource.style.fontSize;
-    trigger.style.fontWeight = styleSource.style.fontWeight;
-  }
-
-  function ensureSlackModalTrigger() {
-    const existing = document.getElementById(SLACK_MODAL_TRIGGER_ID);
-    const actionContainer = shouldShowSlackModalTrigger()
-      ? findGuestReservationTabContainer()
-      : null;
-
-    // 띄울 조건이 아니거나 붙일 자리가 없으면 있던 것을 걷는다.
-    if (!(actionContainer instanceof HTMLElement)) {
-      existing?.remove();
-      return;
-    }
-
-    const trigger = existing instanceof HTMLButtonElement ? existing : createSlackTrigger();
-
-    if (trigger.parentElement !== actionContainer) {
-      actionContainer.appendChild(trigger);
-    }
-
-    copyTabButtonStyle(trigger, findGuestReservationTabStyleSource());
-
-    trigger.style.cursor = "pointer";
-    trigger.style.pointerEvents = "auto";
-  }
-
   /** 런처를 눌렀을 때. 열면 오버레이를 띄우고 닫으면 걷는다. */
   function toggleMapCalendar(nextOpen: boolean) {
     state.mapCalendarVisible = nextOpen;
@@ -172,7 +123,14 @@ export function createRadarWorkflow(deps: Deps) {
 
     const isOpen = !state.mapCalendarSuppressedBySlack && isMapCalendarModalOpenRequested();
 
-    const launcher = renderRadarLauncher({ open: isOpen, onOpenChange: toggleMapCalendar });
+    const launcher = renderRadarLauncher({
+      open: isOpen,
+      onOpenChange: toggleMapCalendar,
+      // 개발 빌드에서만 런처 옆에 Slack 모달 테스트 버튼이 붙는다.
+      onOpenSlackModal: shouldShowSlackModalTrigger()
+        ? () => showSlackCopyModal(buildSlackReservationContext())
+        : null,
+    });
 
     scheduleAutoOpenMapCalendarLauncher(launcher);
   }
@@ -412,7 +370,6 @@ export function createRadarWorkflow(deps: Deps) {
   }
 
   return {
-    ensureSlackModalTrigger,
     findGuestReservationTabContainer,
     findGuestReservationTabStyleSource,
     ensureMapCalendarLoadingOverlay,

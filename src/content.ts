@@ -79,7 +79,6 @@ import {
   MAP_CALENDAR_OVERLAY_ID,
   MAP_CALENDAR_LAUNCHER_ID,
   SLACK_COPY_MODAL_MOUNT_ID,
-  SLACK_MODAL_TRIGGER_ID,
   DEBUG_MODE,
   DEV_BUILD,
   MAP_CALENDAR_OVERLAY_TAB_MEETING_ID,
@@ -309,7 +308,6 @@ declare global {
       ensureTopNavigationClickability();
       installTopNavigationClickBypass();
       ensurePanel();
-      ensureSlackModalTrigger();
       ensureMapCalendarLauncher();
       const openedPendingSlackModal = tryOpenPendingSlackCopyModal();
       if (isMapCalendarModalOpenRequested() && !openedPendingSlackModal) {
@@ -396,7 +394,6 @@ declare global {
     ensureTopNavigationClickability();
     installTopNavigationClickBypass();
     ensurePanel();
-    ensureSlackModalTrigger();
     ensureMapCalendarLauncher();
     const openedPendingSlackModal = tryOpenPendingSlackCopyModal();
     const sharingMapId = getSharingMapId();
@@ -1368,7 +1365,6 @@ declare global {
   }
 
   const {
-    ensureSlackModalTrigger,
     syncMapCalendarBodyLoadingState,
     ensureMapCalendarLauncher,
     removeMapCalendarLauncher,
@@ -1386,7 +1382,6 @@ declare global {
 
     MAP_CALENDAR_OVERLAY_ID,
     MAP_CALENDAR_LAUNCHER_ID,
-    SLACK_MODAL_TRIGGER_ID,
     DEBUG_MODE,
     DEV_BUILD,
     MAP_CALENDAR_ALWAYS_OPEN_STORAGE_KEY,
@@ -3812,7 +3807,6 @@ declare global {
           return false;
         }
         ensurePanel();
-        ensureSlackModalTrigger();
         ensureMapCalendarLauncher();
         const openedPendingSlackModal = tryOpenPendingSlackCopyModal();
         if (isMapCalendarModalOpenRequested() && !openedPendingSlackModal) {

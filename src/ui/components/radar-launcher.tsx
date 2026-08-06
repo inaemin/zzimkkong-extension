@@ -19,11 +19,43 @@ export interface RadarLauncherProps {
   /** 레이더가 열려 있는지. 눌린 상태로 표시된다. */
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  /**
+   * Slack 모달을 띄우는 개발용 버튼. 개발 빌드에서만 넘어온다.
+   *
+   * 예전에는 호스트의 예약 탭 바에 끼워 넣었는데, 그 바가 없는 화면에서는
+   * 버튼이 아예 안 보였다. 런처 옆이면 레이더가 뜨는 곳이면 항상 보인다.
+   */
+  onOpenSlackModal?: (() => void) | null;
 }
 
-export function RadarLauncher({ open, onOpenChange }: RadarLauncherProps) {
+export function RadarLauncher({ open, onOpenChange, onOpenSlackModal }: RadarLauncherProps) {
   const label = open ? "레이더 닫기" : "레이더 열기";
 
+  return (
+    <div className="flex items-center gap-2">
+      {onOpenSlackModal ? (
+        <button
+          type="button"
+          onClick={onOpenSlackModal}
+          aria-label="Slack 모달 테스트 (개발 전용)"
+          title="Slack 모달 테스트 (개발 전용)"
+          className={[
+            "h-10 rounded-full border px-3 text-xs font-medium whitespace-nowrap",
+            // 개발 전용이라 브랜드 색을 쓰지 않는다. 실서비스 버튼과 헷갈리면 안 된다.
+            "border-dashed border-slate-400 bg-white/95 text-slate-600",
+            "shadow-[0_0_0_1px_rgba(100,116,139,0.16)]",
+            "hover:bg-slate-100 hover:text-slate-900",
+          ].join(" ")}
+        >
+          Slack 모달
+        </button>
+      ) : null}
+      {renderRadarToggle(label, open, onOpenChange)}
+    </div>
+  );
+}
+
+function renderRadarToggle(label: string, open: boolean, onOpenChange: (open: boolean) => void) {
   return (
     <Toggle
       pressed={open}

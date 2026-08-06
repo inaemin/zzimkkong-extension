@@ -131,3 +131,59 @@ test("같은 예약 응답이 두 번 와도 모달은 한 번만(중복 방지)
   const reopened = await slackModalExists(page);
   expect(reopened).toBe(false);
 });
+
+// Slack 모달 테스트 버튼은 개발 전용이다. 예전에는 호스트의 예약 탭 바에
+// 끼워 넣어서, 그 바가 없는 화면에서는 아예 안 보였다. 지금은 레이더 런처
+// 옆에 붙어 레이더가 뜨는 곳이면 항상 보인다.
+test("개발 플래그를 켜면 런처 옆에 Slack 모달 버튼이 뜨고 눌리면 모달이 열린다", async ({
+  page,
+}) => {
+  await page.addInitScript(() => {
+    globalThis.__ZZK_DEBUG_MODE__ = true;
+    try {
+      localStorage.setItem("zzk-manual-slack-modal-trigger-v1", "1");
+    } catch {
+      /* 저장소를 못 쓰면 그냥 넘어간다 */
+    }
+  });
+  await mountLmsPage(page);
+  await page.evaluate(() => window.__zzkTestApi?.syncGuestUi?.());
+
+  const readLauncherButtons = () =>
+    page.evaluate(() =>
+      [
+        ...(document
+          .getElementById("zzk-map-calendar-radar-launcher")
+          ?.shadowRoot?.querySelectorAll("button") ?? []),
+      ].map((button) => button.getAttribute("aria-label")),
+    );
+
+  await expect.poll(readLauncherButtons).toContain("Slack 모달 테스트 (개발 전용)");
+
+  await page.evaluate(() => {
+    const shadow = document.getElementById("zzk-map-calendar-radar-launcher")?.shadowRoot;
+    const button = [...(shadow?.querySelectorAll("button") ?? [])].find(
+      (candidate) => candidate.getAttribute("aria-label") === "Slack 모달 테스트 (개발 전용)",
+    );
+    button?.click();
+  });
+
+  // 모달이 실제로 떠야 한다. 안 뜨면 버튼만 있고 기능이 없는 셈이다.
+  await expect(page.locator('[data-slot="dialog-content"]')).toBeVisible({ timeout: 4000 });
+});
+
+test("개발 플래그가 없으면 Slack 모달 버튼이 뜨지 않는다", async ({ page }) => {
+  await mountLmsPage(page);
+  await page.evaluate(() => window.__zzkTestApi?.syncGuestUi?.());
+  await page.waitForTimeout(300);
+
+  const labels = await page.evaluate(() =>
+    [
+      ...(document
+        .getElementById("zzk-map-calendar-radar-launcher")
+        ?.shadowRoot?.querySelectorAll("button") ?? []),
+    ].map((button) => button.getAttribute("aria-label")),
+  );
+
+  expect(labels).not.toContain("Slack 모달 테스트 (개발 전용)");
+});
