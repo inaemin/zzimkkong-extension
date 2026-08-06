@@ -8,7 +8,6 @@ import {
   normalizeTextForMatch,
   getErrorMessage,
   pushDebugEvent,
-  debugLog,
   getDebugEvents,
   clearDebugEvents,
 } from "./utils/shared.js";
@@ -3560,16 +3559,9 @@ declare global {
         type: message?.type,
         error: getErrorMessage(runtimeError),
       });
-      if (isRuntimeMessageTimeoutError(runtimeError)) {
-        throw runtimeError;
-      }
-      if (!shouldUseDirectApiFallback(message)) {
-        throw runtimeError;
-      }
-      debugLog("transport", "falling back to direct API", {
-        type: message?.type,
-      });
-      return sendMessageDirectFallback(message);
+      // 여기 오는 건 sendMessage 가 이미 "직접 처리 대상 아님"으로 가른
+      // 메시지뿐이다. 그래서 되돌릴 fallback 이 없고 그대로 올린다.
+      throw runtimeError;
     });
   }
 
@@ -3584,31 +3576,17 @@ declare global {
         return;
       }
 
+      // 타이머는 하나면 된다. 예전에는 소프트 타임아웃이 지나면 fallback 을
+      // 기다리고 5배 뒤에 진짜 포기하는 2단 구조였는데, fallback 대상 메시지는
+      // 애초에 여기까지 오지 않으므로 둘의 동작이 같아졌다.
       let settled = false;
-      const hardTimeoutMs = RUNTIME_MESSAGE_TIMEOUT_MS * 5;
       const timer = window.setTimeout(() => {
         if (settled) {
           return;
         }
-        if (shouldUseDirectApiFallback(message)) {
-          pushDebugEvent("transport", "runtime-timeout-waiting", {
-            type: message?.type,
-            timeoutMs: RUNTIME_MESSAGE_TIMEOUT_MS,
-          });
-          return;
-        }
         settled = true;
-        window.clearTimeout(hardTimer);
         reject(createRuntimeMessageTimeoutError());
       }, RUNTIME_MESSAGE_TIMEOUT_MS);
-      const hardTimer = window.setTimeout(() => {
-        if (settled) {
-          return;
-        }
-        settled = true;
-        window.clearTimeout(timer);
-        reject(createRuntimeMessageTimeoutError());
-      }, hardTimeoutMs);
 
       try {
         chrome.runtime.sendMessage(message, (response) => {
@@ -3618,7 +3596,6 @@ declare global {
 
           settled = true;
           window.clearTimeout(timer);
-          window.clearTimeout(hardTimer);
           const runtimeError = chrome.runtime.lastError;
           if (runtimeError) {
             reject(new Error(runtimeError.message || "runtime 통신 오류"));
@@ -3637,7 +3614,6 @@ declare global {
         }
         settled = true;
         window.clearTimeout(timer);
-        window.clearTimeout(hardTimer);
         // catch 는 unknown 을 준다. Promise 거부는 Error 로 통일한다.
         reject(error instanceof Error ? error : new Error(getErrorMessage(error)));
       }
