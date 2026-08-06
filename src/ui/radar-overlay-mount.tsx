@@ -1,6 +1,7 @@
 import { createRoot, type Root } from "react-dom/client";
 
 import { MAP_CALENDAR_OVERLAY_ID } from "../constants/runtime.js";
+
 // shadow root 안에서는 preflight 를 포함한 Tailwind 전체를 넣어도 안전하다.
 // 페이지로 새지 않으므로 lms+ 를 건드리지 않는다(페이지 주입 시절에는 preflight 를
 // 빼야 했고, 그래서 버튼 배경·그림자 기본값을 손으로 채워야 했다).
@@ -22,6 +23,8 @@ import { ShadowRootProvider } from "./shadow-root-context.js";
 interface OverlayMount {
   host: HTMLElement;
   container: HTMLElement;
+  /** 팝오버·달력이 뜰 층(카드 바깥). */
+  portalLayer: HTMLElement;
   root: Root;
   stopThemeBridge: () => void;
 }
@@ -50,9 +53,24 @@ function createMount(): OverlayMount {
   container.style.display = "contents";
   shadowRoot.appendChild(container);
 
+  // 팝오버·달력이 뜰 자리.
+  //
+  // 카드 안에 렌더하면 카드가 position: relative + overflow: hidden 이라
+  // 팝오버의 절대 위치가 카드를 기준으로 잡히고, 그만큼 scrollHeight 가 늘어
+  // 레이아웃이 밀린다(155 → 218px). 카드 바깥의 이 층에 띄우면 카드 크기에
+  // 영향을 주지 않는다.
+  const portalLayer = document.createElement("div");
+  portalLayer.dataset.zzkPortalLayer = "";
+  portalLayer.style.position = "fixed";
+  portalLayer.style.inset = "0";
+  portalLayer.style.pointerEvents = "none";
+  portalLayer.style.zIndex = "1";
+  shadowRoot.appendChild(portalLayer);
+
   return {
     host,
     container,
+    portalLayer,
     root: createRoot(container),
     stopThemeBridge: bridgeHostTheme(host),
   };
@@ -84,19 +102,14 @@ export function renderRadarOverlay(node: React.ReactNode): HTMLElement {
   return current.host;
 }
 
-export function unmountRadarOverlay(): void {
-  if (!mount) {
-    return;
-  }
-  mount.stopThemeBridge();
-  mount.root.unmount();
-  mount.host.remove();
-  mount = null;
-}
-
-/** 명령형 코드가 아직 오버레이 엘리먼트를 직접 찾는다. */
-export function getRadarOverlayHost(): HTMLElement | null {
-  return mount && mount.host.isConnected ? mount.host : null;
+/**
+ * 팝오버·달력을 띄울 층. 카드 바깥이라 카드 크기에 영향을 주지 않는다.
+ *
+ * 헤더는 자체 React 루트라 오버레이의 컨텍스트가 이어지지 않는다. 그래서
+ * 헤더 안의 포털은 기본값으로 두면 헤더(=카드 안)에 렌더돼 레이아웃을 민다.
+ */
+export function getRadarPortalLayer(): HTMLElement | null {
+  return mount && mount.host.isConnected ? mount.portalLayer : null;
 }
 
 /**

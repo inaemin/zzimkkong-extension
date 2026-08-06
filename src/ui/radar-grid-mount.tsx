@@ -14,9 +14,7 @@ let mountedInto: HTMLElement | null = null;
 
 export function renderRadarGrid(container: HTMLElement, props: RadarGridProps): void {
   if (!root || mountedInto !== container || !container.isConnected) {
-    if (root) {
-      root.unmount();
-    }
+    root?.unmount();
     root = createRoot(container);
     mountedInto = container;
   }
@@ -31,10 +29,4 @@ export function renderRadarGrid(container: HTMLElement, props: RadarGridProps): 
       </TooltipProvider>
     </ShadowRootProvider>,
   );
-}
-
-export function unmountRadarGrid(): void {
-  root?.unmount();
-  root = null;
-  mountedInto = null;
 }

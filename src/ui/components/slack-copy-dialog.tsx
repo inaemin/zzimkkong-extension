@@ -51,6 +51,19 @@ export interface SlackCopyDialogProps {
   onCopy: (message: string) => Promise<boolean>;
 }
 
+/** 복사 상태와 채널에 따른 안내 문구. */
+function buildStatusMessage(status: CopyStatusState, channel: string): string {
+  if (status === "success") {
+    return "복사 완료! Slack 채널에 붙여넣어 주세요.";
+  }
+  if (status === "error") {
+    return "복사에 실패했습니다. 직접 선택해서 복사해 주세요.";
+  }
+  return channel
+    ? `${channel} 채널로 리마인드를 생성합니다.`
+    : "채널을 입력하면 해당 채널용 /remind 명령이 생성됩니다.";
+}
+
 export function SlackCopyDialog({
   open,
   onOpenChange,
@@ -69,14 +82,7 @@ export function SlackCopyDialog({
   const [copying, setCopying] = React.useState(false);
   const [status, setStatus] = React.useState<CopyStatusState>("idle");
 
-  const statusMessage =
-    status === "success"
-      ? "복사 완료! Slack 채널에 붙여넣어 주세요."
-      : status === "error"
-        ? "복사에 실패했습니다. 직접 선택해서 복사해 주세요."
-        : channel
-          ? `${channel} 채널로 리마인드를 생성합니다.`
-          : "채널을 입력하면 해당 채널용 /remind 명령이 생성됩니다.";
+  const statusMessage = buildStatusMessage(status, channel);
 
   const handleCopy = () => {
     setCopying(true);

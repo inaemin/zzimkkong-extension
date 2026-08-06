@@ -1,6 +1,6 @@
 // CRXJS 는 서비스워커를 "type": "module" 로 등록한다.
 // ES 모듈이라 importScripts() 는 쓸 수 없다.
-import { DEBUG_MODE } from "./constants/debug.js";
+import { debugLog, getErrorMessage } from "./utils/shared.js";
 import {
   KST_DATE_PARTS_FORMATTER,
   LMS_API_BASE_URL,
@@ -8,6 +8,7 @@ import {
   normalizeFetchRoomType as normalizeRoomType,
   normalizeTargetRoomName,
 } from "./constants/runtime.js";
+import { minuteToHourMinute } from "./utils/date-time.js";
 import { createLmsDataNormalizers } from "./services/lms-data/normalizers.js";
 import type { SpaceTab } from "./constants/runtime.js";
 import type {
@@ -17,6 +18,15 @@ import type {
   Room,
 } from "./services/lms-data/types.js";
 
+/** 부트스트랩 실패는 콘솔에만 남긴다(서비스워커라 UI 가 없다). */
+function reportBootstrapFailure(error: unknown): void {
+  if (typeof console === "undefined" || typeof console.error !== "function") {
+    return;
+  }
+  const detail = error instanceof Error ? error.stack || error.message : JSON.stringify(error);
+  console.error("[찜꽁 레이더] background bootstrap failed:", detail);
+}
+
 /** content script 가 sendMessage 로 보내는 조회 요청. */
 interface FetchPayload {
   date?: unknown;
@@ -24,6 +34,14 @@ interface FetchPayload {
   endTime?: unknown;
   roomType?: unknown;
   allowPastDate?: boolean;
+}
+
+/**
+ * 런타임 메시지의 payload 는 무엇이든 올 수 있다. 필드는 전부 unknown 이고
+ * 실제 검증은 sanitize* 가 하므로, 여기서는 객체인지만 확인해 넘긴다.
+ */
+function asFetchPayload(value: unknown): FetchPayload {
+  return value && typeof value === "object" ? value : {};
 }
 
 interface SpaceContext {
@@ -44,17 +62,6 @@ interface SpaceContext {
       minuteToHourMinute,
     });
 
-    function debugLog(scope: string, message: string, detail?: unknown): void {
-      if (!DEBUG_MODE || typeof console === "undefined" || typeof console.log !== "function") {
-        return;
-      }
-      if (typeof detail === "undefined") {
-        console.log("[찜꽁 레이더][debug]", scope, message);
-        return;
-      }
-      console.log("[찜꽁 레이더][debug]", scope, message, detail);
-    }
-
     registerRuntimeMessageListener();
 
     function registerRuntimeMessageListener(): void {
@@ -73,11 +80,11 @@ interface SpaceContext {
         debugLog("background", "received runtime message", { type: messageType });
 
         if (messageType === MESSAGE_TYPE_FETCH_AVAILABILITY) {
-          return respondWith(sendResponse, loadAvailability(payload));
+          return respondWith(sendResponse, loadAvailability(asFetchPayload(payload)));
         }
 
         if (messageType === MESSAGE_TYPE_FETCH_DAILY_SCHEDULE) {
-          return respondWith(sendResponse, loadDailySchedule(payload));
+          return respondWith(sendResponse, loadDailySchedule(asFetchPayload(payload)));
         }
 
         return false;
@@ -106,7 +113,7 @@ interface SpaceContext {
         return undefined;
       }
 
-      return source[key];
+      return (source as Record<string, unknown>)[key];
     }
 
     function loadAvailability(payload: FetchPayload): Promise<AvailabilityResult> {
@@ -161,6 +168,10 @@ interface SpaceContext {
       const roomType = normalizeRoomType(getProperty(payload, "roomType"));
       const startMinute = lmsDataNormalizers.parseTimeToMinute(startTime);
       const endMinute = lmsDataNormalizers.parseTimeToMinute(endTime);
+      // sanitizeTimeForApi 를 통과했으면 HH:MM 이다. 그래도 어긋나면 멈춘다.
+      if (startMinute === null || endMinute === null) {
+        throw new Error("시간 형식이 올바르지 않습니다.");
+      }
       const spaceContext = await loadLmsSpaceContext(roomType);
 
       const rooms = await Promise.all(
@@ -245,17 +256,6 @@ interface SpaceContext {
       return normalizedName.startsWith("페") ? "pair" : "meeting";
     }
 
-    function minuteToHourMinute(totalMinute: number): string {
-      if (!Number.isFinite(totalMinute)) {
-        return "00:00";
-      }
-
-      const minute = ((Math.trunc(totalMinute) % (24 * 60)) + 24 * 60) % (24 * 60);
-      const hour = Math.floor(minute / 60);
-      const remainMinute = minute % 60;
-      return `${String(hour).padStart(2, "0")}:${String(remainMinute).padStart(2, "0")}`;
-    }
-
     async function fetchJson(url: string): Promise<unknown> {
       const response = await fetch(url, {
         headers: {
@@ -288,7 +288,7 @@ interface SpaceContext {
       }
       try {
         return JSON.parse(text);
-      } catch (error) {
+      } catch {
         return {};
       }
     }
@@ -337,17 +337,7 @@ interface SpaceContext {
 
       return `${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}`;
     }
-
-    function getErrorMessage(error: unknown): string {
-      if (error instanceof Error && error.message) {
-        return error.message;
-      }
-      return "알 수 없는 오류가 발생했습니다.";
-    }
   } catch (error) {
-    if (typeof console !== "undefined" && typeof console.error === "function") {
-      const detail = error instanceof Error && error.stack ? error.stack : String(error);
-      console.error("[찜꽁 레이더] background bootstrap failed:", detail);
-    }
+    reportBootstrapFailure(error);
   }
 })();

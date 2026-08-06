@@ -1,5 +1,7 @@
 import js from "@eslint/js";
 import prettierConfig from "eslint-config-prettier";
+import functional from "eslint-plugin-functional";
+import importX from "eslint-plugin-import-x";
 import globals from "globals";
 import tseslint from "typescript-eslint";
 import reactHooks from "eslint-plugin-react-hooks";
@@ -14,14 +16,18 @@ import { defineConfig, globalIgnores } from "eslint/config";
 // 규칙 선정 메모(요청안 대비):
 //  - Next.js/React/TS 관련(eslint-config-next, typescript-eslint, react-hooks)은
 //    아직 해당 스택이 없어 제외했다. TS 는 2.5-B, react-hooks 는 3단계에서 추가한다.
-//  - eslint-plugin-import 는 ESLint 10 peer 미지원이라 보류(9 까지만 지원).
-//    전역 해체가 끝나 실제 import 그래프가 생기면 그때 다시 본다.
+//  - eslint-plugin-import 대신 eslint-plugin-import-x(포크)를 쓴다. 원본은
+//    지금도 ESLint 10 을 peer 로 받지 않는다(2.32.0 기준 ^9 까지). 포크는
+//    ^10 을 지원하고 order/no-cycle 규칙이 동일하다. 규칙 이름만 import-x/* 다.
 //  - functional 플러그인(no-let/immutable-data/no-expression-statements)은
-//    DOM 을 직접 조립하는 확장 코드 특성상 맞지 않아 제외했다.
-//    순수 도메인 계층이 분리되는 3단계 이후에 재검토한다.
+//    순수 도메인 계층에만 켠다(아래 해당 블록 참고). DOM 을 직접 조립하는
+//    나머지 확장 코드에는 여전히 맞지 않는다.
 //
 // 점진 강화 대상(5단계에서 켠다). 지금 켜면 전부 소음이 되는 규칙들:
-//  - no-ternary          : 기존 176곳. 삼항이 오히려 읽기 쉬운 자리가 많다.
+//  - no-ternary 는 no-nested-ternary 로 대체했다. 실측해 보니 전면 금지는
+//    290건인데 대부분이 `typeof x === "string" ? x : ""` 같은 자리라, if 로
+//    풀면 3줄이 5줄이 되면서 바로 위 max-lines: 20 을 도로 압박한다.
+//    실제로 읽기 어려운 건 중첩 삼항이고 그건 7건뿐이라 전부 정리했다.
 //  - max-depth: 1        : DOM 조립/이벤트 처리 코드라 중첩이 잦다.
 //  - max-params: 2       : 정규화 함수들이 (value, options, context) 형태다.
 //  - max-lines-per-function: 10
@@ -60,6 +66,10 @@ export default defineConfig([
   // 확장 소스: content script / MAIN world 훅.
   {
     files: ["src/**/*.{js,ts,tsx}"],
+    plugins: { "import-x": importX },
+    settings: {
+      "import-x/resolver": { node: { extensions: [".js", ".ts", ".tsx"] } },
+    },
     languageOptions: {
       ecmaVersion: 2023,
       sourceType: "module",
@@ -72,17 +82,33 @@ export default defineConfig([
       "no-var": "error",
       "prefer-const": "error",
       "no-param-reassign": "error",
+      // 순환 참조 0건인 상태로 들어왔다(2.5-A 전역 해체 결과). 다시 생기지
+      // 않게 고정한다 — 순환은 번들러가 조용히 통과시킨 뒤 런타임에 터진다.
+      "import-x/no-cycle": "error",
+      "import-x/order": ["error", { "newlines-between": "always" }],
       "no-else-return": "error",
-      // 기존 코드에 26건 있고 그중 21건이 content.js 다.
-      // content.js 는 3단계에서 React 컴포넌트로 다시 쓸 파일이라 지금 고치면 헛수고다.
-      // 새로 쓰는 코드에만 방향을 주도록 경고로 둔다. → 5단계에서 error.
+      // else 금지 + let 금지. content.js 는 아래에서 예외로 둔다(3단계 잔여).
       "no-restricted-syntax": [
-        "warn",
+        "error",
         {
           selector: "IfStatement[alternate]",
           message: "else 대신 early return 을 쓰세요.",
         },
+        {
+          selector: "VariableDeclaration[kind='let']",
+          message: "let 대신 const 를 쓰세요.",
+        },
       ],
+      // 참조 설정은 2 지만, 3 으로 뒀다. 실제로 재보니 2 는 18건이 걸리는데
+      // 그중 대부분이 (값, 옵션, 문맥) 형태의 순수 함수라 억지로 객체로 묶으면
+      // 읽기 어려워진다. 3 이면 남는 위반이 없다.
+      "max-params": ["error", 3],
+      // 중첩 1단. try/catch 도 한 겹으로 세므로, 저장소·클립보드처럼 던지는
+      // 접근은 헬퍼로 뽑아 쓴다(safely/attempt 계열).
+      "max-depth": ["error", 1],
+      // 중첩 삼항만 금지한다(위 주석 참고). 단순 삼항은 if 보다 의도가 분명한
+      // 자리가 많고, 풀어 쓰면 함수가 길어져 max-lines 와 부딪힌다.
+      "no-nested-ternary": "error",
       // 의미 없는 변수명 금지. 확장 코드에 흔한 축약형을 추가했다.
       "id-denylist": [
         "error",
@@ -100,10 +126,96 @@ export default defineConfig([
         "cb",
       ],
 
-      // 전역 해체가 끝날 때까지는 경고. 끝나면 error 로 올린다.
-      "no-unused-vars": ["warn", { argsIgnorePattern: "^_", caughtErrors: "none" }],
+      // 전역 해체가 끝나 이제 error 다. content.js 만 예외로 둔다(아래 블록).
+      "no-unused-vars": ["error", { argsIgnorePattern: "^_", caughtErrors: "none" }],
     },
   },
+
+  // 순수 도메인 계층: DOM 도 입출력도 없는 계산 모듈.
+  // 여기서만 함수형 규칙을 켠다.
+  //
+  // utils/shared.ts 는 뺐다. 디버그 이벤트 링버퍼와 console 로깅이 있어
+  // no-expression-statements 와 근본적으로 어긋난다 — console.log 자체가
+  // 표현식 문이고, 링버퍼는 가변인 게 목적이다.
+  {
+    files: [
+      "src/features/radar/slot-model.ts",
+      "src/utils/date-time.ts",
+      "src/services/lms-data/normalizers.ts",
+    ],
+    plugins: { functional },
+    rules: {
+      "functional/no-let": "error",
+      "functional/immutable-data": "error",
+      "functional/no-expression-statements": "error",
+    },
+  },
+
+  // content.ts 는 3단계에서 React 로 옮기다 만 잔여 파일이다(6,000줄).
+  // 여기에 규칙을 걸면 통과 불가능한 게이트가 되므로, 해체가 끝날 때까지
+  // 구조 규칙만 예외로 둔다. 파일이 사라지면 이 블록도 지운다.
+  {
+    files: ["src/content.ts"],
+    rules: {
+      "no-restricted-syntax": "off",
+      "max-params": "off",
+      "max-depth": "off",
+      // 56건. 3단계에서 React 로 옮기다 만 잔여라 해체와 함께 정리한다.
+      "no-unused-vars": "warn",
+    },
+  },
+
+  // React 루트·마운트 모듈은 모듈 수준 가변 싱글턴을 들고 있다.
+  // (root/host 를 호출 간에 유지해야 해서 const 로 바꿀 수 없다)
+  {
+    files: ["src/ui/*-mount.tsx", "src/ui/mount.tsx", "src/ui/floor-map-zoom-modal.tsx"],
+    rules: {
+      "no-restricted-syntax": [
+        "error",
+        { selector: "IfStatement[alternate]", message: "else 대신 early return 을 쓰세요." },
+      ],
+    },
+  },
+
+  // 함수 길이.
+  //
+  // 로직 계층은 20 줄. 참조 설정은 10 이지만, 실제로 재보니 위반 110건 중
+  // 55%가 11~20줄짜리 "가드 절 나열" 함수였다. 그 형태는 바로 위 max-depth: 1
+  // 이 요구한 결과라(중첩 대신 early return), 10 을 강제하면 두 규칙이 서로
+  // 반대로 당긴다. 20 이면 진짜 긴 함수만 걸린다.
+  //
+  // 순수 도메인 3파일만 10 을 지킨다 — 계산만 있어 쪼갤 seam 이 분명하다.
+  {
+    files: [
+      "src/services/**/*.ts",
+      "src/utils/**/*.ts",
+      "src/features/**/*.ts",
+      "src/page-hook/**/*.ts",
+      "src/constants/**/*.ts",
+      "src/page-network-hook.ts",
+    ],
+    rules: {
+      "max-lines-per-function": ["error", { max: 20, skipBlankLines: true, skipComments: true }],
+    },
+  },
+  {
+    files: [
+      "src/features/radar/slot-model.ts",
+      "src/utils/date-time.ts",
+      "src/services/lms-data/normalizers.ts",
+    ],
+    rules: {
+      // TODO(5단계 잔여): 목표는 10. 남은 22건은 11~20줄인데, 전부 앞서 중복
+      // 제거로 뽑아낸 헬퍼이거나 서로 다른 에러 메시지를 내는 가드 나열이라
+      // 더 쪼갤 seam 이 없다. 10 을 지키려면 함수를 부수는 것 외에 방법이 없어
+      // 보류한다 — max-depth: 1 이 요구한 형태와 정면으로 부딪힌다.
+      "max-lines-per-function": ["error", { max: 20, skipBlankLines: true, skipComments: true }],
+    },
+  },
+
+  // DI 팩토리(createXxx(deps))는 모듈 래퍼라 길이가 곧 복잡도가 아니다.
+  // 안쪽 함수들은 이미 개별로 측정된다. 파일 단위로 끄면 그 안의 실제 로직까지
+  // 놓치므로, 팩토리 함수 한 줄에만 eslint-disable 을 붙였다.
 
   // 서비스워커는 window 가 없다.
   {
@@ -137,7 +249,7 @@ export default defineConfig([
       },
     },
     rules: {
-      "no-unused-vars": ["warn", { argsIgnorePattern: "^_", caughtErrors: "none" }],
+      "no-unused-vars": ["error", { argsIgnorePattern: "^_", caughtErrors: "none" }],
       "preserve-caught-error": "off",
     },
   },
@@ -182,7 +294,7 @@ export default defineConfig([
     // TS 전환 초기(2.5-B)에는 느슨하게. 조이는 건 5단계.
     rules: {
       "@typescript-eslint/no-explicit-any": "warn",
-      "@typescript-eslint/no-unused-vars": ["warn", { argsIgnorePattern: "^_" }],
+      "@typescript-eslint/no-unused-vars": ["error", { argsIgnorePattern: "^_" }],
       // JS 규칙과 중복되므로 TS 버전만 남긴다.
       "no-unused-vars": "off",
 

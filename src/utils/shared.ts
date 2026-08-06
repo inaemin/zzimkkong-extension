@@ -44,6 +44,20 @@ export interface DebugEvent {
 
 const debugEvents: DebugEvent[] = [];
 
+/** 순환을 표시하며 객체를 복제한다. */
+function cloneDebugObject(value: object, seen: WeakSet<object>): unknown {
+  if (seen.has(value)) {
+    return "[circular]";
+  }
+  seen.add(value);
+  const source = value as Record<string, unknown>;
+  const output = Object.fromEntries(
+    Object.keys(source).map((key) => [key, cloneDebugValue(source[key], seen)]),
+  );
+  seen.delete(value);
+  return output;
+}
+
 function cloneDebugValue(value: unknown, seen: WeakSet<object> = new WeakSet()): unknown {
   if (value == null) {
     return value;
@@ -58,17 +72,7 @@ function cloneDebugValue(value: unknown, seen: WeakSet<object> = new WeakSet()):
     return value.map((entry) => cloneDebugValue(entry, seen));
   }
   if (typeof value === "object") {
-    if (seen.has(value)) {
-      return "[circular]";
-    }
-    seen.add(value);
-    const source = value as Record<string, unknown>;
-    const output: Record<string, unknown> = {};
-    Object.keys(source).forEach((key) => {
-      output[key] = cloneDebugValue(source[key], seen);
-    });
-    seen.delete(value);
-    return output;
+    return cloneDebugObject(value, seen);
   }
   return toDisplayString(value);
 }
@@ -116,4 +120,32 @@ export function getDebugEvents(): unknown[] {
 
 export function clearDebugEvents(): void {
   debugEvents.length = 0;
+}
+
+/**
+ * 예약된 타이머를 취소한다. state 의 타이머 필드는 "없음"을 null 로 두는데
+ * clearTimeout 은 null 을 받지 않아서, 호출부마다 분기하는 대신 여기서 흡수한다.
+ */
+export function cancelTimer(timerId: number | null | undefined): void {
+  if (timerId === null || typeof timerId === "undefined") {
+    return;
+  }
+  clearTimeout(timerId);
+}
+
+/**
+ * 상대 경로도 받아 URL 로 만든다. 파싱할 수 없으면 null.
+ *
+ * 호스트가 내려주는 값이라 형식을 믿을 수 없어서, 던지는 대신 null 을 준다.
+ */
+export function parseUrlSafely(urlValue: unknown): URL | null {
+  if (typeof urlValue !== "string" || urlValue.trim() === "") {
+    return null;
+  }
+
+  try {
+    return new URL(urlValue, location.origin);
+  } catch {
+    return null;
+  }
 }

@@ -12,8 +12,9 @@
     // 아직 타입이 없는 .js 는 검사하지 않는다(checkJs 미설정).
     "allowJs": true,
 
-    // 초기에는 느슨하게. 전부 .ts 로 옮긴 뒤 5단계에서 조인다.
-    "strict": false,
+    // 하위 플래그를 하나씩 켜서 전부 0건이 됐으므로 strict 로 묶는다.
+    // (strictNullChecks 가 마지막이었다. 이제 새 플래그가 추가돼도 자동으로 켜진다.)
+    "strict": true,
 
     "esModuleInterop": true,
     "resolveJsonModule": true,

@@ -33,7 +33,7 @@ export function RadarError({ message, onRetry, onClose, headerRef }: RadarErrorP
         onTouchStart={stop}
         onTouchEnd={stop}
       >
-        <div className="zzk-map-calendar-header" ref={headerRef}>
+        <div className="zzk-map-calendar-header" data-testid="radar-header" ref={headerRef}>
           <div className="zzk-map-calendar-title-controls">
             <strong>예약 현황</strong>
           </div>
@@ -53,12 +53,15 @@ export function RadarError({ message, onRetry, onClose, headerRef }: RadarErrorP
 
         <div className="zzk-map-calendar-body zzk-map-calendar-error-body">
           <div className="zzk-map-calendar-error">
-            <p className="zzk-map-calendar-error-message">{message}</p>
+            <p className="zzk-map-calendar-error-message" data-testid="radar-error-message">
+              {message}
+            </p>
             <Button
               type="button"
               variant="secondary"
               size="sm"
               className="zzk-map-calendar-error-retry"
+              data-testid="radar-error-retry"
               onClick={onRetry}
             >
               다시 시도

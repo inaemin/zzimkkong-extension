@@ -9,11 +9,35 @@ function reportStorageFailure(event: string, storageKey: unknown, error: unknown
   debugWarn("storage", event, detail);
 }
 
-function getStorageErrorMessage(error: unknown): string {
+export function getStorageErrorMessage(error: unknown): string {
   if (error instanceof Error && error.message) {
     return error.message;
   }
   return toDisplayString(error) || "unknown storage error";
+}
+
+/**
+ * localStorage 읽기. 실패하면 보고하고 null 을 준다.
+ *
+ * 저장소 접근은 오리진·설정에 따라 던진다. try 를 각 함수에 두면 그 자체로
+ * 중첩이 한 겹 늘어나서, 읽기만 여기로 모은다.
+ */
+function readRawStorageValue(storageKey: string): string | null {
+  try {
+    return window.localStorage.getItem(storageKey);
+  } catch (error) {
+    reportStorageFailure("read-failed", storageKey, error);
+    return null;
+  }
+}
+
+/** localStorage 삭제. 실패는 보고만 하고 넘어간다. */
+function removeRawStorageValue(storageKey: string): void {
+  try {
+    window.localStorage.removeItem(storageKey);
+  } catch (error) {
+    reportStorageFailure("remove-failed", storageKey, error);
+  }
 }
 
 export function readStoredBoolean(storageKey: string, fallbackValue = false): boolean {
@@ -21,17 +45,12 @@ export function readStoredBoolean(storageKey: string, fallbackValue = false): bo
     return Boolean(fallbackValue);
   }
 
-  try {
-    const rawValue = window.localStorage.getItem(storageKey);
-    if (rawValue === "1" || rawValue === "true") {
-      return true;
-    }
-    if (rawValue === "0" || rawValue === "false") {
-      return false;
-    }
-  } catch (error) {
-    reportStorageFailure("read-failed", storageKey, error);
-    return Boolean(fallbackValue);
+  const rawValue = readRawStorageValue(storageKey);
+  if (rawValue === "1" || rawValue === "true") {
+    return true;
+  }
+  if (rawValue === "0" || rawValue === "false") {
+    return false;
   }
 
   return Boolean(fallbackValue);
@@ -55,14 +74,9 @@ export function readStoredText(storageKey: string, fallbackValue = ""): string {
     return typeof fallbackValue === "string" ? fallbackValue : "";
   }
 
-  try {
-    const rawValue = window.localStorage.getItem(storageKey);
-    if (typeof rawValue === "string") {
-      return rawValue;
-    }
-  } catch (error) {
-    reportStorageFailure("read-failed", storageKey, error);
-    return typeof fallbackValue === "string" ? fallbackValue : "";
+  const rawValue = readRawStorageValue(storageKey);
+  if (typeof rawValue === "string") {
+    return rawValue;
   }
 
   return typeof fallbackValue === "string" ? fallbackValue : "";
@@ -73,22 +87,26 @@ export function writeStoredText(storageKey: string, value: string): void {
     return;
   }
 
-  try {
-    const normalized = typeof value === "string" ? value : "";
-    if (normalized === "") {
-      try {
-        window.localStorage.removeItem(storageKey);
-      } catch (error) {
-        reportStorageFailure("remove-failed", storageKey, error);
-      }
-      return;
-    }
+  const normalized = typeof value === "string" ? value : "";
+  if (normalized === "") {
+    removeRawStorageValue(storageKey);
+    return;
+  }
 
+  try {
     window.localStorage.setItem(storageKey, normalized);
   } catch (error) {
     reportStorageFailure("write-failed", storageKey, error);
-    return;
   }
+}
+
+function parseStoredNumber(storageKey: string): number | null {
+  const rawValue = readRawStorageValue(storageKey);
+  if (typeof rawValue !== "string" || rawValue.trim() === "") {
+    return null;
+  }
+  const parsed = Number(rawValue);
+  return Number.isFinite(parsed) ? parsed : null;
 }
 
 export function readStoredNumber(
@@ -96,29 +114,10 @@ export function readStoredNumber(
   fallbackValue: number | null = null,
 ): number | null {
   const normalizedFallback = Number.isFinite(fallbackValue) ? fallbackValue : null;
-
   if (typeof storageKey !== "string" || storageKey === "") {
     return normalizedFallback;
   }
-
-  let rawValue: string | null = null;
-  try {
-    rawValue = window.localStorage.getItem(storageKey);
-  } catch (error) {
-    reportStorageFailure("read-failed", storageKey, error);
-    return normalizedFallback;
-  }
-
-  if (typeof rawValue !== "string" || rawValue.trim() === "") {
-    return normalizedFallback;
-  }
-
-  const parsed = Number(rawValue);
-  if (!Number.isFinite(parsed)) {
-    return normalizedFallback;
-  }
-
-  return parsed;
+  return parseStoredNumber(storageKey) ?? normalizedFallback;
 }
 
 export function writeStoredNumber(storageKey: string, value: number): void {
@@ -127,11 +126,7 @@ export function writeStoredNumber(storageKey: string, value: number): void {
   }
 
   if (!Number.isFinite(value)) {
-    try {
-      window.localStorage.removeItem(storageKey);
-    } catch (error) {
-      reportStorageFailure("remove-failed", storageKey, error);
-    }
+    removeRawStorageValue(storageKey);
     return;
   }
 

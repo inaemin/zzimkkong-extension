@@ -22,6 +22,8 @@ export interface RadarShellProps {
   headerRef?: React.Ref<HTMLDivElement>;
   /** 너비 조절 손잡이. bindMapCalendarResizeHandle 이 잡는다. */
   resizeHandleRef?: React.Ref<HTMLDivElement>;
+  /** 접힌 상태. 접히면 본문을 감추고 헤더만 남긴다(CSS 가 처리). */
+  collapsed?: boolean;
   cardRef?: React.Ref<HTMLDivElement>;
   /**
    * 본문(.zzk-map-calendar-body). 아직 내용은 명령형으로 채워진다.
@@ -66,6 +68,7 @@ export function RadarShell({
   onSpaceTabChange,
   headerRef,
   resizeHandleRef,
+  collapsed = false,
   cardRef,
   bodyRef,
 }: RadarShellProps) {
@@ -126,16 +129,22 @@ export function RadarShell({
         </button>
       </div>
 
-      <div className="zzk-map-calendar-card" ref={setCardRef} {...stopProps}>
+      <div
+        className={collapsed ? "zzk-map-calendar-card collapsed" : "zzk-map-calendar-card"}
+        data-testid="radar-card"
+        ref={setCardRef}
+        {...stopProps}
+      >
         <div
           className="zzk-map-calendar-resize-handle"
+          data-testid="radar-resize-handle"
           role="separator"
           aria-orientation="vertical"
           aria-label="레이더 너비 조절"
           ref={resizeHandleRef}
         />
-        <div className="zzk-map-calendar-header" ref={headerRef} />
-        <div className="zzk-map-calendar-body" ref={bodyRef} />
+        <div className="zzk-map-calendar-header" data-testid="radar-header" ref={headerRef} />
+        <div className="zzk-map-calendar-body" data-testid="radar-body" ref={bodyRef} />
       </div>
     </div>
   );

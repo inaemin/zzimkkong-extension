@@ -3,9 +3,7 @@ import {
   API_ORIGIN,
   WEB_ORIGIN,
   ensureExtensionBuild,
-  jsonResponse,
   loadContentBundle,
-  stubServiceDocument,
 } from "./helpers/extension.js";
 
 test.beforeAll(ensureExtensionBuild);
@@ -272,7 +270,7 @@ test("clicking a 30-min block wires through to the lms+ form", async ({ page }) 
     // 타임라인 pane 의 같은 위치다(예전에는 DOM 에 서로 참조를 걸어 뒀다).
     const labelRows = Array.from(
       window.__zzkQueryAll(
-        ".zzk-map-calendar-label-pane .zzk-map-calendar-row.zzk-map-calendar-label-row",
+        '[data-testid="radar-label-pane"] .zzk-map-calendar-row.zzk-map-calendar-label-row',
       ),
     );
     const roomIndex = labelRows.findIndex((r) => {
@@ -281,7 +279,7 @@ test("clicking a 30-min block wires through to the lms+ form", async ({ page }) 
     });
     const timelineRows = Array.from(
       window.__zzkQueryAll(
-        ".zzk-map-calendar-timeline-pane .zzk-map-calendar-row.zzk-map-calendar-timeline-row",
+        '[data-testid="radar-timeline-pane"] .zzk-map-calendar-row.zzk-map-calendar-timeline-row',
       ),
     );
     const row = roomIndex >= 0 ? timelineRows[roomIndex] : null;
@@ -306,7 +304,7 @@ async function hoverSlot(page, label) {
     // 타임라인 pane 의 같은 위치다(예전에는 DOM 에 서로 참조를 걸어 뒀다).
     const labelRows = Array.from(
       window.__zzkQueryAll(
-        ".zzk-map-calendar-label-pane .zzk-map-calendar-row.zzk-map-calendar-label-row",
+        '[data-testid="radar-label-pane"] .zzk-map-calendar-row.zzk-map-calendar-label-row',
       ),
     );
     const roomIndex = labelRows.findIndex((r) => {
@@ -315,7 +313,7 @@ async function hoverSlot(page, label) {
     });
     const timelineRows = Array.from(
       window.__zzkQueryAll(
-        ".zzk-map-calendar-timeline-pane .zzk-map-calendar-row.zzk-map-calendar-timeline-row",
+        '[data-testid="radar-timeline-pane"] .zzk-map-calendar-row.zzk-map-calendar-timeline-row',
       ),
     );
     const row = roomIndex >= 0 ? timelineRows[roomIndex] : null;
@@ -330,7 +328,7 @@ function readHoverPreview(page) {
     // 타임라인 pane 의 같은 위치다(예전에는 DOM 에 서로 참조를 걸어 뒀다).
     const labelRows = Array.from(
       window.__zzkQueryAll(
-        ".zzk-map-calendar-label-pane .zzk-map-calendar-row.zzk-map-calendar-label-row",
+        '[data-testid="radar-label-pane"] .zzk-map-calendar-row.zzk-map-calendar-label-row',
       ),
     );
     const roomIndex = labelRows.findIndex((r) => {
@@ -339,7 +337,7 @@ function readHoverPreview(page) {
     });
     const timelineRows = Array.from(
       window.__zzkQueryAll(
-        ".zzk-map-calendar-timeline-pane .zzk-map-calendar-row.zzk-map-calendar-timeline-row",
+        '[data-testid="radar-timeline-pane"] .zzk-map-calendar-row.zzk-map-calendar-timeline-row',
       ),
     );
     const row = roomIndex >= 0 ? timelineRows[roomIndex] : null;
@@ -416,7 +414,7 @@ test("슬롯 hover 시 회의실 이름 셀에도 파란 배경이 적용된다"
     page.evaluate(() => {
       // 회의실 이름 셀은 라벨 pane 에만 있다.
       const rows = Array.from(
-        window.__zzkQueryAll(".zzk-map-calendar-label-pane .zzk-map-calendar-row"),
+        window.__zzkQueryAll('[data-testid="radar-label-pane"] .zzk-map-calendar-row'),
       );
       const row = rows.find((r) => {
         const n = r.querySelector(".zzk-map-calendar-room-name");
@@ -445,7 +443,7 @@ test("슬롯 hover 시 회의실 이름 셀에도 파란 배경이 적용된다"
 
 function readOverlayScroll(page) {
   return page.evaluate(() => {
-    const body = window.__zzkQuery(".zzk-map-calendar-body");
+    const body = window.__zzkQuery('[data-testid="radar-body"]');
     if (!body) return null;
     return { scrollLeft: body.scrollLeft, maxScroll: body.scrollWidth - body.clientWidth };
   });
@@ -469,7 +467,7 @@ test("today scrolls near current time; a future date resets to the start", async
   // 오늘을 스크롤한 상태에서 미래로 넘긴 뒤에도 위치가 남으면 안 된다.
   // 확실히 하기 위해 스크롤을 끝으로 밀어 놓고 미래 날짜를 렌더한다.
   await page.evaluate(() => {
-    const body = window.__zzkQuery(".zzk-map-calendar-body");
+    const body = window.__zzkQuery('[data-testid="radar-body"]');
     body.scrollLeft = body.scrollWidth;
   });
 
@@ -482,12 +480,12 @@ test("today scrolls near current time; a future date resets to the start", async
 
 test("드래그로 옮긴 모달 위치가 저장되고 재로드 시 복원된다", async ({ page }) => {
   await mountFormPage(page);
-  await page.waitForSelector("#zzk-map-calendar-overlay .zzk-map-calendar-header", {
+  await page.waitForSelector('#zzk-map-calendar-overlay [data-testid="radar-header"]', {
     timeout: 4000,
   });
 
   // 헤더를 드래그해 모달을 옮긴다.
-  const header = page.locator("#zzk-map-calendar-overlay .zzk-map-calendar-header").first();
+  const header = page.locator('#zzk-map-calendar-overlay [data-testid="radar-header"]').first();
   const box = await header.boundingBox();
   await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
   await page.mouse.down();

@@ -12,8 +12,9 @@ import {
   sanitizeDateForApi,
   sanitizeTimeForApi,
 } from "../../utils/date-time.js";
-import { createLmsDataNormalizers } from "./normalizers.js";
 import type { SpaceTab } from "../../constants/runtime.js";
+
+import { createLmsDataNormalizers } from "./normalizers.js";
 import type {
   AvailabilityResult,
   DailyScheduleResult,
@@ -47,11 +48,11 @@ function getRoomTypeForRoomName(roomName: string): SpaceTab {
 }
 
 const lmsDataNormalizers = createLmsDataNormalizers({
-  getProperty(source, key) {
+  getProperty(source: unknown, key: string): unknown {
     if (source == null || (typeof source !== "object" && typeof source !== "function")) {
       return undefined;
     }
-    return source[key];
+    return (source as Record<string, unknown>)[key];
   },
   normalizeRoomType: normalizeFetchRoomType,
   getRoomTypeForRoomName,
@@ -76,8 +77,13 @@ export async function loadSpaceContext(roomType: SpaceTab | null = null): Promis
 // /api/space-reservations?date=&spaceId= 를 부른다(전자는 겹침 여부만 계산).
 // 레이더를 한 번 열거나 타임블록을 누를 때마다 회의실 수 x 2 만큼 요청이 나가므로,
 // 짧은 TTL 로 같은 요청을 합친다. inflight 도 함께 묶어 응답 전 중복 호출을 막는다.
-const reservationCache = new Map();
-const reservationInflight = new Map();
+interface ReservationCacheEntry {
+  reservations: Reservation[];
+  fetchedAt: number;
+}
+
+const reservationCache = new Map<string, ReservationCacheEntry>();
+const reservationInflight = new Map<string, Promise<Reservation[]>>();
 
 // 예약이 생성/변경되면 캐시가 곧바로 낡는다. TTL(3초)을 기다리지 않고 비운다.
 export function clearReservationCache(): void {
@@ -97,111 +103,142 @@ function readCachedReservations(cacheKey: string): Reservation[] | null {
   return entry.reservations;
 }
 
-export async function fetchReservationsForRoom(
-  roomId: number,
-  date: string,
-): Promise<Reservation[]> {
-  const query = new URLSearchParams({
-    date,
-    spaceId: String(roomId),
-  }).toString();
+/** 그 사이 다른 요청이 자리를 차지했으면 건드리지 않는다. */
+function releaseInflight(query: string, request: Promise<Reservation[]>): void {
+  if (reservationInflight.get(query) !== request) {
+    return;
+  }
+  reservationInflight.delete(query);
+}
 
+/** 실제 조회 + 캐시 적재. 응답이 배열일 수도, { reservations } 일 수도 있다. */
+async function requestReservations(query: string): Promise<Reservation[]> {
+  const response = await fetchApiJson(`${LMS_API_BASE_URL}/api/space-reservations?${query}`);
+  const reservationsValue = Array.isArray(response)
+    ? response
+    : (response as { reservations?: unknown } | null)?.reservations;
+  const reservations = lmsDataNormalizers.normalizeReservations(reservationsValue);
+  reservationCache.set(query, { reservations, fetchedAt: Date.now() });
+  return reservations;
+}
+
+/**
+ * 다시 요청하지 않아도 되는 경우를 걸러낸다.
+ *
+ * 캐시가 살아 있으면 그대로, 같은 요청이 이미 날아가 있으면 거기 얹는다.
+ * 빈 배열도 유효한 캐시라 null 검사로 갈라야 한다(예약 0건인 방).
+ */
+function reuseReservations(query: string): Promise<Reservation[]> | Reservation[] | null {
   const cached = readCachedReservations(query);
-  if (cached) {
+  if (cached !== null) {
     return cached;
   }
+  return reservationInflight.get(query) ?? null;
+}
 
-  const pending = reservationInflight.get(query);
-  if (pending) {
-    return pending;
+async function fetchReservationsForRoom(roomId: number, date: string): Promise<Reservation[]> {
+  const query = new URLSearchParams({ date, spaceId: String(roomId) }).toString();
+
+  const reused = reuseReservations(query);
+  if (reused) {
+    return reused;
   }
 
-  const request = (async () => {
-    const response = await fetchApiJson(`${LMS_API_BASE_URL}/api/space-reservations?${query}`);
-    const reservationsValue = Array.isArray(response)
-      ? response
-      : (response as { reservations?: unknown } | null)?.reservations;
-    const reservations = lmsDataNormalizers.normalizeReservations(reservationsValue);
-    reservationCache.set(query, { reservations, fetchedAt: Date.now() });
-    return reservations;
-  })();
+  const request = requestReservations(query);
 
   reservationInflight.set(query, request);
   try {
     return await request;
   } finally {
-    if (reservationInflight.get(query) === request) {
-      reservationInflight.delete(query);
-    }
+    releaseInflight(query, request);
   }
 }
 
-// 개편 서비스에는 availability 엔드포인트가 없어서, 각 공간의 당일 예약을 받아와
-// 요청 구간과 겹치는지로 예약 가능 여부를 계산한다.
-export async function fetchAvailability(payload: FetchPayload): Promise<AvailabilityResult> {
+/**
+ * HH:MM 두 개를 분으로. sanitizeAvailabilityWindow 를 통과했으면 성공이
+ * 보장되지만, 어긋나면 조용히 넘기지 않고 여기서 멈춘다.
+ */
+function toMinuteWindow(startTime: string, endTime: string) {
+  const startMinute = lmsDataNormalizers.parseTimeToMinute(startTime);
+  const endMinute = lmsDataNormalizers.parseTimeToMinute(endTime);
+  if (startMinute === null || endMinute === null) {
+    throw new Error("시간 형식이 올바르지 않습니다.");
+  }
+  return { startMinute, endMinute };
+}
+
+/** 요청 구간을 검증해 정규화한다. 형식이 틀리면 여기서 던진다. */
+function sanitizeAvailabilityWindow(payload: FetchPayload) {
   const date = sanitizeDateForApi(payload && payload.date, {
     allowPastDate: payload?.allowPastDate === true,
   });
   const startTime = sanitizeTimeForApi(payload && payload.startTime);
   const endTime = sanitizeTimeForApi(payload && payload.endTime);
-  const roomType = normalizeFetchRoomType(payload && payload.roomType);
 
   if (startTime >= endTime) {
     throw new Error("종료 시간은 시작 시간보다 늦어야 합니다.");
   }
 
-  const startMinute = lmsDataNormalizers.parseTimeToMinute(startTime);
-  const endMinute = lmsDataNormalizers.parseTimeToMinute(endTime);
+  return {
+    date,
+    startTime,
+    endTime,
+    roomType: normalizeFetchRoomType(payload && payload.roomType),
+  };
+}
+
+/** 방마다 그날 예약을 받아와 요청 구간과 겹치는지 판정한다. */
+async function resolveRoomAvailability(
+  rooms: Room[],
+  window: { date: string; startMinute: number; endMinute: number },
+) {
+  return Promise.all(
+    rooms.map(async (room) => ({
+      id: room.id,
+      name: room.name,
+      color: room.color,
+      floor: room.floor,
+      floorLabel: room.floorLabel,
+      isAvailable: lmsDataNormalizers.isRoomAvailableInWindow(
+        await fetchReservationsForRoom(room.id, window.date),
+        window.startMinute,
+        window.endMinute,
+      ),
+    })),
+  );
+}
+
+// 개편 서비스에는 availability 엔드포인트가 없어서, 각 공간의 당일 예약을 받아와
+// 요청 구간과 겹치는지로 예약 가능 여부를 계산한다.
+/** 전체·빈 곳·사용 중 개수. */
+function countAvailability(rooms: Array<{ isAvailable: boolean }>) {
+  const available = rooms.filter((room) => room.isAvailable).length;
+  return { total: rooms.length, available, occupied: rooms.length - available };
+}
+
+export async function fetchAvailability(payload: FetchPayload): Promise<AvailabilityResult> {
+  const { date, startTime, endTime, roomType } = sanitizeAvailabilityWindow(payload);
   const spaceContext = await loadSpaceContext(roomType);
 
-  const rooms = await Promise.all(
-    spaceContext.targetRooms.map(async (room) => {
-      const reservations = await fetchReservationsForRoom(room.id, date);
-
-      return {
-        id: room.id,
-        name: room.name,
-        color: room.color,
-        floor: room.floor,
-        floorLabel: room.floorLabel,
-        isAvailable: lmsDataNormalizers.isRoomAvailableInWindow(
-          reservations,
-          startMinute,
-          endMinute,
-        ),
-      };
-    }),
-  );
-
-  const availableCount = rooms.filter((room) => room.isAvailable).length;
+  const rooms = await resolveRoomAvailability(spaceContext.targetRooms, {
+    date,
+    ...toMinuteWindow(startTime, endTime),
+  });
 
   return {
     mapId: spaceContext.mapId,
     mapName: spaceContext.mapName,
-    selectedWindow: {
-      date,
-      startTime,
-      endTime,
-    },
+    selectedWindow: { date, startTime, endTime },
     roomType,
-    counts: {
-      total: rooms.length,
-      available: availableCount,
-      occupied: rooms.length - availableCount,
-    },
+    counts: countAvailability(rooms),
     rooms,
   };
 }
 
-export async function fetchDailySchedule(payload: FetchPayload): Promise<DailyScheduleResult> {
-  const date = sanitizeDateForApi(payload && payload.date, {
-    allowPastDate: payload?.allowPastDate === true,
-  });
-  const roomType = normalizeFetchRoomType(payload && payload.roomType);
-  const spaceContext = await loadSpaceContext(roomType);
-
-  const rooms = await Promise.all(
-    spaceContext.targetRooms.map(async (room) => ({
+/** 방마다 그날 예약을 붙여 스케줄 행을 만든다. */
+async function loadRoomSchedules(rooms: Room[], date: string) {
+  return Promise.all(
+    rooms.map(async (room) => ({
       id: room.id,
       name: room.name,
       color: room.color,
@@ -212,13 +249,31 @@ export async function fetchDailySchedule(payload: FetchPayload): Promise<DailySc
       reservations: await fetchReservationsForRoom(room.id, date),
     })),
   );
+}
 
+/** 방들의 운영 시간에서 타임라인 범위와 슬롯을 만든다. */
+function buildTimeline(rooms: Parameters<typeof lmsDataNormalizers.computeTimelineRange>[0]) {
   const range = lmsDataNormalizers.computeTimelineRange(rooms);
-  const timeline = lmsDataNormalizers.buildTimelineSlots(
-    range.startMinute,
-    range.endMinute,
-    LMS_TIME_STEP_MINUTES,
-  );
+  return {
+    range,
+    timeline: lmsDataNormalizers.buildTimelineSlots(
+      range.startMinute,
+      range.endMinute,
+      LMS_TIME_STEP_MINUTES,
+    ),
+  };
+}
+
+export async function fetchDailySchedule(payload: FetchPayload): Promise<DailyScheduleResult> {
+  const date = sanitizeDateForApi(payload && payload.date, {
+    allowPastDate: payload?.allowPastDate === true,
+  });
+  const roomType = normalizeFetchRoomType(payload && payload.roomType);
+  const spaceContext = await loadSpaceContext(roomType);
+
+  const rooms = await loadRoomSchedules(spaceContext.targetRooms, date);
+
+  const { range, timeline } = buildTimeline(rooms);
 
   return {
     mapId: spaceContext.mapId,
@@ -253,6 +308,15 @@ function stripBearer(value: unknown): string {
   return typeof value === "string" ? value.replace(/^Bearer\s+/i, "").trim() : "";
 }
 
+/** 저장소 접근은 권한·오리진에 따라 던진다. 실패하면 기본값을 준다. */
+function safely<T>(read: () => T, fallback: T): T {
+  try {
+    return read();
+  } catch {
+    return fallback;
+  }
+}
+
 function extractJwtFromValue(rawValue: unknown): string {
   if (typeof rawValue !== "string" || rawValue === "") {
     return "";
@@ -266,91 +330,70 @@ function extractJwtFromValue(rawValue: unknown): string {
   return match ? match[0] : "";
 }
 
-function readLmsAuthToken(): string {
-  const stores = [];
-  try {
-    if (typeof localStorage !== "undefined") stores.push(localStorage);
-  } catch (error) {
-    /* 접근 불가 시 무시 */
-  }
-  try {
-    if (typeof sessionStorage !== "undefined") stores.push(sessionStorage);
-  } catch (error) {
-    /* 접근 불가 시 무시 */
-  }
-
-  for (const store of stores) {
-    let length = 0;
-    try {
-      length = store.length;
-    } catch (error) {
-      continue;
-    }
-    for (let index = 0; index < length; index += 1) {
-      let key = null;
-      try {
-        key = store.key(index);
-      } catch (error) {
-        continue;
-      }
-      if (!key) {
-        continue;
-      }
-      let value = "";
-      try {
-        value = store.getItem(key) || "";
-      } catch (error) {
-        continue;
-      }
-      if (!value.includes("eyJ")) {
-        continue;
-      }
-      const token = extractJwtFromValue(value);
-      if (token) {
-        return token;
-      }
-    }
-  }
-
-  return "";
+/** 접근 가능한 저장소만 모은다(오리진에 따라 접근 자체가 던진다). */
+function readableStores(): Storage[] {
+  return [
+    safely(() => (typeof localStorage !== "undefined" ? localStorage : null), null),
+    safely(() => (typeof sessionStorage !== "undefined" ? sessionStorage : null), null),
+  ].filter((store): store is Storage => store !== null);
 }
 
-export async function fetchApiJson(url: string): Promise<unknown> {
-  const headers: Record<string, string> = {
-    accept: "application/json",
-  };
-  const token = readLmsAuthToken();
-  if (token) {
-    headers.authorization = `Bearer ${token}`;
+function readLmsAuthToken(): string {
+  // 저장소×키를 한 줄로 펼쳐 중첩을 없앤다.
+  const candidates = readableStores().flatMap((store) => {
+    const length = safely(() => store.length, 0);
+    return Array.from({ length }, (_, index) => safely(() => store.key(index), null))
+      .filter((key): key is string => Boolean(key))
+      .map((key) => safely(() => store.getItem(key) || "", ""));
+  });
+
+  return (
+    candidates
+      .filter((value) => value.includes("eyJ"))
+      .map((value) => extractJwtFromValue(value))
+      .find((token) => Boolean(token)) || ""
+  );
+}
+
+/** 401/403 은 로그인 문제라 문구를 따로 준다. */
+function isAuthStatus(status: number): boolean {
+  return status === 401 || status === 403;
+}
+
+function authErrorMessage(hasToken: boolean): string {
+  return hasToken
+    ? "로그인 정보가 만료되었어요. 페이지를 새로고침한 뒤 다시 시도해 주세요."
+    : "로그인이 필요해요. 회의실 예약 페이지에 로그인한 뒤 다시 시도해 주세요.";
+}
+
+/** 실패 응답을 에러로 바꾼다. 본문에 message 가 있으면 그걸 쓴다. */
+function throwApiError(status: number, data: unknown, hasToken: boolean): never {
+  if (isAuthStatus(status)) {
+    throw new Error(authErrorMessage(hasToken));
   }
+  const serverMessage =
+    data && typeof data === "object" && "message" in data && typeof data.message === "string"
+      ? data.message
+      : null;
+  throw new Error(serverMessage ?? `요청 실패 (${status})`);
+}
+
+async function fetchApiJson(url: string): Promise<unknown> {
+  const token = readLmsAuthToken();
 
   const response = await fetch(url, {
-    headers,
+    headers: token
+      ? { accept: "application/json", authorization: `Bearer ${token}` }
+      : { accept: "application/json" },
     // 쿠키도 함께 보낸다(일부 엔드포인트가 세션 쿠키를 병행할 수 있음).
     credentials: "include",
   });
 
   const text = await response.text();
-  let data = null;
-  if (text) {
-    try {
-      data = JSON.parse(text);
-    } catch (error) {
-      data = null;
-    }
-  }
+  const data: unknown = text ? safely(() => JSON.parse(text) as unknown, null) : null;
 
   if (!response.ok) {
-    if (response.status === 401 || response.status === 403) {
-      throw new Error(
-        token
-          ? "로그인 정보가 만료되었어요. 페이지를 새로고침한 뒤 다시 시도해 주세요."
-          : "로그인이 필요해요. 회의실 예약 페이지에 로그인한 뒤 다시 시도해 주세요.",
-      );
-    }
-    const message =
-      data && typeof data.message === "string" ? data.message : `요청 실패 (${response.status})`;
-    throw new Error(message);
+    throwApiError(response.status, data, Boolean(token));
   }
 
   if (data == null || typeof data !== "object") {

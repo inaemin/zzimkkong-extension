@@ -1,6 +1,5 @@
 import * as React from "react";
 
-import { minuteToHourMinute } from "@/utils/date-time";
 import type { RoomSchedule, TimelineSlot } from "@/services/lms-data/types";
 import {
   buildSlotTitle,
@@ -52,7 +51,6 @@ export interface RadarGridProps {
   /** 회의실 이름 옆 배지. 아직 명령형이라 붙일 자리만 내준다. */
   renderRoomLabel: (container: HTMLElement | null, room: RoomSchedule) => void;
   /** 타임라인 pane. 가로 스크롤 위치를 바깥에서 읽고 되돌린다. */
-  timelinePaneRef?: React.Ref<HTMLDivElement>;
   minTrackWidth: number;
   /** 타임라인 아래 평면도. 같은 트리에 있어야 본문 소유권이 하나로 정리된다. */
   floorMaps: RadarFloorMapsProps;
@@ -67,7 +65,6 @@ export function RadarGrid({
   onSlotClick,
   defaultReservationMinutes,
   renderRoomLabel,
-  timelinePaneRef,
   minTrackWidth,
   floorMaps,
 }: RadarGridProps) {
@@ -88,7 +85,9 @@ export function RadarGrid({
     // 빈 상태에서도 평면도는 보여준다(공간 위치는 일정과 무관하게 유용하다).
     return (
       <>
-        <p className="zzk-map-calendar-empty">{emptyMessage}</p>
+        <p className="zzk-map-calendar-empty" data-testid="radar-empty">
+          {emptyMessage}
+        </p>
         <RadarFloorMaps {...floorMaps} />
       </>
     );
@@ -97,8 +96,8 @@ export function RadarGrid({
   return (
     <>
       <div className="zzk-map-calendar-grid-wrap">
-        <div className="zzk-map-calendar-label-pane">
-          <div className="zzk-map-calendar-grid zzk-map-calendar-label-grid">
+        <div className="zzk-map-calendar-label-pane" data-testid="radar-label-pane">
+          <div className="zzk-map-calendar-grid">
             <div className="zzk-map-calendar-axis-row zzk-map-calendar-label-row">
               <div className="zzk-map-calendar-floor-name axis">층</div>
               <div className="zzk-map-calendar-room-name axis">{roomColumnLabel}</div>
@@ -134,7 +133,7 @@ export function RadarGrid({
           </div>
         </div>
 
-        <div className="zzk-map-calendar-timeline-pane" ref={timelinePaneRef}>
+        <div className="zzk-map-calendar-timeline-pane" data-testid="radar-timeline-pane">
           <div
             className="zzk-map-calendar-timeline-track"
             style={{ minWidth: `${minTrackWidth}px` }}
@@ -280,7 +279,6 @@ function RadarGridRow({
         {slotStates.map((slotState, index) => (
           <RadarGridSlot
             key={slotState.slot.startMinute}
-            room={room}
             slotState={slotState}
             columnStart={layout.slotColumnStarts[index]}
             isSelected={
@@ -310,7 +308,6 @@ function RadarGridRow({
 }
 
 function RadarGridSlot({
-  room,
   slotState,
   columnStart,
   isSelected,
@@ -318,7 +315,6 @@ function RadarGridSlot({
   onHover,
   onClick,
 }: {
-  room: RoomSchedule;
   slotState: SlotState;
   columnStart: number;
   isSelected: boolean;
@@ -339,33 +335,40 @@ function RadarGridSlot({
     .filter(Boolean)
     .join(" ");
 
+  const cell = (
+    <div
+      className={className}
+      // 슬롯 시작 시각을 남겨 두면 테스트에서 특정 블록을 집기 쉽다.
+      data-zzk-slot-start={slot.label}
+      style={{ gridColumn: String(columnStart) }}
+      onMouseEnter={() => {
+        if (isSelectable) {
+          onHover();
+        }
+      }}
+      onClick={(event: React.MouseEvent) => {
+        event.preventDefault();
+        event.stopPropagation();
+        if (isSelectable) {
+          onClick();
+        }
+      }}
+    />
+  );
+
+  // 예약이 있는 칸만 툴팁을 띄운다(지난 예약 포함).
+  //
+  // "예약 없음"도 "선택 불가(현재 시간 이전)"도 칸 색으로 이미 드러나고,
+  // 둘을 합치면 대부분의 칸이라 지나갈 때마다 뜨면 방해가 된다. 누가 언제
+  // 예약했는지는 색만으로 알 수 없어서 그 경우에만 설명이 필요하다.
+  if (!isBusy) {
+    return cell;
+  }
+
   return (
     <Tooltip>
-      <TooltipTrigger
-        render={
-          <div
-            className={className}
-            // 슬롯 시작 시각을 남겨 두면 테스트에서 특정 블록을 집기 쉽다.
-            data-zzk-slot-start={slot.label}
-            style={{ gridColumn: String(columnStart) }}
-            onMouseEnter={() => {
-              if (isSelectable) {
-                onHover();
-              }
-            }}
-            onClick={(event: React.MouseEvent) => {
-              event.preventDefault();
-              event.stopPropagation();
-              if (isSelectable) {
-                onClick();
-              }
-            }}
-          />
-        }
-      />
-      <TooltipContent>
-        {buildSlotTitle(room.name, slotState, minuteToHourMinute(slot.endMinute))}
-      </TooltipContent>
+      <TooltipTrigger render={cell} />
+      <TooltipContent>{buildSlotTitle(slotState)}</TooltipContent>
     </Tooltip>
   );
 }

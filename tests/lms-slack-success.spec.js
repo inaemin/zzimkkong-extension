@@ -3,9 +3,7 @@ import {
   API_ORIGIN,
   WEB_ORIGIN,
   ensureExtensionBuild,
-  jsonResponse,
   loadContentBundle,
-  stubServiceDocument,
 } from "./helpers/extension.js";
 
 test.beforeAll(ensureExtensionBuild);

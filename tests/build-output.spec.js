@@ -6,13 +6,10 @@ import {
   WEB_ORIGIN,
   ensureExtensionBuild,
   getBackgroundBundlePath,
-  getContentBundlePath,
-  getPageHookBundlePath,
   loadBackgroundBundle,
   loadContentBundle,
   loadPageHookBundle,
   readBuiltManifest,
-  resolveBuiltPath,
   stubServiceDocument,
 } from "./helpers/extension.js";
 
@@ -39,21 +36,23 @@ test("빌드 산출물 manifest 가 확장 로드에 필요한 형태를 갖춘�
   expect(fs.existsSync(path.join(DIST_DIR, manifest.background.service_worker))).toBeTruthy();
 });
 
-test("런타임에 경로로 직접 불러오는 파일들이 산출물에 그대로 있다", () => {
-  // content.js 가 chrome.runtime.getURL 로 이 경로들을 문자열 그대로 부른다.
-  // 번들러가 경로를 바꿔버리면 예약 훅과 Slack 모달 스타일이 조용히 깨진다.
-  const runtimeLoadedPaths = ["assets/basecoat-dialog.css"];
-
+test("직접 선언한 web_accessible_resources 가 없다", () => {
+  // 예전에는 content.js 가 chrome.runtime.getURL 로 Slack 모달 CSS 를 불러와서
+  // manifest 에 직접 자산을 공개했다. 지금은 모달이 shadow root 안에서 Tailwind
+  // 를 쓰므로 우리가 공개할 자산이 없다.
+  //
+  // 목록 자체가 비진 않는다 — CRXJS 가 번들 청크를 자기 항목으로 넣는다. 그래서
+  // "우리가 손으로 적은 자산" 만 없는지 본다. 다시 생긴다면 그 파일이 산출물에
+  // 실제로 있는지도 함께 확인해야 한다.
   const manifest = readBuiltManifest();
-  const exposed = manifest.web_accessible_resources?.[0]?.resources ?? [];
+  const resources = (manifest.web_accessible_resources ?? []).flatMap(
+    (entry) => entry.resources ?? [],
+  );
 
-  for (const relativePath of runtimeLoadedPaths) {
-    expect(
-      fs.existsSync(path.join(DIST_DIR, relativePath)),
-      `${relativePath} 파일 없음`,
-    ).toBeTruthy();
-    expect(exposed, `${relativePath} 가 web_accessible_resources 에 없음`).toContain(relativePath);
-  }
+  const handWritten = resources.filter((resource) => !resource.startsWith("assets/"));
+  expect(handWritten).toEqual([]);
+  expect(resources).not.toContain("assets/basecoat-dialog.css");
+  expect(fs.existsSync(path.join(DIST_DIR, "assets/basecoat-dialog.css"))).toBe(false);
 });
 
 test("서비스워커 번들이 모듈로 실제 실행된다", async ({ page }) => {

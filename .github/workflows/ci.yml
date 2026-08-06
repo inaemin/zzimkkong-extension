@@ -1,0 +1,83 @@
+name: CI
+
+# PR 필수 체크. 여기서 처음으로 "실패하면 머지 불가"로 조인다.
+# (마이그레이션 중에 걸면 계속 막히므로 규칙이 안정된 뒤인 지금이 적기다.)
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+# 같은 브랜치에 새 커밋이 오면 이전 실행은 취소한다.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    name: Format, lint, types
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      # 셋 다 독립이라 하나가 실패해도 나머지 결과를 함께 보고 싶다.
+      # if: '!cancelled()' 로 앞 단계 실패와 무관하게 돌린다.
+      - name: Check formatting
+        run: npm run format:check
+
+      - name: Lint
+        if: "!cancelled()"
+        run: npm run lint
+
+      - name: Typecheck
+        if: "!cancelled()"
+        run: npm run typecheck
+
+  test:
+    name: Playwright
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install Playwright browsers
+        # playwright.config.js 는 channel: "chrome" 만 쓰므로 chrome 만 받는다.
+        run: npx playwright install --with-deps chrome
+
+      - name: Run tests
+        run: npm run pw:test
+
+      - name: Upload test artifacts
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: |
+            test-results/
+            playwright-report/
+          retention-days: 7
+          if-no-files-found: ignore

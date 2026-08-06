@@ -19,16 +19,12 @@ function readHostVariables(): Map<string, string> {
   const computed = getComputedStyle(document.documentElement);
   const resolved = new Map<string, string>();
 
-  for (const { host, local } of BRIDGED_VARIABLES) {
-    // 이미 채워졌으면 앞선 후보가 이긴다(--font-family 가 --font-sans 보다 우선).
-    if (resolved.has(local)) {
-      continue;
-    }
-    const value = computed.getPropertyValue(host).trim();
-    if (value) {
-      resolved.set(local, value);
-    }
-  }
+  // 앞선 후보가 이긴다(--font-family 가 --font-sans 보다 우선)므로, 이미
+  // 채워진 local 은 건너뛴다.
+  BRIDGED_VARIABLES.forEach(({ host, local }) => {
+    const value = resolved.has(local) ? "" : computed.getPropertyValue(host).trim();
+    return value ? resolved.set(local, value) : resolved;
+  });
 
   return resolved;
 }

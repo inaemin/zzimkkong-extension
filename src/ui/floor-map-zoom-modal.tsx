@@ -34,9 +34,3 @@ export function closeFloorMapZoom(): void {
   }
   mount.render(<FloorMapZoom floor={null} dataUri={null} />);
 }
-
-/** 테스트·정리용. 마운트 자체를 걷어낸다. */
-export function destroyFloorMapZoom(): void {
-  mount?.unmount();
-  mount = null;
-}

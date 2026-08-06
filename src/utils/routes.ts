@@ -1,8 +1,6 @@
-export const LMS_HOST = "techcourse-lms-plus-web.woowahan.com";
-
 // lms+ 에는 공유 맵 개념이 없어 sharingMapId가 없다. 대신 레이더가 스코프
 // 키를 만들 때 쓸 수 있도록 고정 토큰을 돌려준다.
-export const LMS_SCOPE_ID = "lms";
+const LMS_SCOPE_ID = "lms";
 
 export function isLmsSpaceReservationPage(): boolean {
   return /^\/space-reservations(?:\/.*)?$/.test(location.pathname);
