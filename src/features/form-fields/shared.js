@@ -3,30 +3,6 @@
     return;
   }
 
-  function reportMissingBootstrapDependencies(missing) {
-    if (!Array.isArray(globalThis.__zzkBootstrapLoadErrors)) {
-      globalThis.__zzkBootstrapLoadErrors = [];
-    }
-    globalThis.__zzkBootstrapLoadErrors.push({
-      script: "src/features/form-fields/shared.js",
-      reason: "missing-bootstrap-dependencies",
-      missing,
-    });
-  }
-
-  const missingBootstrapDependencies = [
-    ["__zzkSharedUtils", globalThis.__zzkSharedUtils],
-    ["__zzkSlackShared", globalThis.__zzkSlackShared],
-    ["__zzkSharedConstants", globalThis.__zzkSharedConstants],
-  ]
-    .filter(([, value]) => !value)
-    .map(([name]) => name);
-
-  if (missingBootstrapDependencies.length > 0) {
-    reportMissingBootstrapDependencies(missingBootstrapDependencies);
-    return;
-  }
-
   const { normalizeTextForMatch } = globalThis.__zzkSharedUtils;
   const { normalizeSlackFieldText } = globalThis.__zzkSlackShared;
   const { TARGET_ROOM_NAMES } = globalThis.__zzkSharedConstants;

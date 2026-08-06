@@ -18,7 +18,6 @@
   const MAP_CALENDAR_STYLE_ID = "zzk-map-calendar-style";
   const MAP_CALENDAR_OVERLAY_TAB_MEETING_ID = "zzk-map-calendar-overlay-tab-meeting";
   const MAP_CALENDAR_OVERLAY_TAB_PAIR_ID = "zzk-map-calendar-overlay-tab-pair";
-  const PAGE_RESERVATION_HOOK_SCRIPT_ID = "zzk-page-reservation-hook";
   const PAGE_RESERVATION_EVENT_TYPE = "ZZK_RESERVATION_NETWORK_EVENT";
   const SLACK_COPY_MODAL_ID = "zzk-slack-copy-modal";
   const FLOOR_MAP_ZOOM_ID = "zzk-floormap-zoom";
@@ -127,7 +126,6 @@
     MAP_CALENDAR_STYLE_ID,
     MAP_CALENDAR_OVERLAY_TAB_MEETING_ID,
     MAP_CALENDAR_OVERLAY_TAB_PAIR_ID,
-    PAGE_RESERVATION_HOOK_SCRIPT_ID,
     PAGE_RESERVATION_EVENT_TYPE,
     SLACK_COPY_MODAL_ID,
     FLOOR_MAP_ZOOM_ID,

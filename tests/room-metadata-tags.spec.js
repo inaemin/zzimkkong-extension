@@ -1,32 +1,19 @@
-import path from "node:path";
 import { expect, test } from "@playwright/test";
+import {
+  API_ORIGIN,
+  WEB_ORIGIN,
+  ensureExtensionBuild,
+  jsonResponse,
+  loadContentBundle,
+  stubServiceDocument,
+} from "./helpers/extension.js";
+
+test.beforeAll(ensureExtensionBuild);
 
 // 하드코딩된 방 메타데이터(TARGET_ROOM_METADATA)는 legacy 제거 후에도 lms+ 에서 계속 쓰인다.
 // 창 태그·크루 제외·회의실 정렬 순서가 lms+ /api/spaces 응답 기준으로도 유지되는지 검증한다.
 
-const WEB_ORIGIN = "https://techcourse-lms-plus-web.woowahan.com";
-const API_ORIGIN = "https://techcourse-lms-plus-api.woowahan.com";
 
-// manifest 의 content_scripts 순서와 동일해야 한다.
-const CONTENT_SCRIPT_BUNDLE = [
-  "src/constants/debug.js",
-  "src/utils/shared.js",
-  "src/utils/storage.js",
-  "src/constants/runtime.js",
-  "src/utils/date-time.js",
-  "src/utils/routes.js",
-  "src/features/slack/shared.js",
-  "src/features/slack/workflow.js",
-  "src/features/slack/success-flow.js",
-  "src/features/form-fields/shared.js",
-  "src/services/lms-data/normalizers.js",
-  "src/services/lms-data/shared.js",
-  "src/features/radar/floor-maps.js",
-  "src/features/radar/shared.js",
-  "src/features/radar/workflow.js",
-  "src/features/radar/form-sync.js",
-  "src/content.js",
-];
 
 function buildSpace(id, name, floor, overrides = {}) {
   return {
@@ -78,13 +65,7 @@ async function mountRadar(page, spaces) {
 
   await page.goto(`${WEB_ORIGIN}/space-reservations`, { waitUntil: "domcontentloaded" });
 
-  for (const scriptPath of CONTENT_SCRIPT_BUNDLE) {
-    await page.addScriptTag({ path: path.resolve(process.cwd(), scriptPath) });
-  }
-
-  await page.waitForFunction(() => window.__zzkAvailabilityLensLoaded === true, undefined, {
-    timeout: 3000,
-  });
+  await loadContentBundle(page);
   await page.waitForSelector("#zzk-map-calendar-overlay .zzk-map-calendar-row", {
     timeout: 6000,
   });

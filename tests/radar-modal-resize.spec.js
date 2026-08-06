@@ -1,35 +1,25 @@
-import path from "node:path";
 import { expect, test } from "@playwright/test";
+import {
+  API_ORIGIN,
+  WEB_ORIGIN,
+  ensureExtensionBuild,
+  enableTestHooks,
+  jsonResponse,
+  loadContentBundle,
+  stubServiceDocument,
+} from "./helpers/extension.js";
+
+test.beforeAll(ensureExtensionBuild);
 
 const WIDTH_STORAGE_KEY = "zzk-map-calendar-width-v1";
 
-const WEB_ORIGIN = "https://techcourse-lms-plus-web.woowahan.com";
-const API_ORIGIN = "https://techcourse-lms-plus-api.woowahan.com";
 
 async function injectContentScriptBundle(page, beforeContentScript) {
-  await page.addScriptTag({ path: path.resolve(process.cwd(), "src/constants/debug.js") });
-  await page.addScriptTag({ path: path.resolve(process.cwd(), "src/utils/shared.js") });
-  await page.addScriptTag({ path: path.resolve(process.cwd(), "src/utils/storage.js") });
-  await page.addScriptTag({ path: path.resolve(process.cwd(), "src/constants/runtime.js") });
-  await page.addScriptTag({ path: path.resolve(process.cwd(), "src/utils/date-time.js") });
-  await page.addScriptTag({ path: path.resolve(process.cwd(), "src/utils/routes.js") });
-  await page.addScriptTag({ path: path.resolve(process.cwd(), "src/features/slack/shared.js") });
-  await page.addScriptTag({ path: path.resolve(process.cwd(), "src/features/slack/workflow.js") });
-  await page.addScriptTag({ path: path.resolve(process.cwd(), "src/features/slack/success-flow.js") });
-  await page.addScriptTag({ path: path.resolve(process.cwd(), "src/features/form-fields/shared.js") });
-  await page.addScriptTag({ path: path.resolve(process.cwd(), "src/services/lms-data/normalizers.js") });
-  await page.addScriptTag({ path: path.resolve(process.cwd(), "src/services/lms-data/shared.js") });
-  await page.addScriptTag({ path: path.resolve(process.cwd(), "src/features/radar/floor-maps.js") });
-  await page.addScriptTag({ path: path.resolve(process.cwd(), "src/features/radar/shared.js") });
-  await page.addScriptTag({ path: path.resolve(process.cwd(), "src/features/radar/workflow.js") });
-  await page.addScriptTag({ path: path.resolve(process.cwd(), "src/features/radar/form-sync.js") });
+  // 번들이 한 덩어리라 "content.js 직전"이 곧 "번들 로드 직전"이다.
   if (typeof beforeContentScript === "function") {
     await beforeContentScript();
   }
-  await page.addScriptTag({ path: path.resolve(process.cwd(), "src/content.js") });
-  await page.waitForFunction(() => window.__zzkAvailabilityLensLoaded === true, undefined, {
-    timeout: 3000,
-  });
+  await loadContentBundle(page);
   await page.evaluate(() => {
     window.__zzkTestApi?.syncGuestUi?.();
   });

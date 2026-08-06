@@ -16,6 +16,7 @@
       shouldSkipSlackCopyModal,
       showSlackCopyModal,
       buildLmsSlackReservationContext,
+      onReservationMutated,
     } = deps;
 
     // 개편 서비스(lms+) 예약 생성 성공 처리: 응답 body 로 Slack 모달을 띄운다.
@@ -28,6 +29,13 @@
       if (!(payload.ok === true && Number.isInteger(status) && status >= 200 && status < 300)) {
         return;
       }
+
+      // 예약이 바뀌었으니 캐시를 먼저 비운다. Slack 모달 대상(POST)인지와 무관하게,
+      // 그리고 아래 지문 디듀프에 걸리기 전에 해야 레이더가 항상 최신을 그린다.
+      if (typeof onReservationMutated === "function") {
+        onReservationMutated();
+      }
+
       // 현재 lms+ 지원 범위는 예약 "생성"(POST)만이다. 수정(PUT/PATCH) 성공은
       // 아직 Slack 모달 대상이 아니므로 여기서 걸러낸다(추후 확장 시 이 가드를 넓힌다).
       const method = normalizeReservationMutationMethod(payload.method);

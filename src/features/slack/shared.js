@@ -3,29 +3,6 @@
     return;
   }
 
-  function reportMissingBootstrapDependencies(missing) {
-    if (!Array.isArray(globalThis.__zzkBootstrapLoadErrors)) {
-      globalThis.__zzkBootstrapLoadErrors = [];
-    }
-    globalThis.__zzkBootstrapLoadErrors.push({
-      script: "src/features/slack/shared.js",
-      reason: "missing-bootstrap-dependencies",
-      missing,
-    });
-  }
-
-  const missingBootstrapDependencies = [
-    ["__zzkSharedConstants", globalThis.__zzkSharedConstants],
-    ["__zzkDateTimeUtils", globalThis.__zzkDateTimeUtils],
-  ]
-    .filter(([, value]) => !value)
-    .map(([name]) => name);
-
-  if (missingBootstrapDependencies.length > 0) {
-    reportMissingBootstrapDependencies(missingBootstrapDependencies);
-    return;
-  }
-
   const {
     DEFAULT_SLACK_REMINDER_LEAD_TIME_MINUTES,
     SLACK_REMINDER_LEAD_TIME_OPTIONS,

@@ -110,7 +110,6 @@
     MAP_CALENDAR_STYLE_ID,
     MAP_CALENDAR_OVERLAY_TAB_MEETING_ID,
     MAP_CALENDAR_OVERLAY_TAB_PAIR_ID,
-    PAGE_RESERVATION_HOOK_SCRIPT_ID,
     PAGE_RESERVATION_EVENT_TYPE,
     SLACK_COPY_MODAL_ID,
     FLOOR_MAP_ZOOM_ID,
@@ -382,6 +381,13 @@
     mounted: false,
     loading: false,
     availabilityInflightToken: null,
+    // 같은 조건(날짜·시간·탭)으로 다시 조회할 때 재사용할 마지막 응답.
+    // 타임블록을 연속으로 누르면 매번 회의실 수만큼 요청이 나가므로 TTL 로 막는다.
+    availabilityCache: new Map(),
+    availabilityCacheFetchedAt: new Map(),
+    // 아직 응답이 안 온 조회. TTL 캐시는 응답이 온 뒤에만 유효하므로,
+    // 응답 전에 다시 눌린 경우는 같은 Promise 에 합류시켜 중복 요청을 막는다.
+    availabilityInflightByToken: new Map(),
     pendingAvailabilityRefresh: false,
     latestRooms: [],
     latestRoomsBySpaceTab: new Map(),
@@ -435,9 +441,6 @@
     editReservationBaselineConstraint: null,
     editReservationBaselinePathKey: "",
     latestMapName: "",
-    reservationHookInstalled: false,
-    reservationHookInstalling: false,
-    reservationHookInstallGeneration: 0,
     reservationIntentWatcherInstalled: false,
     reservationMessageListenerInstalled: false,
     reservationOwnerWatcherInstalled: false,
@@ -496,9 +499,6 @@
     installHostTimePickerInteractionWatcher();
 
     if (isRadarSupportedPage()) {
-      if (shouldInstallPageReservationNetworkHook()) {
-        installPageReservationNetworkHook();
-      }
       if (!isGuestUiReadyForActivation()) {
         removeMapCalendarLauncher();
         removeMapCalendarOverlay();
@@ -598,12 +598,8 @@
       return;
     }
     if (!isRadarSupportedPage()) {
-      restorePageReservationNetworkHook();
       teardownGuestUi();
       return;
-    }
-    if (shouldInstallPageReservationNetworkHook()) {
-      installPageReservationNetworkHook();
     }
     queueSlackModalFromPersistedEditSubmitIfNeeded('mutation-observer');
     if (!isGuestUiReadyForActivation()) {
@@ -845,11 +841,6 @@
       return;
     }
 
-    if (state.loading) {
-      state.pendingAvailabilityRefresh = true;
-      return;
-    }
-
     if (!state.elements) {
       ensurePanel();
     }
@@ -873,6 +864,7 @@
       if (isSharingMapSwitch) {
         state.scheduleCache.clear();
         state.scheduleCacheFetchedAtByDate.clear();
+        clearAvailabilityCache();
         state.scheduleInflightByDate.clear();
         state.activeScheduleDate = null;
         state.activeScheduleTab = null;
@@ -908,6 +900,30 @@
     const roomType = normalizeMapCalendarSpaceTab(state.mapCalendarSpaceTab);
     const availabilityToken = `${sharingMapId}|${date}|${startTime}|${endTime}|${roomType}`;
 
+    // 타임블록을 연속으로 누르면 같은 조건으로 반복 조회된다. TTL 안이면 재사용한다.
+    const cachedAvailability = getFreshAvailabilityCache(availabilityToken);
+    if (cachedAvailability) {
+      pushDebugEvent("availability", "cache-hit", { token: availabilityToken });
+      applyAvailabilityData(cachedAvailability, { roomType, date, startTime, endTime });
+      if (state.scheduleOverlayEnabled) {
+        try {
+          await refreshDailySchedule(date);
+        } catch {
+          removeMapCalendarOverlay();
+        }
+      }
+      return;
+    }
+
+    // TTL 캐시는 응답이 도착한 뒤에만 유효하다. 응답 전에 또 눌린 경우는
+    // 진행 중인 요청에 합류시켜 회의실 수만큼의 요청이 배로 나가는 걸 막는다.
+    const existingInflight = state.availabilityInflightByToken.get(availabilityToken);
+    if (existingInflight instanceof Promise) {
+      pushDebugEvent("availability", "inflight-join", { token: availabilityToken });
+      await existingInflight;
+      return;
+    }
+
     state.loading = true;
     state.pendingAvailabilityRefresh = false;
     setStatus(
@@ -916,25 +932,27 @@
     );
     state.elements.refreshButton.disabled = true;
 
+    const inflight = sendMessage({
+      type: "ZZK_FETCH_AVAILABILITY",
+      payload: {
+        sharingMapId,
+        date,
+        startTime,
+        endTime,
+        roomType,
+      },
+    });
+    state.availabilityInflightByToken.set(availabilityToken, inflight);
+
     try {
       state.availabilityInflightToken = availabilityToken;
-      const response = await sendMessage({
-        type: "ZZK_FETCH_AVAILABILITY",
-        payload: {
-          sharingMapId,
-          date,
-          startTime,
-          endTime,
-          roomType,
-        },
-      });
+      const response = await inflight;
 
       if (!response?.ok) {
         throw new Error(response?.error || "데이터를 불러오지 못했습니다.");
       }
 
       const data = response.data;
-      const rooms = Array.isArray(data?.rooms) ? data.rooms : [];
       if (state.availabilityInflightToken !== availabilityToken) {
         return;
       }
@@ -944,15 +962,9 @@
       if (normalizeMapCalendarSpaceTab(state.mapCalendarSpaceTab) !== roomType) {
         return;
       }
-      state.latestRooms = rooms;
-      state.latestRoomsBySpaceTab.set(roomType, rooms);
-      state.latestMapName =
-        typeof data?.mapName === "string" ? data.mapName : state.latestMapName;
 
-      const visibleRooms = rooms;
-      renderCounts(visibleRooms);
-      renderRoomLists(visibleRooms);
-      renderUpdatedAt();
+      cacheAvailability(availabilityToken, data);
+      applyAvailabilityData(data, { roomType, date, startTime, endTime });
 
       if (state.scheduleOverlayEnabled) {
         try {
@@ -961,14 +973,12 @@
           removeMapCalendarOverlay();
         }
       }
-
-      setStatus(
-        `${data?.mapName || "공간 지도"} · ${date} ${startTime}~${endTime} 기준`,
-        "success",
-      );
     } catch (error) {
       setStatus(getErrorMessage(error), "error");
     } finally {
+      if (state.availabilityInflightByToken.get(availabilityToken) === inflight) {
+        state.availabilityInflightByToken.delete(availabilityToken);
+      }
       if (state.availabilityInflightToken === availabilityToken) {
         state.availabilityInflightToken = null;
       }
@@ -976,6 +986,8 @@
       if (state.elements) {
         state.elements.refreshButton.disabled = false;
       }
+      // 조건이 바뀌어 대기 중인 갱신이 있으면 그때만 다시 돈다.
+      // (같은 조건 반복은 위의 inflight/TTL 에서 이미 걸러진다)
       if (state.pendingAvailabilityRefresh) {
         state.pendingAvailabilityRefresh = false;
         refreshAvailability();
@@ -1127,6 +1139,68 @@
     }
 
     renderRoomTagLegend(legend);
+  }
+
+  // 예약 현황(availability)은 회의실 수만큼 요청을 보낸다. 타임블록을 연속으로
+  // 누르면 그때마다 전량 재조회되므로, 스케줄 캐시와 같은 TTL 로 재사용한다.
+  function getFreshAvailabilityCache(token) {
+    const fetchedAt = state.availabilityCacheFetchedAt.get(token);
+    if (!Number.isFinite(fetchedAt)) {
+      return null;
+    }
+
+    if (Date.now() - fetchedAt >= RESERVATION_SCHEDULE_STALE_MS) {
+      state.availabilityCache.delete(token);
+      state.availabilityCacheFetchedAt.delete(token);
+      return null;
+    }
+
+    return state.availabilityCache.get(token) || null;
+  }
+
+  function cacheAvailability(token, data) {
+    state.availabilityCache.set(token, data);
+    state.availabilityCacheFetchedAt.set(token, Date.now());
+  }
+
+  function clearAvailabilityCache() {
+    state.availabilityCache.clear();
+    state.availabilityCacheFetchedAt.clear();
+    state.availabilityInflightByToken.clear();
+  }
+
+  // 예약이 새로 생기면 캐시된 예약 목록이 즉시 낡는다. TTL(3초)을 기다리면
+  // 방금 잡은 예약이 레이더에 안 보이므로, 성공 즉시 전 계층 캐시를 비우고 다시 그린다.
+  function invalidateReservationCaches() {
+    if (typeof clearLmsReservationCache === "function") {
+      clearLmsReservationCache();
+    }
+    clearAvailabilityCache();
+    state.scheduleCache.clear();
+    state.scheduleCacheFetchedAtByDate.clear();
+    state.scheduleInflightByDate.clear();
+    pushDebugEvent("availability", "cache-invalidated", {
+      reason: "reservation-mutated",
+    });
+  }
+
+  // 새로 받은 응답이든 캐시된 응답이든 화면 반영은 같은 경로를 쓴다.
+  function applyAvailabilityData(data, { roomType, date, startTime, endTime }) {
+    const rooms = Array.isArray(data?.rooms) ? data.rooms : [];
+
+    state.latestRooms = rooms;
+    state.latestRoomsBySpaceTab.set(roomType, rooms);
+    state.latestMapName =
+      typeof data?.mapName === "string" ? data.mapName : state.latestMapName;
+
+    renderCounts(rooms);
+    renderRoomLists(rooms);
+    renderUpdatedAt();
+
+    setStatus(
+      `${data?.mapName || "공간 지도"} · ${date} ${startTime}~${endTime} 기준`,
+      "success",
+    );
   }
 
   function isScheduleCacheStale(date) {
@@ -6936,7 +7010,6 @@
     state.lastObservedRouteKey = getCurrentRouteKey();
     if (!isRadarSupportedPage()) {
       resetEditReservationBaselineConstraint();
-      restorePageReservationNetworkHook();
       teardownGuestUi();
       return;
     }
@@ -6946,9 +7019,6 @@
     state.lastGuestRouteChangeAt = Date.now();
     state.lastObservedPathname = location.pathname;
 
-    if (shouldInstallPageReservationNetworkHook()) {
-      installPageReservationNetworkHook();
-    }
 
     syncMapCalendarAlwaysOpenPreference();
     if (!isGuestUiReadyForActivation()) {
@@ -7014,6 +7084,7 @@
     state.latestRoomsBySpaceTab.clear();
     state.scheduleCache.clear();
     state.scheduleCacheFetchedAtByDate.clear();
+    clearAvailabilityCache();
     state.scheduleInflightByDate.clear();
     state.activeScheduleDate = null;
     state.activeScheduleTab = null;
@@ -7059,158 +7130,6 @@
       handleHistoryMethodLocationChange();
       return result;
     };
-  }
-
-  function installPageReservationNetworkHook() {
-    if (state.reservationHookInstalled || state.reservationHookInstalling) {
-      return;
-    }
-
-    if (!(document.documentElement instanceof HTMLElement)) {
-      return;
-    }
-
-    const existing = document.getElementById(PAGE_RESERVATION_HOOK_SCRIPT_ID);
-    if (existing instanceof HTMLScriptElement) {
-      return;
-    }
-
-    if (
-      typeof chrome === "undefined" ||
-      !chrome.runtime ||
-      typeof chrome.runtime.getURL !== "function"
-    ) {
-      return;
-    }
-
-    state.reservationHookInstalling = true;
-    const installGeneration = state.reservationHookInstallGeneration;
-
-    const mountTarget =
-      document.head instanceof HTMLElement
-        ? document.head
-        : document.documentElement;
-
-    const injectScript = (scriptPath, scriptId = "") =>
-      new Promise((resolve, reject) => {
-        const script = document.createElement("script");
-        if (scriptId) {
-          script.id = scriptId;
-        }
-        script.src = chrome.runtime.getURL(scriptPath);
-        script.async = false;
-        script.dataset.zzkInjected = "true";
-        script.addEventListener(
-          "load",
-          () => {
-            script.remove();
-            resolve();
-          },
-          { once: true },
-        );
-        script.addEventListener(
-          "error",
-          () => {
-            script.remove();
-            reject(new Error(`Failed to load ${scriptPath}`));
-          },
-          { once: true },
-        );
-        mountTarget.appendChild(script);
-      });
-
-    injectScript("src/page-hook/shared.js")
-      .then(() => {
-        if (
-          installGeneration !== state.reservationHookInstallGeneration ||
-          !shouldInstallPageReservationNetworkHook()
-        ) {
-          return false;
-        }
-
-        return injectScript("src/page-network-hook.js", PAGE_RESERVATION_HOOK_SCRIPT_ID)
-          .then(() => true);
-      })
-      .then((hookLoaded) => {
-        if (hookLoaded !== true) {
-          if (installGeneration === state.reservationHookInstallGeneration) {
-            state.reservationHookInstalling = false;
-          }
-          return;
-        }
-
-        state.reservationHookInstalling = false;
-        state.reservationHookInstalled = true;
-        if (
-          installGeneration !== state.reservationHookInstallGeneration ||
-          !shouldInstallPageReservationNetworkHook()
-        ) {
-          restorePageReservationNetworkHook();
-        }
-      })
-      .catch(() => {
-        if (installGeneration === state.reservationHookInstallGeneration) {
-          state.reservationHookInstalling = false;
-          state.reservationHookInstalled = false;
-        }
-      });
-  }
-
-  function restorePageReservationNetworkHook() {
-    state.reservationHookInstallGeneration += 1;
-    const shouldAttemptRestore =
-      state.reservationHookInstalled ||
-      state.reservationHookInstalling ||
-      window.__zzkReservationHookLoaded === true;
-    state.reservationHookInstalling = false;
-    state.reservationHookInstalled = false;
-
-    if (!shouldAttemptRestore) {
-      return;
-    }
-
-    if (typeof window.__zzkReservationHookRestore === "function") {
-      try {
-        window.__zzkReservationHookRestore();
-        return;
-      } catch (error) {
-        debugLog("Failed to restore page reservation hook directly", getErrorMessage(error));
-      }
-    }
-
-    if (!(document.documentElement instanceof HTMLElement)) {
-      return;
-    }
-
-    if (
-      typeof chrome === "undefined" ||
-      !chrome.runtime ||
-      typeof chrome.runtime.getURL !== "function"
-    ) {
-      return;
-    }
-
-    const restoreScriptId = `${PAGE_RESERVATION_HOOK_SCRIPT_ID}-restore`;
-    if (document.getElementById(restoreScriptId)) {
-      return;
-    }
-
-    const mountTarget =
-      document.head instanceof HTMLElement
-        ? document.head
-        : document.documentElement;
-    const script = document.createElement("script");
-    script.id = restoreScriptId;
-    script.src = chrome.runtime.getURL("src/page-network-restore.js");
-    script.async = false;
-    script.dataset.zzkInjected = "true";
-    script.addEventListener("load", () => script.remove(), { once: true });
-    script.addEventListener("error", () => script.remove(), { once: true });
-    mountTarget.appendChild(script);
-  }
-
-  function shouldInstallPageReservationNetworkHook() {
-    return isRadarSupportedPage();
   }
 
   function installReservationIntentWatcher() {
@@ -8634,6 +8553,7 @@
     shouldSkipSlackCopyModal,
     showSlackCopyModal,
     buildLmsSlackReservationContext,
+    onReservationMutated: invalidateReservationCaches,
   });
 
   // 개편 서비스(lms+) 예약 생성 응답 body → Slack 모달 context.
@@ -8936,6 +8856,7 @@
   const {
     fetchAvailability: fetchLmsAvailability,
     fetchDailySchedule: fetchLmsDailySchedule,
+    clearReservationCache: clearLmsReservationCache,
   } = globalThis.__zzkLmsDataShared;
 
   function normalizeDateInput(inputElement) {
@@ -9237,6 +9158,10 @@
           isGuestUiReadyForActivation: isGuestUiReadyForActivation(),
           debugMode: DEBUG_MODE,
         };
+      },
+      // availability 캐시(TTL) 동작 검증용.
+      async refreshAvailability() {
+        return refreshAvailability();
       },
       getDebugEvents() {
         return getDebugEvents();

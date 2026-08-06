@@ -1,5 +1,8 @@
 import path from "node:path";
 import { expect, test } from "@playwright/test";
+import { ensureExtensionBuild, loadBackgroundBundle } from "./helpers/extension.js";
+
+test.beforeAll(ensureExtensionBuild);
 
 // background.js 는 서비스워커 밖에서는 importScripts 가 없어 전역이 미리 올라와 있어야 한다.
 const SCRIPT_ORDER_FOR_LMS_DATA = [
@@ -179,8 +182,9 @@ async function loadBackgroundScript(page) {
       },
     };
   });
-  await page.addScriptTag({ path: path.resolve(process.cwd(), "src/constants/debug.js") });
-  await page.addScriptTag({ path: path.resolve(process.cwd(), "src/background.js") });
+  // background.js 는 이제 ES 모듈(type:"module" 서비스워커)이라 소스 주입이 안 된다.
+  // 빌드된 워커 청크를 실제 모듈 그래프대로 로드한다.
+  await loadBackgroundBundle(page);
 }
 
 async function sendBackgroundMessage(page, message) {
