@@ -63,6 +63,9 @@ function createMount(): OverlayMount {
   portalLayer.dataset.zzkPortalLayer = "";
   portalLayer.style.position = "fixed";
   portalLayer.style.inset = "0";
+  // 층 자체는 화면 전체를 덮으므로 클릭이 통과해야 한다. 다만 실제로 떠 있는
+  // 팝오버·달력은 눌려야 하므로 자식에서 되살린다. 안 그러면 달력이 보이기만
+  // 하고 날짜·월 이동이 전부 먹히지 않는다.
   portalLayer.style.pointerEvents = "none";
   portalLayer.style.zIndex = "1";
   shadowRoot.appendChild(portalLayer);

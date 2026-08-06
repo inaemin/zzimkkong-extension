@@ -707,6 +707,43 @@ test("날짜를 옮겨도 날짜 버튼 너비가 그대로다", async ({ page }
   expect(new Set(widths).size, `너비가 흔들림: ${[...new Set(widths)].join(", ")}`).toBe(1);
 });
 
+// 달력은 포털 층에 뜨는데, 그 층은 화면 전체를 덮으므로 pointer-events: none 이다.
+// 자식에서 되살리지 않으면 달력이 보이기만 하고 클릭이 전부 통과해 버린다.
+test("달력에서 날짜를 고르면 반영되고 월 이동도 된다", async ({ page }) => {
+  await mountServicePage(page);
+  await page.waitForSelector(`#${MAP_CALENDAR_OVERLAY_ID} [aria-label="지도 날짜 선택"]`, {
+    timeout: 4000,
+  });
+
+  const readLabel = () =>
+    page.evaluate(() =>
+      (window.__zzkQuery('[aria-label="지도 날짜 선택"]')?.textContent || "").trim(),
+    );
+  const readMonth = () =>
+    page.evaluate(() =>
+      (window.__zzkQuery('[data-slot="calendar"]')?.textContent || "").slice(0, 20),
+    );
+
+  const before = await readLabel();
+  await page.click(`#${MAP_CALENDAR_OVERLAY_ID} [aria-label="지도 날짜 선택"]`);
+  await page.locator('[data-slot="calendar"]').waitFor({ state: "visible" });
+
+  // 월 이동 화살표가 실제로 먹히는지.
+  const monthBefore = await readMonth();
+  await page.click('[aria-label="Go to the Next Month"]');
+  await expect.poll(readMonth).not.toBe(monthBefore);
+
+  // 날짜 칸을 눌러 실제로 선택이 반영되는지.
+  await page.evaluate(() => {
+    const days = [...window.__zzkQueryAll('[data-slot="calendar"] button')].filter(
+      (button) => /^\d+$/.test((button.textContent || "").trim()) && !button.disabled,
+    );
+    days[15]?.click();
+  });
+
+  await expect.poll(readLabel).not.toBe(before);
+});
+
 // 팝오버·달력은 카드가 아니라 포털 층(position: fixed)에 떠야 한다. 카드 안에
 // 렌더하면 카드가 overflow: hidden + relative 라 scrollHeight 가 늘고 레이아웃이 밀린다.
 test("날짜 달력은 카드 밖 포털 층에 뜬다", async ({ page }) => {

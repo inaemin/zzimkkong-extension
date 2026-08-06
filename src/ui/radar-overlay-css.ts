@@ -81,6 +81,12 @@ export const RADAR_OVERLAY_CSS = `
   --zzk-slot-selected: rgba(14, 165, 233, 0.38);
 }
 
+/* 포털 층은 클릭이 통과해야 하지만(화면 전체를 덮는다), 그 안에 뜬
+   팝오버·달력·툴팁은 눌려야 한다. */
+:host [data-zzk-portal-layer] > * {
+  pointer-events: auto;
+}
+
 :host .zzk-map-calendar-card {
   --zzk-floor-col-width: ${CALENDAR_FLOOR_COL_WIDTH}px;
   --zzk-room-col-width: ${CALENDAR_ROOM_COL_WIDTH}px;
