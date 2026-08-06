@@ -1088,6 +1088,7 @@ declare global {
       renderRadarOverlay(
         createElement(RadarShell, {
           spaceTab: normalizeMapCalendarSpaceTab(state.mapCalendarSpaceTab),
+          collapsed: state.mapCalendarCollapsed,
           onSpaceTabChange: (tab) => {
             setMapCalendarSpaceTab(tab);
           },
@@ -1190,7 +1191,7 @@ declare global {
     syncMapCalendarBodyLoadingState();
 
     if (state.mapCalendarCollapsed) {
-      card.classList.add("collapsed");
+      // 접힘 표시는 RadarShell 이 클래스로 그린다. 너비만 맞추고 본문은 건너뛴다.
       applyMapCalendarWidth(overlay);
       return;
     }
