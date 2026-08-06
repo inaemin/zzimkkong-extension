@@ -20,6 +20,7 @@ type Deps = {
   MAP_CALENDAR_ALWAYS_OPEN_STORAGE_KEY: string;
   RADAR_LAUNCHER_Z_INDEX: number;
   DEBUG_MODE: boolean;
+  DEV_BUILD: boolean;
   queryRadarOverlay: typeof import("../../ui/radar-overlay-mount.js").queryRadarOverlay;
   unmountRadarOverlay: typeof import("../../ui/radar-overlay-mount.js").unmountRadarOverlay;
   renderRadarLauncher: typeof import("../../ui/radar-launcher-mount.js").renderRadarLauncher;
@@ -62,6 +63,7 @@ export function createRadarWorkflow(deps: Deps) {
     MAP_CALENDAR_LAUNCHER_ID,
     SLACK_MODAL_TRIGGER_ID,
     DEBUG_MODE,
+    DEV_BUILD,
     MAP_CALENDAR_ALWAYS_OPEN_STORAGE_KEY,
     findGuestReservationTabContainer,
     findGuestReservationTabStyleSource,
@@ -81,16 +83,27 @@ export function createRadarWorkflow(deps: Deps) {
     renderMapCalendarOverlay,
   } = deps;
 
+  /**
+   * Slack 모달 테스트 버튼을 띄울지.
+   *
+   * 개발 빌드에서만 뜬다. 배포 빌드는 DEV_BUILD 가 false 리터럴로 박히므로
+   * 이 함수가 항상 false 를 주고 버튼이 붙지 않는다.
+   *
+   * 배포 빌드에서 실제 사이트를 확인해야 할 때만 localStorage 로 연다
+   * (DEBUG_MODE 는 페이지가 플래그를 심어야 켜지므로 사용자에게는 안 보인다).
+   */
   function shouldShowSlackModalTrigger() {
-    const manualVerificationEnabled = (() => {
-      try {
-        return window.localStorage.getItem("zzk-manual-slack-modal-trigger-v1") === "1";
-      } catch {
-        return false;
-      }
-    })();
-
-    return DEBUG_MODE || manualVerificationEnabled;
+    if (DEV_BUILD) {
+      return true;
+    }
+    if (!DEBUG_MODE) {
+      return false;
+    }
+    try {
+      return window.localStorage.getItem("zzk-manual-slack-modal-trigger-v1") === "1";
+    } catch {
+      return false;
+    }
   }
 
   function createSlackTrigger(): HTMLButtonElement {
