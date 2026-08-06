@@ -22,3 +22,11 @@ src-backup/
 EXTENSION.md
 ISSUE.md
 webstore-screenshots/
+
+# Local drafts / notes (커밋 대상이 아님)
+dropit.md
+dropit-thumbnail.png
+*-explanation-pr-*.html
+
+# 로컬 전용 에이전트 스킬(commit·loop-issue 는 추적한다)
+.opencode/skills/explain-diff/

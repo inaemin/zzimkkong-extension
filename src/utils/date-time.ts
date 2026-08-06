@@ -294,36 +294,8 @@ export function parseDateStringAsUTC(dateString: string): Date | null {
   return Number.isNaN(date.getTime()) ? null : date;
 }
 
-export function addMonthsToDateString(dateString: string, monthOffset: number): string {
-  if (!isDateString(dateString) || !Number.isInteger(monthOffset)) {
-    return dateString;
-  }
-  const parsedDate = parseDateStringAsUTC(dateString);
-  if (!(parsedDate instanceof Date)) {
-    return dateString;
-  }
-  parsedDate.setUTCDate(1);
-  parsedDate.setUTCMonth(parsedDate.getUTCMonth() + monthOffset);
-  return formatUTCDateString(parsedDate);
-}
 
-export function getMonthStartDateString(dateString: string): string {
-  const parsedDate = parseDateStringAsUTC(dateString);
-  if (!(parsedDate instanceof Date)) {
-    return "";
-  }
-  parsedDate.setUTCDate(1);
-  return formatUTCDateString(parsedDate);
-}
 
-export function formatMonthTitle(date: Date): string {
-  if (!(date instanceof Date) || Number.isNaN(date.getTime())) {
-    return "";
-  }
-  const year = date.getUTCFullYear();
-  const month = String(date.getUTCMonth() + 1).padStart(2, "0");
-  return `${year}.${month}`;
-}
 
 export function formatKSTWeekday(dateString: string): string {
   const parsedDate = parseDateStringAsUTC(dateString);

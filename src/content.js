@@ -32,11 +32,6 @@ import {
   getNextHourRange,
   getEarliestSelectableMinuteForDate,
   addDaysToDateString,
-  formatUTCDateString,
-  parseDateStringAsUTC,
-  addMonthsToDateString,
-  getMonthStartDateString,
-  formatMonthTitle,
   formatKSTWeekday,
   formatDateSelectorText,
 } from "./utils/date-time.js";
@@ -63,6 +58,21 @@ import {
   readHostFieldDisplayValue,
 } from "./features/form-fields/shared.js";
 import {
+  buildSlotStates,
+  buildSlotTitle,
+  groupRoomsByFloor,
+  resolveSelectionEndIndex,
+} from "./features/radar/slot-model.js";
+import { createElement } from "react";
+import { flushSync } from "react-dom";
+import { closeFloorMapZoom, openFloorMapZoom } from "./ui/floor-map-zoom-modal.js";
+import { RadarShell } from "./ui/components/radar-shell.js";
+import { getRadarOverlayRoot } from "./ui/radar-overlay-mount.js";
+import { renderRadarHeader } from "./ui/radar-header-mount.js";
+import { renderRadarGrid } from "./ui/radar-grid-mount.js";
+import { renderRadarError } from "./ui/radar-error-mount.js";
+import { ensurePageTailwindStyle } from "./ui/page-styles.js";
+import {
   MAP_CALENDAR_OVERLAY_ID,
   MAP_CALENDAR_LAUNCHER_ID,
   SLACK_MODAL_TRIGGER_ID,
@@ -72,13 +82,10 @@ import {
   MAP_CALENDAR_OVERLAY_TAB_PAIR_ID,
   PAGE_RESERVATION_EVENT_TYPE,
   SLACK_COPY_MODAL_ID,
-  FLOOR_MAP_ZOOM_ID,
   SLACK_COPY_MODAL_STYLE_ID,
   SLACK_COPY_MODAL_BASECOAT_STYLE_ID,
   SLACK_COPY_MODAL_BASECOAT_STYLE_PATH,
   X_ICON_SVG,
-  CHEVRON_LEFT_ICON_SVG,
-  CHEVRON_RIGHT_ICON_SVG,
   SLACK_CHANNEL_MENTION_STORAGE_KEY,
   SLACK_CHANNEL_HISTORY_STORAGE_KEY,
   SLACK_REMINDER_LEAD_TIME_STORAGE_KEY,
@@ -202,175 +209,8 @@ import { createSlackSuccessFlow } from "./features/slack/success-flow.js";
     writeStoredBoolean(MAP_CALENDAR_FLOORMAP_OPEN_STORAGE_KEY, open);
   }
 
-  // 평면도를 누르고 있는 동안 화면 중앙에 크게 띄우는 확대 모달. 단일 인스턴스를
-  // 재사용한다(누를 때 보이고, 손을 떼면 숨긴다).
-  let floorMapZoomOverlay = null;
-
-  function ensureFloorMapZoomOverlay() {
-    // detached 노드도 instanceof 는 계속 true 이므로, DOM 에 붙어있는지(isConnected)
-    // 까지 확인한다. lms+ SPA 에서 body 하위가 갈려 떨어져 나갔으면 새로 만든다.
-    if (floorMapZoomOverlay instanceof HTMLElement && floorMapZoomOverlay.isConnected) {
-      return floorMapZoomOverlay;
-    }
-    const overlay = document.createElement("div");
-    overlay.id = FLOOR_MAP_ZOOM_ID;
-    overlay.setAttribute("aria-hidden", "true");
-    // 클릭을 가로채지 않는다(누르는 동안 보기용). pointerup 은 window 에서 감지한다.
-    overlay.style.pointerEvents = "none";
-
-    const zoomImg = document.createElement("img");
-    zoomImg.className = "zzk-floormap-zoom-image";
-    zoomImg.alt = "";
-    zoomImg.draggable = false;
-
-    const caption = document.createElement("div");
-    caption.className = "zzk-floormap-zoom-caption";
-
-    overlay.append(zoomImg, caption);
-    document.body.appendChild(overlay);
-    overlay.__zzkImage = zoomImg;
-    overlay.__zzkCaption = caption;
-    floorMapZoomOverlay = overlay;
-    return overlay;
-  }
-
-  function openFloorMapZoom(floor, dataUri) {
-    if (!dataUri) {
-      return;
-    }
-    const overlay = ensureFloorMapZoomOverlay();
-    overlay.__zzkImage.src = dataUri;
-    overlay.__zzkImage.alt = `${floor}층 평면도 확대`;
-    overlay.__zzkCaption.textContent = `${floor}F`;
-    overlay.classList.add("visible");
-    overlay.setAttribute("aria-hidden", "false");
-  }
-
-  function closeFloorMapZoom() {
-    if (!(floorMapZoomOverlay instanceof HTMLElement)) {
-      return;
-    }
-    floorMapZoomOverlay.classList.remove("visible");
-    floorMapZoomOverlay.setAttribute("aria-hidden", "true");
-  }
-
   // 타임라인 아래에 층별 평면도(SVG)를 접이식으로 붙인다. lms+ 에는 지도가 없어
   // 공간의 물리적 위치를 알 수 없으므로, 평면도로 페어룸 등의 위치를 확인하게 한다.
-  function renderMapCalendarFloorMapSection(body, preservedScrollLeft = 0) {
-    if (!(body instanceof HTMLElement)) {
-      return;
-    }
-    const floorMaps = { getAvailableFloorMapFloors, getFloorMapDataUri };
-    if (!floorMaps || typeof floorMaps.getAvailableFloorMapFloors !== "function") {
-      return;
-    }
-    const floors = floorMaps.getAvailableFloorMapFloors();
-    if (!Array.isArray(floors) || floors.length === 0) {
-      return;
-    }
-
-    const section = document.createElement("section");
-    section.className = "zzk-map-calendar-floormap-section";
-
-    const open = isFloorMapSectionOpen();
-
-    // 접기/펼치기 헤더(버튼).
-    const header = document.createElement("button");
-    header.type = "button";
-    header.className = "zzk-map-calendar-floormap-header";
-    header.setAttribute("aria-expanded", open ? "true" : "false");
-
-    const caret = document.createElement("span");
-    caret.className = "zzk-map-calendar-floormap-caret";
-    caret.setAttribute("aria-hidden", "true");
-    caret.textContent = "▸";
-
-    const title = document.createElement("span");
-    title.className = "zzk-map-calendar-floormap-title";
-    title.textContent = "평면도";
-
-    header.append(caret, title);
-    section.appendChild(header);
-
-    // 층별 평면도를 가로로 나열하는 스크롤 컨테이너.
-    const scroller = document.createElement("div");
-    scroller.className = "zzk-map-calendar-floormap-scroller";
-
-    floors.forEach((floor) => {
-      const dataUri = floorMaps.getFloorMapDataUri(floor);
-      if (!dataUri) {
-        return;
-      }
-      const card = document.createElement("figure");
-      card.className = "zzk-map-calendar-floormap-card";
-
-      const img = document.createElement("img");
-      img.className = "zzk-map-calendar-floormap-image";
-      img.src = dataUri;
-      img.alt = `${floor}층 평면도`;
-      img.loading = "lazy";
-      img.draggable = false;
-
-      // 마우스로 누르고 있는 동안에만 확대 모달로 크게 보여준다.
-      img.addEventListener("pointerdown", (event) => {
-        // 주 버튼(좌클릭)/터치만 처리한다.
-        if (event.button != null && event.button !== 0) {
-          return;
-        }
-        event.preventDefault();
-        openFloorMapZoom(floor, dataUri);
-
-        const release = () => {
-          closeFloorMapZoom();
-          window.removeEventListener("pointerup", release);
-          window.removeEventListener("pointercancel", release);
-          window.removeEventListener("blur", release);
-        };
-        // 이미지 밖에서 손을 떼도 닫히도록 window 에 한 번만 건다.
-        window.addEventListener("pointerup", release);
-        window.addEventListener("pointercancel", release);
-        window.addEventListener("blur", release);
-      });
-
-      const caption = document.createElement("figcaption");
-      caption.className = "zzk-map-calendar-floormap-caption";
-      caption.textContent = `${floor}F`;
-
-      card.append(img, caption);
-      scroller.appendChild(card);
-    });
-
-    section.appendChild(scroller);
-
-    const applyOpenState = (nextOpen) => {
-      section.classList.toggle("open", nextOpen);
-      header.setAttribute("aria-expanded", nextOpen ? "true" : "false");
-      caret.textContent = nextOpen ? "▾" : "▸";
-    };
-    applyOpenState(open);
-
-    // 리렌더로 스크롤러가 새로 만들어졌으므로, 펼쳐진 상태면 이전 가로 스크롤 위치를
-    // 복원한다. 이미지 레이아웃이 잡힌 뒤라야 scrollLeft 가 먹으므로 다음 프레임에서 한다.
-    if (open && preservedScrollLeft > 0) {
-      window.requestAnimationFrame(() => {
-        scroller.scrollLeft = preservedScrollLeft;
-      });
-    }
-
-    header.addEventListener("click", () => {
-      const nextOpen = !section.classList.contains("open");
-      applyOpenState(nextOpen);
-      persistFloorMapSectionOpen(nextOpen);
-      // 평면도를 펼치면 모달이 세로로 길어지는(=리사이즈) 것이므로, 뷰포트를
-      // 벗어났으면 화면 안으로 다시 끌어들인다. 새 높이가 레이아웃에 반영된 뒤
-      // 측정하도록 다음 프레임에서 실행한다.
-      window.requestAnimationFrame(() => {
-        reclampMapCalendarOffsetToViewport();
-      });
-    });
-
-    body.appendChild(section);
-  }
 
   const state = {
     mounted: false,
@@ -406,8 +246,6 @@ import { createSlackSuccessFlow } from "./features/slack/success-flow.js";
     mapCalendarCurrentTimeScrollDate: null,
     // 드래그로 옮긴 모달 위치를 저장소에서 복원한다.
     mapCalendarOffset: readStoredMapCalendarOffset(),
-    slotSelection: null,
-    slotHover: null,
     appliedSelection: null,
     timelineSelectionRequestId: 0,
     timelineSelectionApplyTimer: null,
@@ -1403,6 +1241,7 @@ import { createSlackSuccessFlow } from "./features/slack/success-flow.js";
     }
 
     ensureMapCalendarStyle();
+    ensurePageTailwindStyle();
 
     let overlay = document.getElementById(MAP_CALENDAR_OVERLAY_ID);
     if (!(overlay instanceof HTMLElement) || overlay.parentElement !== modalRoot) {
@@ -1419,80 +1258,39 @@ import { createSlackSuccessFlow } from "./features/slack/success-flow.js";
     document
       .querySelectorAll(".zzk-map-calendar-date-popover-floating")
       .forEach((element) => element.remove());
-    overlay.textContent = "";
 
-    const shell = document.createElement("div");
-    shell.className = "zzk-map-calendar-shell";
-    overlay.appendChild(shell);
-
-    const card = document.createElement("div");
-    card.className = "zzk-map-calendar-card";
-    ["pointerdown", "mousedown", "mouseup", "click", "dblclick", "touchstart", "touchend"].forEach(
-      (eventName) => {
-        card.addEventListener(eventName, (event) => event.stopPropagation());
-      },
-    );
-    shell.appendChild(card);
-
-    const header = document.createElement("div");
-    header.className = "zzk-map-calendar-header";
-    card.appendChild(header);
-    bindDraggableHeader({
-      header,
-      element: overlay,
-      getOffset: () => state.mapCalendarOffset,
-      setOffset: (nextOffset) => {
-        state.mapCalendarOffset = nextOffset;
-        persistMapCalendarOffset(nextOffset);
-      },
-      applyOffset: () => {
-        applyMapCalendarOverlayOffset(overlay);
-      },
+    const errorRefs = {};
+    flushSync(() => {
+      renderRadarError(overlay, {
+        message: errorMessage || "예약 현황을 불러오지 못했습니다.",
+        onRetry: () => {
+          openMapCalendarModal();
+        },
+        onClose: () => {
+          state.mapCalendarVisible = false;
+          state.lastAutoOpenPath = null;
+          removeMapCalendarOverlay();
+        },
+        headerRef: (node) => {
+          errorRefs.header = node;
+        },
+      });
     });
 
-    const titleControls = document.createElement("div");
-    titleControls.className = "zzk-map-calendar-title-controls";
-    const title = document.createElement("strong");
-    title.textContent = "예약 현황";
-    titleControls.appendChild(title);
-    header.appendChild(titleControls);
-
-    const headerRight = document.createElement("div");
-    headerRight.className = "zzk-map-calendar-header-right";
-    header.appendChild(headerRight);
-
-    const closeButton = document.createElement("button");
-    closeButton.type = "button";
-    closeButton.className = "zzk-map-calendar-toggle";
-    closeButton.textContent = "닫기";
-    closeButton.setAttribute("aria-label", "레이더 닫기");
-    closeButton.addEventListener("click", () => {
-      state.mapCalendarVisible = false;
-      state.lastAutoOpenPath = null;
-      removeMapCalendarOverlay();
-    });
-    headerRight.appendChild(closeButton);
-
-    const body = document.createElement("div");
-    body.className = "zzk-map-calendar-body zzk-map-calendar-error-body";
-    const errorBox = document.createElement("div");
-    errorBox.className = "zzk-map-calendar-error";
-    const errorText = document.createElement("p");
-    errorText.className = "zzk-map-calendar-error-message";
-    errorText.textContent = errorMessage || "예약 현황을 불러오지 못했습니다.";
-    errorBox.appendChild(errorText);
-
-    const retryButton = document.createElement("button");
-    retryButton.type = "button";
-    retryButton.className = "zzk-map-calendar-error-retry";
-    retryButton.textContent = "다시 시도";
-    retryButton.addEventListener("click", () => {
-      openMapCalendarModal();
-    });
-    errorBox.appendChild(retryButton);
-
-    body.appendChild(errorBox);
-    card.appendChild(body);
+    if (errorRefs.header instanceof HTMLElement) {
+      bindDraggableHeader({
+        header: errorRefs.header,
+        element: overlay,
+        getOffset: () => state.mapCalendarOffset,
+        setOffset: (nextOffset) => {
+          state.mapCalendarOffset = nextOffset;
+          persistMapCalendarOffset(nextOffset);
+        },
+        applyOffset: () => {
+          applyMapCalendarOverlayOffset(overlay);
+        },
+      });
+    }
   }
 
   function renderMapCalendarOverlay(scheduleData) {
@@ -1531,6 +1329,7 @@ import { createSlackSuccessFlow } from "./features/slack/success-flow.js";
     }
 
     ensureMapCalendarStyle();
+    ensurePageTailwindStyle();
 
     let overlay = document.getElementById(MAP_CALENDAR_OVERLAY_ID);
     if (overlay instanceof HTMLElement && overlay.parentElement !== modalRoot) {
@@ -1553,11 +1352,6 @@ import { createSlackSuccessFlow } from "./features/slack/success-flow.js";
       left: previousScrollEl instanceof HTMLElement ? previousScrollEl.scrollLeft : 0,
       top: previousBody instanceof HTMLElement ? previousBody.scrollTop : 0,
     };
-    // 평면도 스크롤러도 매 리렌더마다 새로 그려지므로, 슬롯 hover 등으로 자주 재렌더될 때
-    // 가로 스크롤 위치가 맨 앞으로 튀지 않도록 이전 위치를 보존한다.
-    const previousFloorMapScroller = overlay.querySelector(".zzk-map-calendar-floormap-scroller");
-    const preservedFloorMapScrollLeft =
-      previousFloorMapScroller instanceof HTMLElement ? previousFloorMapScroller.scrollLeft : 0;
 
     applyMapCalendarOverlayOffset(overlay);
     updateMapCalendarLauncherState();
@@ -1565,7 +1359,9 @@ import { createSlackSuccessFlow } from "./features/slack/success-flow.js";
     document
       .querySelectorAll(".zzk-map-calendar-date-popover-floating")
       .forEach((element) => element.remove());
-    overlay.textContent = "";
+    // overlay 는 이제 React 루트다. textContent 로 비우면 React 가 자기 DOM 이
+    // 사라진 줄 모른 채 다음 렌더에서 없는 노드를 건드린다. 트리 갱신은 React 에
+    // 맡기고, 아직 명령형인 본문만 아래에서 새로 만들어 붙인다.
 
     const timeline = scheduleData.timeline;
     const renderedTab = normalizeMapCalendarSpaceTab(
@@ -1607,12 +1403,6 @@ import { createSlackSuccessFlow } from "./features/slack/success-flow.js";
       ? 0
       : getEarliestSelectableMinuteForDate(selectionDate);
 
-    if (state.slotSelection && state.slotSelection.date !== selectionDate) {
-      state.slotSelection = null;
-    }
-    if (state.slotHover && state.slotHover.date !== selectionDate) {
-      state.slotHover = null;
-    }
     if (state.appliedSelection && state.appliedSelection.date !== selectionDate) {
       state.appliedSelection = null;
     }
@@ -1623,65 +1413,44 @@ import { createSlackSuccessFlow } from "./features/slack/success-flow.js";
       state.appliedSelection = null;
     }
 
-    const shell = document.createElement("div");
-    shell.className = "zzk-map-calendar-shell";
-    overlay.appendChild(shell);
-
-    const spaceTabs = document.createElement("div");
-    spaceTabs.className = "zzk-map-calendar-space-tabs";
-    spaceTabs.setAttribute("role", "tablist");
-    spaceTabs.setAttribute("aria-label", "공간 유형 선택");
-
-    const meetingTabButton = document.createElement("button");
-    meetingTabButton.type = "button";
-    meetingTabButton.id = MAP_CALENDAR_OVERLAY_TAB_MEETING_ID;
-    meetingTabButton.className = "zzk-map-calendar-space-tab";
-    meetingTabButton.textContent = "회의실";
-    meetingTabButton.setAttribute("role", "tab");
-
-    const pairTabButton = document.createElement("button");
-    pairTabButton.type = "button";
-    pairTabButton.id = MAP_CALENDAR_OVERLAY_TAB_PAIR_ID;
-    pairTabButton.className = "zzk-map-calendar-space-tab";
-    pairTabButton.textContent = "페어룸";
-    pairTabButton.setAttribute("role", "tab");
-
-    meetingTabButton.addEventListener("click", () => {
-      setMapCalendarSpaceTab(MAP_CALENDAR_SPACE_TAB_MEETING);
+    // 껍데기(탭/카드/헤더 자리/리사이즈 손잡이)는 React 가 그린다. 아직 명령형인
+    // 헤더 컨트롤과 본문은 React 가 내준 자리(ref)에 그대로 붙인다.
+    const shellRefs = {};
+    // ref 가 채워진 상태로 아래 명령형 코드가 이어져야 하므로 이번 렌더를 동기로
+    // 밀어낸다. flushSync(() => {}) 처럼 빈 콜백을 주면 대기 중인 렌더는 밀려나지
+    // 않는다 — render 호출 자체가 안에 들어가야 한다.
+    flushSync(() => {
+      getRadarOverlayRoot(overlay).render(
+        createElement(RadarShell, {
+          spaceTab: normalizeMapCalendarSpaceTab(state.mapCalendarSpaceTab),
+          onSpaceTabChange: (tab) => {
+            setMapCalendarSpaceTab(tab);
+          },
+          cardRef: (node) => {
+            shellRefs.card = node;
+          },
+          headerRef: (node) => {
+            shellRefs.header = node;
+          },
+          resizeHandleRef: (node) => {
+            shellRefs.resizeHandle = node;
+          },
+          bodyRef: (node) => {
+            shellRefs.body = node;
+          },
+        }),
+      );
     });
-    pairTabButton.addEventListener("click", () => {
-      setMapCalendarSpaceTab(MAP_CALENDAR_SPACE_TAB_PAIR);
-    });
-    spaceTabs.append(meetingTabButton, pairTabButton);
-    shell.appendChild(spaceTabs);
+
+    const card = shellRefs.card;
+    const header = shellRefs.header;
+    if (!(card instanceof HTMLElement) || !(header instanceof HTMLElement)) {
+      return;
+    }
+    if (shellRefs.resizeHandle instanceof HTMLElement) {
+      bindMapCalendarResizeHandle(shellRefs.resizeHandle, card);
+    }
     syncOpenMapCalendarSpaceTabButtons();
-
-    const card = document.createElement("div");
-    card.className = "zzk-map-calendar-card";
-    const stopOverlayEventPropagation = (event) => {
-      event.stopPropagation();
-    };
-    ["pointerdown", "mousedown", "mouseup", "click", "dblclick", "touchstart", "touchend"].forEach(
-      (eventName) => {
-        card.addEventListener(eventName, stopOverlayEventPropagation);
-      },
-    );
-    card.addEventListener("wheel", stopOverlayEventPropagation, {
-      passive: true,
-    });
-    shell.appendChild(card);
-
-    const resizeHandle = document.createElement("div");
-    resizeHandle.className = "zzk-map-calendar-resize-handle";
-    resizeHandle.setAttribute("role", "separator");
-    resizeHandle.setAttribute("aria-orientation", "vertical");
-    resizeHandle.setAttribute("aria-label", "레이더 너비 조절");
-    card.appendChild(resizeHandle);
-    bindMapCalendarResizeHandle(resizeHandle, card);
-
-    const header = document.createElement("div");
-    header.className = "zzk-map-calendar-header";
-    card.appendChild(header);
 
     bindDraggableHeader({
       header,
@@ -1696,486 +1465,75 @@ import { createSlackSuccessFlow } from "./features/slack/success-flow.js";
       },
     });
 
-    const titleControls = document.createElement("div");
-    titleControls.className = "zzk-map-calendar-title-controls";
-    header.appendChild(titleControls);
+    // 헤더는 React 가 그린다. 날짜 선택은 손으로 만든 팝오버 대신 shadcn DatePicker
+    // 를 쓰므로, 달력 그리기·위치 계산·바깥 클릭 감지 코드가 전부 빠졌다.
+    const headerRefs = {};
+    const headerDateInput = state.elements?.dateInput;
+    const headerDate =
+      (headerDateInput instanceof HTMLInputElement ? headerDateInput.value : "") ||
+      scheduleData.date ||
+      "";
+    const headerMinDate = getMinimumSelectableDateForCurrentContext(headerDate) || "";
+    // 최소일보다 앞이면 끌어올린다. 지난 날짜는 예약할 수 없다.
+    const clampedHeaderDate = clampDateToMin(headerDate, headerMinDate);
+    if (headerDateInput instanceof HTMLInputElement && clampedHeaderDate) {
+      headerDateInput.value = clampedHeaderDate;
+    }
+    syncPanelDateNavigationState();
 
-    if (state.elements) {
-      const controlRow = document.createElement("div");
-      controlRow.className = "zzk-map-calendar-controls";
-
-      const dateControlRow = document.createElement("div");
-      dateControlRow.className = "zzk-map-calendar-date-row";
-
-      const dateWeekdayLabel = document.createElement("span");
-      dateWeekdayLabel.className = "zzk-map-calendar-date-display";
-      dateWeekdayLabel.setAttribute("aria-live", "polite");
-
-      const dateDisplayWrap = document.createElement("span");
-      dateDisplayWrap.className = "zzk-map-calendar-date-display-wrap";
-      dateDisplayWrap.tabIndex = 0;
-      dateDisplayWrap.setAttribute("role", "button");
-      dateDisplayWrap.setAttribute("aria-label", "지도 날짜 선택 열기");
-
-      const datePopover = document.createElement("div");
-      datePopover.className =
-        "zzk-map-calendar-date-popover zzk-map-calendar-date-popover-floating";
-      datePopover.hidden = true;
-
-      const datePopoverHeader = document.createElement("div");
-      datePopoverHeader.className = "zzk-map-calendar-date-popover-header";
-
-      const datePopoverPrevButton = document.createElement("button");
-      datePopoverPrevButton.type = "button";
-      datePopoverPrevButton.className = "zzk-map-calendar-date-popover-nav prev";
-      datePopoverPrevButton.innerHTML = CHEVRON_LEFT_ICON_SVG;
-      datePopoverPrevButton.setAttribute("aria-label", "이전달");
-
-      const datePopoverTitle = document.createElement("strong");
-      datePopoverTitle.className = "zzk-map-calendar-date-popover-title";
-
-      const datePopoverNextButton = document.createElement("button");
-      datePopoverNextButton.type = "button";
-      datePopoverNextButton.className = "zzk-map-calendar-date-popover-nav next";
-      datePopoverNextButton.innerHTML = CHEVRON_RIGHT_ICON_SVG;
-      datePopoverNextButton.setAttribute("aria-label", "다음달");
-
-      datePopoverHeader.append(datePopoverPrevButton, datePopoverTitle, datePopoverNextButton);
-
-      const datePopoverWeekdays = document.createElement("div");
-      datePopoverWeekdays.className = "zzk-map-calendar-date-popover-weekdays";
-      ["일", "월", "화", "수", "목", "금", "토"].forEach((weekday) => {
-        const weekdayLabel = document.createElement("span");
-        weekdayLabel.textContent = weekday;
-        datePopoverWeekdays.appendChild(weekdayLabel);
-      });
-
-      const datePopoverGrid = document.createElement("div");
-      datePopoverGrid.className = "zzk-map-calendar-date-popover-grid";
-      datePopover.append(datePopoverHeader, datePopoverWeekdays, datePopoverGrid);
-      ["pointerdown", "click", "mousedown", "mouseup", "touchstart", "touchend"].forEach(
-        (eventName) => {
-          datePopover.addEventListener(eventName, (event) => {
-            event.stopPropagation();
-          });
+    flushSync(() => {
+      renderRadarHeader(header, {
+        date: clampedHeaderDate,
+        minDate: headerMinDate,
+        todayDate: getTodayDateInKST(),
+        onDateChange: (nextDate) => {
+          applyPanelDateChange(nextDate);
         },
-      );
-
-      const prevDateButton = document.createElement("button");
-      prevDateButton.type = "button";
-      prevDateButton.className = "zzk-map-calendar-date-nav prev";
-      prevDateButton.innerHTML = CHEVRON_LEFT_ICON_SVG;
-      prevDateButton.setAttribute("aria-label", "이전날");
-
-      const dateInput = document.createElement("input");
-      dateInput.type = "date";
-      dateInput.className = "zzk-map-calendar-control zzk-date zzk-map-calendar-date-native";
-
-      const nextDateButton = document.createElement("button");
-      nextDateButton.type = "button";
-      nextDateButton.className = "zzk-map-calendar-date-nav next";
-      nextDateButton.innerHTML = CHEVRON_RIGHT_ICON_SVG;
-      nextDateButton.setAttribute("aria-label", "다음날");
-
-      const todayDateButton = document.createElement("button");
-      todayDateButton.type = "button";
-      todayDateButton.className = "zzk-map-calendar-date-nav today";
-      todayDateButton.textContent = "오늘";
-      todayDateButton.setAttribute("aria-label", "오늘");
-
-      const syncMapCalendarDateNavState = () => {
-        const todayDate = getTodayDateInKST();
-        const minimumDate = getMinimumSelectableDateForCurrentContext(dateInput.value);
-        setDateInputMinimum(dateInput, minimumDate);
-        const normalizedDate = clampDateToMin(dateInput.value, minimumDate);
-        dateInput.value = normalizedDate;
-        state.elements.dateInput.value = normalizedDate;
-        syncPanelDateNavigationState();
-        prevDateButton.disabled = Boolean(minimumDate) && normalizedDate <= minimumDate;
-        todayDateButton.disabled = normalizedDate === todayDate;
-
-        const prevDate = addDaysToDateString(normalizedDate, -1);
-        const nextDate = addDaysToDateString(normalizedDate, 1);
-        const prevLabel = isDateString(prevDate) ? `이전일 (${prevDate})` : "이전일";
-        const nextLabel = isDateString(nextDate) ? `다음일 (${nextDate})` : "다음일";
-        const todayLabel = `오늘 (${todayDate})`;
-        const dateDisplayText = formatDateSelectorText(normalizedDate);
-        renderDateDisplayLabel(dateWeekdayLabel, normalizedDate);
-        setAttrOrRemove(dateWeekdayLabel, "title", dateDisplayText || "");
-
-        prevDateButton.title = prevLabel;
-        prevDateButton.setAttribute("aria-label", prevLabel);
-        nextDateButton.title = nextLabel;
-        nextDateButton.setAttribute("aria-label", nextLabel);
-        todayDateButton.title = todayLabel;
-        todayDateButton.setAttribute("aria-label", todayLabel);
-      };
-
-      const todayDate = getTodayDateInKST();
-      const minimumDate = getMinimumSelectableDateForCurrentContext(
-        state.elements.dateInput.value || scheduleData.date || "",
-      );
-      setDateInputMinimum(dateInput, minimumDate);
-      const initialDate = clampDateToMin(
-        state.elements.dateInput.value || scheduleData.date || "",
-        minimumDate,
-      );
-      dateInput.value = initialDate;
-      state.elements.dateInput.value = initialDate;
-      syncPanelDateNavigationState();
-      dateInput.setAttribute("aria-label", "지도 날짜 선택");
-      const shouldUseCustomDatePopover = true;
-      let datePopoverMonth =
-        state.mapCalendarDatePopoverMonth || getMonthStartDateString(initialDate || todayDate);
-      let lastDatePopoverPosition = { left: null, top: null };
-
-      const syncMapCalendarDatePopoverPosition = () => {
-        if (datePopover.hidden) {
-          datePopover.style.removeProperty("left");
-          datePopover.style.removeProperty("top");
-          return;
-        }
-
-        const displayRect = dateDisplayWrap.getBoundingClientRect();
-        const popoverRect = datePopover.getBoundingClientRect();
-        const viewportWidth = window.innerWidth || document.documentElement.clientWidth || 0;
-        const viewportHeight = window.innerHeight || document.documentElement.clientHeight || 0;
-        const popoverWidth = Math.ceil(popoverRect.width || datePopover.offsetWidth || 236);
-        const popoverHeight = Math.ceil(popoverRect.height || datePopover.offsetHeight || 0);
-        const horizontalPadding = 12;
-        const verticalGap = 8;
-
-        if (
-          !Number.isFinite(displayRect.left) ||
-          !Number.isFinite(displayRect.bottom) ||
-          !Number.isFinite(popoverWidth) ||
-          !Number.isFinite(popoverHeight) ||
-          popoverWidth <= 0 ||
-          popoverHeight <= 0
-        ) {
-          if (
-            Number.isFinite(lastDatePopoverPosition.left) &&
-            Number.isFinite(lastDatePopoverPosition.top)
-          ) {
-            datePopover.style.left = `${Math.round(lastDatePopoverPosition.left)}px`;
-            datePopover.style.top = `${Math.round(lastDatePopoverPosition.top)}px`;
-          }
-          return;
-        }
-
-        let left = displayRect.left;
-        left = Math.min(left, viewportWidth - popoverWidth - horizontalPadding);
-        left = Math.max(horizontalPadding, left);
-
-        const top = Math.max(horizontalPadding, displayRect.bottom + verticalGap);
-
-        const nextLeft = Math.round(left);
-        const nextTop = Math.round(top);
-        datePopover.style.left = `${nextLeft}px`;
-        datePopover.style.top = `${nextTop}px`;
-        lastDatePopoverPosition = { left: nextLeft, top: nextTop };
-      };
-      state.syncMapCalendarDatePopoverPosition = syncMapCalendarDatePopoverPosition;
-
-      const handleViewportPopoverReposition = () => {
-        if (datePopover.hidden) {
-          return;
-        }
-        window.requestAnimationFrame(() => {
-          syncMapCalendarDatePopoverPosition();
-        });
-      };
-
-      const closeMapCalendarDatePopover = () => {
-        datePopover.hidden = true;
-        dateDisplayWrap.classList.remove("is-open");
-        state.mapCalendarDatePopoverOpen = false;
-        state.mapCalendarDatePopoverMonth = datePopoverMonth;
-        syncMapCalendarDatePopoverPosition();
-        window.removeEventListener("resize", handleViewportPopoverReposition);
-        window.removeEventListener("scroll", handleViewportPopoverReposition, true);
-      };
-
-      const openMapCalendarDatePopover = () => {
-        renderMapCalendarDatePopover();
-        datePopover.hidden = false;
-        dateDisplayWrap.classList.add("is-open");
-        state.mapCalendarDatePopoverOpen = true;
-        state.mapCalendarDatePopoverMonth = datePopoverMonth;
-        window.addEventListener("resize", handleViewportPopoverReposition);
-        window.addEventListener("scroll", handleViewportPopoverReposition, true);
-        window.requestAnimationFrame(() => {
-          syncMapCalendarDatePopoverPosition();
-        });
-      };
-
-      const toggleMapCalendarDatePopover = () => {
-        if (datePopover.hidden) {
-          openMapCalendarDatePopover();
-          return;
-        }
-        closeMapCalendarDatePopover();
-      };
-
-      const selectMapCalendarPopoverDate = (nextDate) => {
-        const normalizedDate = clampDateToMin(normalizeDateString(nextDate), getTodayDateInKST());
-        if (!normalizedDate) {
-          return;
-        }
-        dateInput.value = normalizedDate;
-        applyPanelDateChange(normalizedDate);
-        dateInput.value = state.elements.dateInput.value;
-        datePopoverMonth = getMonthStartDateString(normalizedDate);
-        state.mapCalendarDatePopoverMonth = datePopoverMonth;
-        syncMapCalendarDateNavState();
-        closeMapCalendarDatePopover();
-      };
-
-      function renderMapCalendarDatePopover() {
-        const todayDateValue = getTodayDateInKST();
-        const selectedDate =
-          normalizeDateString(
-            state.elements?.dateInput.value || dateInput.value || todayDateValue,
-          ) || todayDateValue;
-        const monthStart = parseDateStringAsUTC(datePopoverMonth || selectedDate);
-        if (!(monthStart instanceof Date)) {
-          datePopoverGrid.replaceChildren();
-          datePopoverTitle.textContent = "";
-          return;
-        }
-
-        datePopoverTitle.textContent = formatMonthTitle(monthStart);
-        datePopoverGrid.replaceChildren();
-
-        const startWeekday = monthStart.getUTCDay();
-        const gridStart = new Date(monthStart.getTime());
-        gridStart.setUTCDate(gridStart.getUTCDate() - startWeekday);
-        const monthEnd = new Date(monthStart.getTime());
-        monthEnd.setUTCMonth(monthEnd.getUTCMonth() + 1, 0);
-        const endWeekday = monthEnd.getUTCDay();
-        const gridEnd = new Date(monthEnd.getTime());
-        gridEnd.setUTCDate(gridEnd.getUTCDate() + (6 - endWeekday));
-        const totalDayCount = Math.round((gridEnd.getTime() - gridStart.getTime()) / 86400000) + 1;
-
-        for (let index = 0; index < totalDayCount; index += 1) {
-          const cellDate = new Date(gridStart.getTime());
-          cellDate.setUTCDate(gridStart.getUTCDate() + index);
-          const cellDateString = formatUTCDateString(cellDate);
-          const dayButton = document.createElement("button");
-          dayButton.type = "button";
-          dayButton.className = "zzk-map-calendar-date-popover-day";
-          dayButton.textContent = String(cellDate.getUTCDate());
-
-          if (cellDate.getUTCMonth() !== monthStart.getUTCMonth()) {
-            dayButton.classList.add("is-outside-month");
-          }
-          if (cellDateString === todayDateValue) {
-            dayButton.classList.add("is-today");
-          }
-          if (cellDateString === selectedDate) {
-            dayButton.classList.add("is-selected");
-          }
-          if (cellDateString < todayDateValue) {
-            dayButton.disabled = true;
-          }
-
-          dayButton.addEventListener("click", () => {
-            selectMapCalendarPopoverDate(cellDateString);
-          });
-          datePopoverGrid.appendChild(dayButton);
-        }
-
-        if (!datePopover.hidden) {
-          window.requestAnimationFrame(() => {
-            syncMapCalendarDatePopoverPosition();
-          });
-        }
-      }
-
-      datePopoverPrevButton.addEventListener("click", () => {
-        datePopoverMonth = addMonthsToDateString(datePopoverMonth, -1);
-        state.mapCalendarDatePopoverMonth = datePopoverMonth;
-        renderMapCalendarDatePopover();
-        window.requestAnimationFrame(() => {
-          window.requestAnimationFrame(() => {
-            syncMapCalendarDatePopoverPosition();
-          });
-        });
-      });
-      datePopoverNextButton.addEventListener("click", () => {
-        datePopoverMonth = addMonthsToDateString(datePopoverMonth, 1);
-        state.mapCalendarDatePopoverMonth = datePopoverMonth;
-        renderMapCalendarDatePopover();
-        window.requestAnimationFrame(() => {
-          window.requestAnimationFrame(() => {
-            syncMapCalendarDatePopoverPosition();
-          });
-        });
-      });
-
-      dateDisplayWrap.addEventListener("pointerdown", (event) => {
-        if (shouldUseCustomDatePopover) {
-          event.preventDefault();
-          event.stopPropagation();
-          toggleMapCalendarDatePopover();
-          return;
-        }
-        event.stopPropagation();
-      });
-      dateDisplayWrap.addEventListener("click", (event) => {
-        if (shouldUseCustomDatePopover) {
-          event.preventDefault();
-          event.stopPropagation();
-          return;
-        }
-      });
-      dateDisplayWrap.addEventListener("keydown", (event) => {
-        if (!shouldUseCustomDatePopover) {
-          return;
-        }
-        if (event.key !== "Enter" && event.key !== " ") {
-          return;
-        }
-        event.preventDefault();
-        event.stopPropagation();
-        toggleMapCalendarDatePopover();
-      });
-      dateInput.addEventListener("pointerdown", (event) => {
-        event.stopPropagation();
-        if (shouldUseCustomDatePopover) {
-          event.preventDefault();
-          return;
-        }
-      });
-      dateInput.addEventListener("click", (event) => {
-        event.stopPropagation();
-        if (shouldUseCustomDatePopover) {
-          event.preventDefault();
-          return;
-        }
-      });
-
-      dateInput.addEventListener("change", () => {
-        const normalizedDate = clampDateToMin(
-          dateInput.value,
-          dateInput.min || getTodayDateInKST(),
-        );
-        dateInput.value = normalizedDate;
-        applyPanelDateChange(normalizedDate);
-        dateInput.value = state.elements.dateInput.value;
-        syncMapCalendarDateNavState();
-      });
-
-      if (shouldUseCustomDatePopover) {
-        dateInput.type = "text";
-        dateInput.tabIndex = -1;
-        dateInput.setAttribute("aria-hidden", "true");
-        dateInput.style.pointerEvents = "none";
-        dateInput.style.position = "absolute";
-        dateInput.style.inset = "0";
-        dateInput.style.width = "100%";
-        dateInput.style.height = "100%";
-        dateInput.style.opacity = "0";
-        dateInput.style.margin = "0";
-        dateInput.style.padding = "0";
-        dateInput.style.border = "none";
-        document.body.appendChild(datePopover);
-        renderMapCalendarDatePopover();
-        overlay.addEventListener("pointerdown", (event) => {
-          const target = event.target;
-          if (!(target instanceof Node)) {
-            closeMapCalendarDatePopover();
+        onShiftDate: (dayOffset) => {
+          shiftPanelDateBy(dayOffset);
+        },
+        collapsed: state.mapCalendarCollapsed,
+        onToggleCollapsed: () => {
+          state.mapCalendarCollapsed = !state.mapCalendarCollapsed;
+          renderMapCalendarOverlay(scheduleData);
+        },
+        alwaysOpen: state.mapCalendarAlwaysOpen,
+        onAlwaysOpenChange: (nextAlwaysOpen) => {
+          state.mapCalendarAlwaysOpen = nextAlwaysOpen;
+          writeStoredBoolean(MAP_CALENDAR_ALWAYS_OPEN_STORAGE_KEY, nextAlwaysOpen);
+          if (nextAlwaysOpen) {
+            state.mapCalendarVisible = true;
+            openMapCalendarModal();
             return;
           }
-          if (dateDisplayWrap.contains(target) || datePopover.contains(target)) {
+          if (!state.mapCalendarVisible) {
+            removeMapCalendarOverlay();
             return;
           }
-          closeMapCalendarDatePopover();
-        });
-      }
-
-      prevDateButton.addEventListener("click", () => {
-        shiftPanelDateBy(-1);
-        dateInput.value = state.elements.dateInput.value;
-        syncMapCalendarDateNavState();
+          updateMapCalendarLauncherState();
+          // 끈 뒤에도 오버레이가 열려 있으면(직접 열어둔 경우) 헤더를 다시 그려야
+          // 스위치가 꺼진 상태로 보인다. 안 그리면 값만 바뀌고 화면은 그대로다.
+          renderMapCalendarOverlay(scheduleData);
+        },
+        tagLegendRef: (node) => {
+          headerRefs.tagLegend = node;
+        },
+        // 달력을 body 로 내보내면 오버레이가 inert 처리돼 날짜 클릭이 막힌다.
+        popoverContainer: overlay,
       });
+    });
 
-      nextDateButton.addEventListener("click", () => {
-        shiftPanelDateBy(1);
-        dateInput.value = state.elements.dateInput.value;
-        syncMapCalendarDateNavState();
-      });
-
-      todayDateButton.addEventListener("click", () => {
-        applyPanelDateChange(getTodayDateInKST());
-        dateInput.value = state.elements.dateInput.value;
-        syncMapCalendarDateNavState();
-      });
-
-      dateDisplayWrap.append(dateInput, dateWeekdayLabel);
-      if (state.mapCalendarDatePopoverOpen) {
-        openMapCalendarDatePopover();
-      }
-      dateControlRow.append(prevDateButton, dateDisplayWrap, nextDateButton, todayDateButton);
-      controlRow.appendChild(dateControlRow);
-      const dateTagLegend = document.createElement("div");
-      dateTagLegend.className = "zzk-room-tag-legend";
-      renderRoomTagLegend(dateTagLegend);
-      controlRow.appendChild(dateTagLegend);
-      syncMapCalendarDateNavState();
-
-      titleControls.appendChild(controlRow);
+    // 방 태그 범례는 아직 명령형이다. React 가 내준 자리에 그린다.
+    if (headerRefs.tagLegend instanceof HTMLElement) {
+      renderRoomTagLegend(headerRefs.tagLegend);
     }
 
-    const headerRight = document.createElement("div");
-    headerRight.className = "zzk-map-calendar-header-right";
-    header.appendChild(headerRight);
-
-    const alwaysOpenToggle = document.createElement("label");
-    alwaysOpenToggle.className = "zzk-map-calendar-always-open";
-    const alwaysOpenInput = document.createElement("input");
-    alwaysOpenInput.type = "checkbox";
-    alwaysOpenInput.checked = state.mapCalendarAlwaysOpen;
-    alwaysOpenInput.setAttribute("aria-label", "지도 타임블록 항상 열기");
-    alwaysOpenInput.addEventListener("change", () => {
-      state.mapCalendarAlwaysOpen = alwaysOpenInput.checked;
-      writeStoredBoolean(MAP_CALENDAR_ALWAYS_OPEN_STORAGE_KEY, state.mapCalendarAlwaysOpen);
-      if (state.mapCalendarAlwaysOpen) {
-        state.mapCalendarVisible = true;
-        openMapCalendarModal();
-        return;
-      }
-
-      if (!state.mapCalendarVisible) {
-        removeMapCalendarOverlay();
-      }
-      updateMapCalendarLauncherState();
-    });
-    const alwaysOpenLabel = document.createElement("span");
-    alwaysOpenLabel.textContent = "항상 열기";
-    alwaysOpenToggle.append(alwaysOpenInput, alwaysOpenLabel);
-    headerRight.appendChild(alwaysOpenToggle);
-
-    const legend = document.createElement("div");
-    legend.className = "zzk-map-calendar-legend";
-    legend.innerHTML =
-      '<span class="free">비어 있음</span><span class="busy">예약 있음</span><span class="selected">선택 시간대</span>';
-    headerRight.appendChild(legend);
-
-    const collapseButton = document.createElement("button");
-    collapseButton.type = "button";
-    collapseButton.className = "zzk-map-calendar-toggle";
-    collapseButton.textContent = state.mapCalendarCollapsed ? "열기" : "접기";
-    collapseButton.setAttribute("aria-label", "지도 타임블록 접기/펼치기");
-    collapseButton.addEventListener("click", () => {
-      state.mapCalendarCollapsed = !state.mapCalendarCollapsed;
-      renderMapCalendarOverlay(scheduleData);
-    });
-    headerRight.appendChild(collapseButton);
-
-    const body = document.createElement("div");
-    body.className = "zzk-map-calendar-body";
-    card.appendChild(body);
+    // 본문 엘리먼트는 React 가 그린다(카드의 직계 자식이어야 CSS 높이 배분이 맞다).
+    // 그리드와 평면도가 모두 컴포넌트라 본문 전체를 React 루트가 소유한다.
+    const body = shellRefs.body;
+    if (!(body instanceof HTMLElement)) {
+      return;
+    }
     syncMapCalendarBodyLoadingState();
 
     if (state.mapCalendarCollapsed) {
@@ -2184,21 +1542,9 @@ import { createSlackSuccessFlow } from "./features/slack/success-flow.js";
       return;
     }
 
-    if (timeline.length === 0 || rooms.length === 0) {
-      const empty = document.createElement("p");
-      empty.className = "zzk-map-calendar-empty";
-      empty.textContent = `표시할 ${tabLabel} 일정이 없습니다.`;
-      body.appendChild(empty);
-      syncMapCalendarBodyScrollState(body);
-      applyMapCalendarWidth(overlay);
-      if (preservedBodyScroll.left !== 0) {
-        body.scrollLeft = preservedBodyScroll.left;
-      }
-      if (preservedBodyScroll.top !== 0) {
-        body.scrollTop = preservedBodyScroll.top;
-      }
-      return;
-    }
+    // 그릴 게 없으면 그리드 대신 문구만 보여준다(컴포넌트가 판단한다).
+    const emptyMessage =
+      timeline.length === 0 || rooms.length === 0 ? `표시할 ${tabLabel} 일정이 없습니다.` : null;
 
     const hasTerminalHourBoundary =
       Number.isInteger(scheduleData?.range?.endMinute) && scheduleData.range.endMinute % 60 === 0;
@@ -2209,490 +1555,77 @@ import { createSlackSuccessFlow } from "./features/slack/success-flow.js";
     //  - 라벨 열(층/회의실)은 스크롤 밖 labelPane 에 두어 가로 스크롤바가 라벨 아래로
     //    번지지 않게 한다. 타임블록/정시 헤더는 timelinePane 안에서만 스크롤된다.
     //  - 두 pane 의 각 행은 동일한 고정 높이(--zzk-cal-row-h)로 렌더해 세로 정렬을 맞춘다.
-    const gridWrap = document.createElement("div");
-    gridWrap.className = "zzk-map-calendar-grid-wrap";
-    body.appendChild(gridWrap);
+    // 그리드는 React 가 그린다. 슬롯 상태·층 그룹은 순수 함수로 미리 계산해
+    // 넘기고, 컴포넌트는 그리기만 한다.
+    const gridRoomsByFloor = groupRoomsByFloor(rooms, resolveMapCalendarRoomFloor).map(
+      (floorGroup) => ({
+        ...floorGroup,
+        rooms: floorGroup.rooms.map((room) => {
+          const applied =
+            state.appliedSelection &&
+            state.appliedSelection.date === selectionDate &&
+            state.appliedSelection.roomId === room.id &&
+            Number.isInteger(state.appliedSelection.startMinute) &&
+            Number.isInteger(state.appliedSelection.endMinute) &&
+            state.appliedSelection.startMinute < state.appliedSelection.endMinute
+              ? state.appliedSelection
+              : null;
 
-    const labelPane = document.createElement("div");
-    labelPane.className = "zzk-map-calendar-label-pane";
-    gridWrap.appendChild(labelPane);
+          return {
+            room,
+            slotStates: buildSlotStates(room, timeline, earliestSelectableMinute),
+            appliedRange: applied
+              ? { startMinute: applied.startMinute, endMinute: applied.endMinute }
+              : null,
+          };
+        }),
+      }),
+    );
 
-    const timelinePane = document.createElement("div");
-    timelinePane.className = "zzk-map-calendar-timeline-pane";
-    gridWrap.appendChild(timelinePane);
-
-    // 타임블록 트랙(스크롤되는 콘텐츠). 정시 헤더/경계선/세로선이 이 안에서 함께 스크롤된다.
-    const timelineTrack = document.createElement("div");
-    timelineTrack.className = "zzk-map-calendar-timeline-track";
-    timelineTrack.style.minWidth = `${Math.max(
-      320,
-      timelineLayout.trackWidth + CALENDAR_SIDE_MARGIN,
-    )}px`;
-    timelinePane.appendChild(timelineTrack);
-
-    // 정시 세로 경계선(hour boundary) 레이어 — 타임블록 트랙 안에 절대배치.
-    const boundaryLayer = document.createElement("div");
-    boundaryLayer.className = "zzk-map-calendar-hour-boundary-layer";
-    const boundaryTrack = document.createElement("div");
-    boundaryTrack.className = "zzk-map-calendar-hour-boundary-track";
-    boundaryTrack.style.gridTemplateColumns = timelineLayout.templateColumns;
-    boundaryLayer.appendChild(boundaryTrack);
-    timelineTrack.appendChild(boundaryLayer);
-    renderMapCalendarHourBoundaryCells(boundaryTrack, timelineLayout.boundaryColumnStarts);
-
-    // 라벨 pane 의 그리드(층/회의실 열).
-    const labelGrid = document.createElement("div");
-    labelGrid.className = "zzk-map-calendar-grid zzk-map-calendar-label-grid";
-    labelPane.appendChild(labelGrid);
-
-    // 층↔회의실 세로 구분선(라벨 pane 안).
-    const dividerLayer = document.createElement("div");
-    dividerLayer.className = "zzk-map-calendar-divider-layer";
-    const dividerTrack = document.createElement("div");
-    dividerTrack.className = "zzk-map-calendar-divider-track";
-    dividerLayer.appendChild(dividerTrack);
-    labelPane.appendChild(dividerLayer);
-
-    // 타임블록 트랙의 그리드(정시 헤더 + 슬롯 행들).
-    const grid = document.createElement("div");
-    grid.className = "zzk-map-calendar-grid zzk-map-calendar-timeline-grid";
-    timelineTrack.appendChild(grid);
-
-    // 라벨 pane 의 헤더 행(층 / 회의실 제목).
-    const axisLabelRow = document.createElement("div");
-    axisLabelRow.className = "zzk-map-calendar-axis-row zzk-map-calendar-label-row";
-    labelGrid.appendChild(axisLabelRow);
-
-    const axisFloor = document.createElement("div");
-    axisFloor.className = "zzk-map-calendar-floor-name axis";
-    axisFloor.textContent = "층";
-    axisLabelRow.appendChild(axisFloor);
-
-    const axisRoomLabel = document.createElement("div");
-    axisRoomLabel.className = "zzk-map-calendar-room-name axis";
-    axisRoomLabel.textContent = tabLabel;
-    axisLabelRow.appendChild(axisRoomLabel);
-
-    // 타임블록 트랙의 헤더 행(정시 라벨).
-    const axisRow = document.createElement("div");
-    axisRow.className = "zzk-map-calendar-axis-row zzk-map-calendar-timeline-row";
-    grid.appendChild(axisRow);
-
-    const axisSlots = document.createElement("div");
-    axisSlots.className = "zzk-map-calendar-slots";
-    axisSlots.style.gridTemplateColumns = timelineLayout.templateColumns;
-    axisRow.appendChild(axisSlots);
-
-    timeline.forEach((slot, index) => {
-      const slotLabel = document.createElement("div");
-      slotLabel.className = "zzk-map-calendar-hour-label";
-      if (slot.isHourMark) {
-        slotLabel.classList.add("hour-boundary");
-      }
-      slotLabel.style.gridColumn = String(timelineLayout.slotColumnStarts[index]);
-      slotLabel.textContent = slot.isHourMark ? slot.label : "";
-      axisSlots.appendChild(slotLabel);
-    });
-
-    let currentFloorKey = null;
-    let currentLabelRooms = null;
-    let currentTimelineRooms = null;
-    let previousMappedFloorLabel = "";
-
-    // 라벨 pane / 타임블록 pane 에 동일 구조의 층 그룹을 만든다(행 높이가 같아 정렬됨).
-    const makeFloorGroup = (isFloorDivider) => {
-      const group = document.createElement("div");
-      group.className = "zzk-map-calendar-floor-group floor-boundary";
-      if (isFloorDivider) {
-        group.classList.add("floor-divider");
-      }
-      const roomsHost = document.createElement("div");
-      roomsHost.className = "zzk-map-calendar-floor-rooms";
-      return { group, roomsHost };
-    };
-
-    rooms.forEach((room) => {
-      const floorInfo = resolveMapCalendarRoomFloor(room);
-
-      if (
-        !(currentTimelineRooms instanceof HTMLElement) ||
-        currentFloorKey !== floorInfo.floorKey
-      ) {
-        currentFloorKey = floorInfo.floorKey;
-        const isFloorDivider = Boolean(
-          floorInfo.floorLabel &&
-          previousMappedFloorLabel &&
-          previousMappedFloorLabel !== floorInfo.floorLabel,
-        );
-
-        // 라벨 pane: 층 이름 열 + 회의실 이름 행들.
-        const labelFloor = makeFloorGroup(isFloorDivider);
-        const floorName = document.createElement("div");
-        floorName.className = "zzk-map-calendar-floor-name";
-        floorName.textContent = floorInfo.floorLabel;
-        labelFloor.group.appendChild(floorName);
-        labelFloor.group.appendChild(labelFloor.roomsHost);
-        labelGrid.appendChild(labelFloor.group);
-        currentLabelRooms = labelFloor.roomsHost;
-
-        // 타임블록 pane: 같은 층 그룹(슬롯 행들). floor-name 은 없지만 구조/높이를 맞춘다.
-        const timelineFloor = makeFloorGroup(isFloorDivider);
-        timelineFloor.group.classList.add("zzk-map-calendar-floor-group-timeline");
-        timelineFloor.group.appendChild(timelineFloor.roomsHost);
-        grid.appendChild(timelineFloor.group);
-        currentTimelineRooms = timelineFloor.roomsHost;
-
-        if (floorInfo.floorLabel) {
-          previousMappedFloorLabel = floorInfo.floorLabel;
-        }
-      }
-
-      // 라벨 pane 의 회의실 이름 행.
-      const labelRow = document.createElement("div");
-      labelRow.className = "zzk-map-calendar-row zzk-map-calendar-label-row";
-      const roomName = document.createElement("div");
-      roomName.className = "zzk-map-calendar-room-name";
-      renderRoomLabel(roomName, room, {
-        formatter: formatMapCalendarRoomLabel,
-        titleMode: "overlay",
-      });
-      roomName.title = `공간 ID: ${room.id}`;
-      labelRow.appendChild(roomName);
-      currentLabelRooms.appendChild(labelRow);
-
-      // 타임블록 pane 의 슬롯 행. hover/selection 은 이 행에 적용된다.
-      const row = document.createElement("div");
-      row.className = "zzk-map-calendar-row zzk-map-calendar-timeline-row";
-      currentTimelineRooms.appendChild(row);
-      // hover 시 라벨 행도 같이 강조하려고 서로 참조를 걸어 둔다.
-      row.__zzkLabelRow = labelRow;
-      labelRow.__zzkTimelineRow = row;
-
-      const slots = document.createElement("div");
-      slots.className = "zzk-map-calendar-slots";
-      slots.style.gridTemplateColumns = timelineLayout.templateColumns;
-      row.appendChild(slots);
-
-      const reservations = Array.isArray(room.reservations) ? room.reservations : [];
-
-      const slotMetas = timeline.map((slot) => {
-        const overlappedReservations = reservations.filter(
-          (reservation) =>
-            Number.isInteger(reservation.startMinute) &&
-            Number.isInteger(reservation.endMinute) &&
-            reservation.startMinute < slot.endMinute &&
-            reservation.endMinute > slot.startMinute,
-        );
-
-        const isPastBlocked =
-          Number.isFinite(earliestSelectableMinute) && slot.startMinute < earliestSelectableMinute;
-
-        return {
-          slot,
-          overlappedReservations,
-          isBusy: overlappedReservations.length > 0,
-          isPastBlocked,
-          isRoomLocked: false,
-          isSelectable: overlappedReservations.length === 0 && !isPastBlocked,
-        };
-      });
-
-      const appliedSelectionForRoom =
-        state.appliedSelection &&
-        state.appliedSelection.date === selectionDate &&
-        state.appliedSelection.roomId === room.id &&
-        Number.isInteger(state.appliedSelection.startMinute) &&
-        Number.isInteger(state.appliedSelection.endMinute) &&
-        state.appliedSelection.startMinute < state.appliedSelection.endMinute
-          ? state.appliedSelection
-          : null;
-
-      const selectionMatchesRoom =
-        state.slotSelection != null &&
-        state.slotSelection.date === selectionDate &&
-        state.slotSelection.roomId === room.id;
-
-      let selectionStartIndex = -1;
-      let selectionMaxIndex = -1;
-      let selectionHoverIndex = -1;
-
-      if (selectionMatchesRoom) {
-        selectionStartIndex = slotMetas.findIndex(
-          (meta) => meta.slot.startMinute === state.slotSelection?.startMinute,
-        );
-
-        if (selectionStartIndex >= 0 && slotMetas[selectionStartIndex].isSelectable) {
-          const hardMaxIndex = Math.min(
-            slotMetas.length - 1,
-            selectionStartIndex + MAX_RESERVATION_BLOCKS - 1,
-          );
-
-          for (let index = selectionStartIndex; index <= hardMaxIndex; index += 1) {
-            if (!slotMetas[index].isSelectable) {
-              break;
-            }
-            selectionMaxIndex = index;
-          }
-
-          const requestedHoverMinute = state.slotSelection?.hoverMinute;
-          const hoverIndex = slotMetas.findIndex(
-            (meta) => meta.slot.startMinute === requestedHoverMinute,
-          );
-
-          selectionHoverIndex =
-            hoverIndex >= selectionStartIndex && hoverIndex <= selectionMaxIndex
-              ? hoverIndex
-              : selectionStartIndex;
-        } else {
-          state.slotSelection = null;
-        }
-      }
-
-      if (selectionStartIndex >= 0 && selectionHoverIndex < selectionStartIndex) {
-        selectionHoverIndex = selectionStartIndex;
-      }
-
-      const hoverMatchesRoom =
-        state.slotHover != null &&
-        state.slotHover.date === selectionDate &&
-        state.slotHover.roomId === room.id;
-
-      if (hoverMatchesRoom) {
-        row.classList.add("hovered");
-        // 라벨 pane 의 같은 행도 강조해 회의실 이름 셀에도 파란 배경이 보이게 한다.
-        if (row.__zzkLabelRow instanceof HTMLElement) {
-          row.__zzkLabelRow.classList.add("hovered");
-        }
-      }
-
-      let hoverStartIndex = -1;
-      let hoverMaxIndex = -1;
-
-      if (hoverMatchesRoom) {
-        hoverStartIndex = slotMetas.findIndex(
-          (meta) => meta.slot.startMinute === state.slotHover?.startMinute,
-        );
-
-        if (hoverStartIndex >= 0 && slotMetas[hoverStartIndex].isSelectable) {
-          // lms+ 는 클릭 시 기본 60분(30분 슬롯 2칸)을 선택하므로, hover 미리보기도
-          // 같은 범위(다음 칸이 막혀 있으면 1칸)를 보여줘 클릭 결과와 일치시킨다.
-          const hoverStartMinute = timeline[hoverStartIndex].startMinute;
-          const hoverTargetEndMinute = hoverStartMinute + LMS_DEFAULT_RESERVATION_MINUTES;
-          let lmsMaxIndex = hoverStartIndex;
-          for (
-            let candidateIndex = hoverStartIndex;
-            candidateIndex < slotMetas.length &&
-            timeline[candidateIndex].endMinute <= hoverTargetEndMinute;
-            candidateIndex += 1
-          ) {
-            lmsMaxIndex = candidateIndex;
-          }
-          const hardMaxIndex = Math.min(slotMetas.length - 1, lmsMaxIndex);
-
-          for (let index = hoverStartIndex; index <= hardMaxIndex; index += 1) {
-            if (!slotMetas[index].isSelectable) {
-              break;
-            }
-            hoverMaxIndex = index;
-          }
-        } else {
-          state.slotHover = null;
-        }
-      }
-
-      slots.addEventListener("mouseleave", () => {
-        if (
-          !state.slotHover ||
-          state.slotHover.date !== selectionDate ||
-          state.slotHover.roomId !== room.id
-        ) {
-          return;
-        }
-
-        state.slotHover = null;
-        renderMapCalendarOverlay(scheduleData);
-      });
-
-      slotMetas.forEach((slotMeta, index) => {
-        const { slot, isBusy, isPastBlocked, isSelectable, isRoomLocked, overlappedReservations } =
-          slotMeta;
-        const slotElement = document.createElement("div");
-        slotElement.className = "zzk-map-calendar-slot";
-        // 슬롯 시작 시각을 데이터 속성으로 남겨 두면 테스트/디버깅에서 특정 블록을 집기 쉽다.
-        slotElement.dataset.zzkSlotStart = slot.label;
-        slotElement.style.gridColumn = String(timelineLayout.slotColumnStarts[index]);
-        if (isBusy) {
-          slotElement.classList.add("busy");
-        } else {
-          slotElement.classList.add("free");
-        }
-        if (isPastBlocked) {
-          slotElement.classList.add("past-blocked");
-        }
-        if (isRoomLocked) {
-          slotElement.classList.add("room-locked-disabled");
-        }
-
-        const isSelectedRange =
-          appliedSelectionForRoom &&
-          appliedSelectionForRoom.startMinute < slot.endMinute &&
-          appliedSelectionForRoom.endMinute > slot.startMinute;
-
-        if (isSelectedRange) {
-          slotElement.classList.add("selected");
-        }
-
-        const isSelectableRangeSlot =
-          selectionStartIndex >= 0 &&
-          selectionMaxIndex >= selectionStartIndex &&
-          index >= selectionStartIndex &&
-          index <= selectionMaxIndex &&
-          slotMetas[index].isSelectable;
-
-        if (isSelectableRangeSlot) {
-          slotElement.classList.add("selectable");
-        }
-
-        if (selectionStartIndex >= 0 && index === selectionStartIndex) {
-          slotElement.classList.add("anchor");
-        }
-
-        const isPreviewRangeSlot =
-          selectionStartIndex >= 0 &&
-          selectionHoverIndex >= selectionStartIndex &&
-          index >= selectionStartIndex &&
-          index <= selectionHoverIndex &&
-          slotMetas[index].isSelectable;
-
-        if (isPreviewRangeSlot) {
-          slotElement.classList.add("preview");
-        }
-
-        const isHoverPreviewRangeSlot =
-          hoverStartIndex >= 0 &&
-          hoverMaxIndex >= hoverStartIndex &&
-          index >= hoverStartIndex &&
-          index <= hoverMaxIndex &&
-          slotMetas[index].isSelectable;
-
-        if (isHoverPreviewRangeSlot) {
-          slotElement.classList.add("hover-preview");
-        }
-
-        const slotEndLabel = minuteToHourMinute(slot.endMinute);
-        const reservationPreview = overlappedReservations
-          .slice(0, 2)
-          .map((reservation) =>
-            reservation.owner
-              ? `${reservation.startTime}~${reservation.endTime} ${reservation.owner}`
-              : `${reservation.startTime}~${reservation.endTime}`,
-          )
-          .join(" | ");
-
-        if (isBusy) {
-          slotElement.title = `${room.name} ${slot.label}~${slotEndLabel} 예약 있음${
-            reservationPreview ? ` (${reservationPreview})` : ""
-          }`;
-        } else if (isPastBlocked) {
-          slotElement.title = `${room.name} ${slot.label}~${slotEndLabel} 선택 불가 (현재 시간 이전)`;
-        } else if (isRoomLocked) {
-          slotElement.title = `${room.name} ${slot.label}~${slotEndLabel} 조회 전용 (수정 중 공간만 선택 가능)`;
-        } else {
-          slotElement.title = `${room.name} ${slot.label}~${slotEndLabel} 비어 있음`;
-        }
-
-        slotElement.addEventListener("mouseenter", () => {
-          if (!isSelectable) {
+    flushSync(() => {
+      renderRadarGrid(body, {
+        timeline,
+        floorGroups: gridRoomsByFloor,
+        layout: timelineLayout,
+        roomColumnLabel: tabLabel,
+        emptyMessage,
+        minTrackWidth: Math.max(320, timelineLayout.trackWidth + CALENDAR_SIDE_MARGIN),
+        defaultReservationMinutes: LMS_DEFAULT_RESERVATION_MINUTES,
+        renderRoomLabel: (container, room) => {
+          if (!(container instanceof HTMLElement)) {
             return;
           }
-
-          let shouldRerender = false;
-
-          if (
-            !state.slotHover ||
-            state.slotHover.date !== selectionDate ||
-            state.slotHover.roomId !== room.id ||
-            state.slotHover.startMinute !== slot.startMinute
-          ) {
-            state.slotHover = {
-              date: selectionDate,
-              roomId: room.id,
-              startMinute: slot.startMinute,
-            };
-            shouldRerender = true;
-          }
-
-          if (
-            state.slotSelection &&
-            state.slotSelection.date === selectionDate &&
-            state.slotSelection.roomId === room.id &&
-            isSelectableRangeSlot &&
-            state.slotSelection.hoverMinute !== slot.startMinute
-          ) {
-            state.slotSelection = {
-              ...state.slotSelection,
-              hoverMinute: slot.startMinute,
-            };
-            shouldRerender = true;
-          }
-
-          if (shouldRerender) {
+          renderRoomLabel(container, room, {
+            formatter: formatMapCalendarRoomLabel,
+            titleMode: "overlay",
+          });
+        },
+        floorMaps: {
+          floors: getAvailableFloorMapFloors(),
+          getFloorMapDataUri,
+          open: isFloorMapSectionOpen(),
+          onOpenChange: (nextOpen) => {
+            persistFloorMapSectionOpen(nextOpen);
+            // 평면도를 펼치면 모달이 세로로 길어진다. 뷰포트를 벗어났으면
+            // 화면 안으로 다시 끌어들인다(새 높이가 반영된 뒤 측정).
+            window.requestAnimationFrame(() => {
+              reclampMapCalendarOffsetToViewport();
+            });
             renderMapCalendarOverlay(scheduleData);
-          }
-        });
-
-        slotElement.addEventListener("click", (event) => {
-          event.preventDefault();
-          event.stopPropagation();
-
-          if (!isSelectable) {
-            return;
-          }
-
-          // lms+ 는 클릭 한 번에 기본 60분(30분 슬롯 2칸)을 선택하되,
-          // 다음 칸이 예약 등으로 막혀 있으면 30분만 선택한다.
-          const clickStartMinute = timeline[index].startMinute;
-          const lmsTargetEndMinute = clickStartMinute + LMS_DEFAULT_RESERVATION_MINUTES;
-          let lmsMaxIndex = index;
-          for (
-            let candidateIndex = index;
-            candidateIndex < slotMetas.length &&
-            timeline[candidateIndex].endMinute <= lmsTargetEndMinute;
-            candidateIndex += 1
-          ) {
-            lmsMaxIndex = candidateIndex;
-          }
-          const hardMaxIndex = Math.min(slotMetas.length - 1, lmsMaxIndex);
-
-          let autoEndIndex = index;
-
-          for (let selectionIndex = index; selectionIndex <= hardMaxIndex; selectionIndex += 1) {
-            if (!slotMetas[selectionIndex].isSelectable) {
-              break;
-            }
-            autoEndIndex = selectionIndex;
-          }
-
-          const selectionStartMinute = timeline[index].startMinute;
-          const selectionEndMinute = timeline[autoEndIndex].endMinute;
-          state.slotSelection = null;
-          state.slotHover = null;
-
+          },
+          onZoomStart: openFloorMapZoom,
+          onZoomEnd: closeFloorMapZoom,
+        },
+        onSlotClick: (room, startIndex, endIndex) => {
           queueTimelineSelectionApply({
             date: selectionDate,
-            startMinute: selectionStartMinute,
-            endMinute: selectionEndMinute,
+            startMinute: timeline[startIndex].startMinute,
+            endMinute: timeline[endIndex].endMinute,
             room,
           });
-        });
-
-        slots.appendChild(slotElement);
+        },
       });
     });
-
-    // lms+ 에는 지도가 없어 공간의 물리적 위치를 알 수 없다. 타임라인 아래에
-    // 층별 평면도(SVG)를 접이식으로 붙여, 페어룸 등이 실제 어디인지 확인할 수 있게 한다.
-    renderMapCalendarFloorMapSection(body, preservedFloorMapScrollLeft);
 
     const scrollEl = getMapCalendarScrollElement(overlay);
     syncMapCalendarBodyScrollState(body);
@@ -2845,23 +1778,6 @@ import { createSlackSuccessFlow } from "./features/slack/success-flow.js";
     };
   }
 
-  function renderMapCalendarHourBoundaryCells(slotsContainer, boundaryColumnStarts) {
-    if (!(slotsContainer instanceof HTMLElement)) {
-      return;
-    }
-
-    const columnStarts = Array.isArray(boundaryColumnStarts) ? boundaryColumnStarts : [];
-    columnStarts.forEach((columnStart) => {
-      if (!Number.isInteger(columnStart) || columnStart < 1) {
-        return;
-      }
-      const line = document.createElement("div");
-      line.className = "zzk-map-calendar-hour-boundary-cell";
-      line.style.gridColumn = String(columnStart);
-      slotsContainer.appendChild(line);
-    });
-  }
-
   function ensureMapCalendarStyle() {
     if (document.getElementById(MAP_CALENDAR_STYLE_ID)) {
       return;
@@ -2923,6 +1839,15 @@ import { createSlackSuccessFlow } from "./features/slack/success-flow.js";
         height: 2px;
         background: rgba(255, 255, 255, 0.94);
         pointer-events: none;
+      }
+
+      #${MAP_CALENDAR_OVERLAY_ID} {
+        /* 슬롯 색. 범례가 이 변수를 그대로 참조하므로 한쪽만 바뀌지 않는다. */
+        --zzk-slot-free: rgba(34, 197, 94, 0.32);
+        --zzk-slot-busy: rgba(239, 68, 68, 0.45);
+        --zzk-slot-past: rgba(148, 163, 184, 0.32);
+        --zzk-slot-past-reserved: rgba(100, 116, 139, 0.55);
+        --zzk-slot-selected: rgba(14, 165, 233, 0.38);
       }
 
       #${MAP_CALENDAR_OVERLAY_ID} .zzk-map-calendar-card {
@@ -3287,10 +2212,6 @@ import { createSlackSuccessFlow } from "./features/slack/success-flow.js";
       }
 
       #${MAP_CALENDAR_OVERLAY_ID} .zzk-map-calendar-control,
-      #${MAP_CALENDAR_OVERLAY_ID} .zzk-map-calendar-toggle {
-        user-select: auto;
-      }
-
       #${MAP_CALENDAR_OVERLAY_ID} .zzk-map-calendar-control.zzk-date {
         min-width: 122px;
       }
@@ -3392,52 +2313,105 @@ import { createSlackSuccessFlow } from "./features/slack/success-flow.js";
         text-overflow: ellipsis;
       }
 
-      #${MAP_CALENDAR_OVERLAY_ID} .zzk-map-calendar-legend {
-        display: flex;
-        gap: 6px;
-        font-size: 12px;
-        color: #334155;
+      #${MAP_CALENDAR_OVERLAY_ID} .zzk-map-calendar-control.zzk-date {
+        min-width: 122px;
       }
 
-      #${MAP_CALENDAR_OVERLAY_ID} .zzk-map-calendar-legend span {
+      #${MAP_CALENDAR_OVERLAY_ID} .zzk-map-calendar-control.zzk-time {
+        min-width: 88px;
+      }
+
+      #${MAP_CALENDAR_OVERLAY_ID} .zzk-map-calendar-control.zzk-time.zzk-time-readonly {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        background: #f8fafc;
+        color: #0f172a;
+        border-color: rgba(15, 23, 42, 0.2);
+        font-variant-numeric: tabular-nums;
+        cursor: default;
+        user-select: none;
+      }
+
+      #${MAP_CALENDAR_OVERLAY_ID} .zzk-map-calendar-control:focus {
+        outline: 2px solid rgba(14, 116, 144, 0.28);
+        outline-offset: 0;
+        border-color: rgba(14, 116, 144, 0.4);
+      }
+
+      #${MAP_CALENDAR_OVERLAY_ID} .zzk-map-calendar-header-right {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin-left: auto;
+      }
+
+      #${MAP_CALENDAR_OVERLAY_ID} .zzk-map-calendar-always-open {
         display: inline-flex;
         align-items: center;
         gap: 4px;
-      }
-
-      #${MAP_CALENDAR_OVERLAY_ID} .zzk-map-calendar-legend span::before {
-        content: "";
-        width: 8px;
-        height: 8px;
-        border-radius: 2px;
-        border: 1px solid rgba(15, 23, 42, 0.25);
-      }
-
-      #${MAP_CALENDAR_OVERLAY_ID} .zzk-map-calendar-legend .free::before {
-        background: rgba(34, 197, 94, 0.4);
-      }
-
-      #${MAP_CALENDAR_OVERLAY_ID} .zzk-map-calendar-legend .busy::before {
-        background: rgba(239, 68, 68, 0.45);
-      }
-
-      #${MAP_CALENDAR_OVERLAY_ID} .zzk-map-calendar-legend .selected::before {
-        background: rgba(14, 165, 233, 0.35);
-      }
-
-      #${MAP_CALENDAR_OVERLAY_ID} .zzk-map-calendar-toggle {
-        border: 1px solid rgba(15, 23, 42, 0.2);
-        border-radius: 999px;
-        background: rgba(248, 250, 252, 0.95);
-        color: #0f172a;
         font-size: 13px;
         font-weight: 700;
-        padding: 4px 9px;
-        cursor: pointer;
+        color: #334155;
+        white-space: nowrap;
+        user-select: none;
       }
 
-      #${MAP_CALENDAR_OVERLAY_ID} .zzk-map-calendar-toggle:hover {
-        background: rgba(226, 232, 240, 0.95);
+      #${MAP_CALENDAR_OVERLAY_ID} .zzk-map-calendar-always-open input {
+        margin: 0;
+        cursor: pointer;
+        accent-color: #0284c7;
+      }
+
+      #${MAP_CALENDAR_OVERLAY_ID} .zzk-map-calendar-header strong {
+        font-size: 14px;
+      }
+
+      #${MAP_CALENDAR_OVERLAY_ID} .zzk-room-tag-legend[hidden] {
+        display: none !important;
+      }
+
+      #${MAP_CALENDAR_OVERLAY_ID} .zzk-room-tag-legend {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+        margin-top: 6px;
+      }
+
+      #${MAP_CALENDAR_OVERLAY_ID} .zzk-room-tag-legend-item {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        font-size: 11px;
+        color: #475569;
+      }
+
+      #${MAP_CALENDAR_OVERLAY_ID} .zzk-room-tag-badge {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        flex: none;
+        min-width: 18px;
+        min-height: 18px;
+        padding: 0 2px;
+        border-radius: 4px;
+        background: rgba(14, 165, 233, 0.14);
+        border: 1px solid rgba(14, 165, 233, 0.22);
+        color: #0369a1;
+        font-size: 10px;
+        font-weight: 800;
+        line-height: 1;
+        letter-spacing: 0.01em;
+      }
+
+      #${MAP_CALENDAR_OVERLAY_ID} .zzk-room-tag-badge::before {
+        content: attr(data-label);
+      }
+
+      #${MAP_CALENDAR_OVERLAY_ID} .zzk-room-name-text {
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
       }
 
       #${MAP_CALENDAR_OVERLAY_ID} .zzk-map-calendar-resize-handle {
@@ -3638,44 +2612,6 @@ import { createSlackSuccessFlow } from "./features/slack/success-flow.js";
         font-size: 12px;
         font-weight: 600;
         color: #475569;
-      }
-
-      /* 평면도 확대 모달 — document.body 에 붙으므로 오버레이 스코프 밖에 둔다.
-         누르는 동안에만 .visible 로 표시된다. */
-      #${FLOOR_MAP_ZOOM_ID} {
-        position: fixed;
-        inset: 0;
-        z-index: ${NAV_SAFE_Z_INDEX};
-        display: none;
-        align-items: center;
-        justify-content: center;
-        flex-direction: column;
-        gap: 12px;
-        padding: 32px;
-        background: rgba(15, 23, 42, 0.72);
-        pointer-events: none;
-      }
-
-      #${FLOOR_MAP_ZOOM_ID}.visible {
-        display: flex;
-      }
-
-      #${FLOOR_MAP_ZOOM_ID} .zzk-floormap-zoom-image {
-        max-width: 92vw;
-        max-height: 82vh;
-        width: auto;
-        height: auto;
-        object-fit: contain;
-        background: #ffffff;
-        border-radius: 12px;
-        box-shadow: 0 24px 64px rgba(0, 0, 0, 0.45);
-      }
-
-      #${FLOOR_MAP_ZOOM_ID} .zzk-floormap-zoom-caption {
-        font-size: 15px;
-        font-weight: 700;
-        color: #ffffff;
-        letter-spacing: 1px;
       }
 
       @keyframes zzk-map-calendar-loading-spin {
@@ -3981,22 +2917,26 @@ import { createSlackSuccessFlow } from "./features/slack/success-flow.js";
       }
 
       #${MAP_CALENDAR_OVERLAY_ID} .zzk-map-calendar-slot.free {
-        background: rgba(34, 197, 94, 0.32);
+        background: var(--zzk-slot-free);
       }
-
       #${MAP_CALENDAR_OVERLAY_ID} .zzk-map-calendar-slot.busy {
-        background: rgba(239, 68, 68, 0.45);
+        background: var(--zzk-slot-busy);
+      }
+      #${MAP_CALENDAR_OVERLAY_ID} .zzk-map-calendar-slot.past-blocked {
+        background: var(--zzk-slot-past);
+        border-color: rgba(100, 116, 139, 0.2);
       }
 
-      #${MAP_CALENDAR_OVERLAY_ID} .zzk-map-calendar-slot.past-blocked {
-        background: rgba(148, 163, 184, 0.32);
-        border-color: rgba(100, 116, 139, 0.2);
+      /* 지난 시간 + 예약 있었음. 빈 과거보다 진하게 해서 "그때 누가 썼다"를 보여준다. */
+      #${MAP_CALENDAR_OVERLAY_ID} .zzk-map-calendar-slot.past-blocked.past-reserved {
+        background: var(--zzk-slot-past-reserved);
+        border-color: rgba(71, 85, 105, 0.4);
       }
 
       #${MAP_CALENDAR_OVERLAY_ID} .zzk-map-calendar-slot.selected {
         outline: 1.5px solid rgba(14, 116, 144, 0.95);
         outline-offset: -1px;
-        background: rgba(14, 165, 233, 0.38);
+        background: var(--zzk-slot-selected);
       }
 
       #${MAP_CALENDAR_OVERLAY_ID} .zzk-map-calendar-slot.selectable {
@@ -7972,12 +6912,7 @@ import { createSlackSuccessFlow } from "./features/slack/success-flow.js";
     return `${normalizedStart} ~ ${normalizedEnd}`;
   }
 
-  const {
-    ensureSlackCopyModalStyle,
-    showSlackCopyModal,
-    closeSlackCopyModal,
-    copyTextToClipboard,
-  } = createSlackWorkflow({
+  const { showSlackCopyModal, closeSlackCopyModal, copyTextToClipboard } = createSlackWorkflow({
     state,
     SLACK_COPY_MODAL_ID,
     SLACK_COPY_MODAL_STYLE_ID,

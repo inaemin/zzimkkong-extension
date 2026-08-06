@@ -3,6 +3,21 @@ import { DEBUG_MODE } from "../constants/debug.js";
 // 소비처가 편하도록 여기서도 다시 내보낸다.
 export { DEBUG_MODE };
 
+/**
+ * String(value) 는 객체를 "[object Object]" 로 만들어 버린다.
+ * 사용자에게 보이거나 매칭에 쓰는 값이라 그런 문자열이 새어나가면 안 되므로,
+ * 원시값만 문자열로 바꾸고 나머지는 빈 문자열로 떨어뜨린다.
+ */
+export function toDisplayString(value: unknown): string {
+  if (typeof value === "string") {
+    return value;
+  }
+  if (typeof value === "number" || typeof value === "boolean" || typeof value === "bigint") {
+    return String(value);
+  }
+  return "";
+}
+
 export function normalizeTextForMatch(value: unknown): string {
   if (typeof value !== "string") {
     return "";
@@ -55,7 +70,7 @@ function cloneDebugValue(value: unknown, seen: WeakSet<object> = new WeakSet()):
     seen.delete(value);
     return output;
   }
-  return String(value);
+  return toDisplayString(value);
 }
 
 export function pushDebugEvent(scope: string, event: string, detail: unknown = {}): void {

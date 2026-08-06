@@ -2,6 +2,7 @@ import {
   DEFAULT_SLACK_REMINDER_LEAD_TIME_MINUTES,
   SLACK_REMINDER_LEAD_TIME_OPTIONS,
 } from "../../constants/runtime.js";
+import { toDisplayString } from "../../utils/shared.js";
 import {
   addDaysToDateString,
   isDateString,
@@ -47,7 +48,7 @@ export function normalizeSlackChannelToken(
 }
 
 export function normalizeSlackReminderLeadMinutes(value: unknown): number {
-  const parsed = Number.parseInt(String(value || ""), 10);
+  const parsed = Number.parseInt(toDisplayString(value), 10);
   if (SLACK_REMINDER_LEAD_TIME_OPTIONS.includes(parsed)) {
     return parsed;
   }

@@ -1,0 +1,111 @@
+/* 페이지에 직접 주입되는 Tailwind.
+ *
+ * 레이더 오버레이는 shadow root 가 아니라 페이지에 렌더된다(오버레이 CSS 약 800줄이
+ * #zzk-map-calendar-overlay 로 스코프돼 있어, shadow root 로 옮기면 그 CSS 가 통째로
+ * 안 닿는다). 그래서 컴포넌트가 쓰는 유틸리티를 페이지에도 넣어줘야 한다.
+ *
+ * preflight(@import "tailwindcss" 에 포함된 기본 리셋)는 넣지 않는다. 그걸 넣으면
+ * lms+ 페이지의 모든 요소가 초기화돼 남의 페이지를 부순다. 유틸리티와 테마만 가져온다.
+ */
+@layer theme, base, components, utilities;
+
+@import "tailwindcss/theme.css" layer(theme);
+@import "tailwindcss/utilities.css" layer(utilities);
+
+/* preflight 대신 필요한 최소한만, 우리 UI 안에서만 되돌린다.
+ *
+ * 브라우저 기본 버튼은 회색 배경(rgb(239,239,239))과 자체 테두리를 갖는다.
+ * preflight 가 그걸 지우는데 우리는 preflight 를 뺐으므로, ghost 처럼 "배경
+ * 없음"을 전제한 variant 가 회색 알약처럼 보였다(달력 이전/다음달 버튼).
+ *
+ * 페이지 전체가 아니라 우리가 그린 요소에만 건다. 팝오버는 오버레이 안으로
+ * 포털되므로 이 선택자에 함께 걸린다. */
+@layer base {
+  #zzk-map-calendar-overlay :is(button, [type="button"]),
+  #zzk-map-calendar-overlay :is(input, select, textarea) {
+    background-color: transparent;
+    background-image: none;
+    border-radius: 0;
+    font: inherit;
+    letter-spacing: inherit;
+    color: inherit;
+  }
+}
+
+/* 토큰 값을 Tailwind 색 이름에 연결한다. 이게 없으면 bg-popover·shadow-md 같은
+   유틸리티가 만들어지지 않아, 클래스는 붙어도 아무 효과가 없다.
+   (@theme 은 최상위에만 올 수 있어 스코프 밖에 둔다.) */
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+}
+
+/* 토큰은 :root 에 건다.
+ *
+ * 오버레이 id 로 스코프하고 싶지만 그러면 안 된다. Tailwind 가 @theme 에서 만든
+ * 변수(--radius-md: calc(var(--radius) - 2px) 등)는 :root 에 놓이는데, --radius 가
+ * 오버레이에만 있으면 그 calc 이 :root 에서 풀리지 못해 빈 값이 된다. 실제로
+ * 달력 셀의 --cell-radius 가 비어 모서리가 각지게 나왔다.
+ *
+ * 값 정의(커스텀 프로퍼티)일 뿐이라 페이지 요소의 모양을 바꾸지는 않는다.
+ * 이름이 일반적이라 호스트와 충돌할 여지는 있는데, shadow root 로 옮기면 사라질
+ * 임시 파일이므로 그때 정리한다. */
+:root {
+  /* shadow/ring 합성 변수의 기본값. preflight 를 뺐기 때문에 직접 넣어야 한다.
+     Tailwind v4 의 box-shadow 유틸리티는 이 변수들을 한 줄로 합쳐 쓰는데,
+     하나라도 비어 있으면 값 전체가 무효가 돼 그림자가 통째로 사라진다. */
+  --tw-shadow: 0 0 #0000;
+  --tw-shadow-color: initial;
+  --tw-shadow-alpha: 100%;
+  --tw-inset-shadow: 0 0 #0000;
+  --tw-inset-shadow-color: initial;
+  --tw-inset-shadow-alpha: 100%;
+  --tw-ring-color: initial;
+  --tw-ring-shadow: 0 0 #0000;
+  --tw-inset-ring-color: initial;
+  --tw-inset-ring-shadow: 0 0 #0000;
+  --tw-ring-inset: initial;
+  --tw-ring-offset-width: 0px;
+  --tw-ring-offset-color: #fff;
+  --tw-ring-offset-shadow: 0 0 #0000;
+
+  --background: oklch(1 0 0);
+  --foreground: oklch(0.145 0 0);
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.145 0 0);
+  --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0.145 0 0);
+  --primary: oklch(0.205 0 0);
+  --primary-foreground: oklch(0.985 0 0);
+  --secondary: oklch(0.97 0 0);
+  --secondary-foreground: oklch(0.205 0 0);
+  --muted: oklch(0.97 0 0);
+  --muted-foreground: oklch(0.556 0 0);
+  --accent: oklch(0.97 0 0);
+  --accent-foreground: oklch(0.205 0 0);
+  --destructive: oklch(0.577 0.245 27.325);
+  --border: oklch(0.922 0 0);
+  --input: oklch(0.922 0 0);
+  --ring: oklch(0.708 0 0);
+  --radius: 0.625rem;
+}

@@ -23,6 +23,24 @@ export interface ReservationEventPayload {
   responseBody?: unknown;
 }
 
+/**
+ * String(value) 는 객체를 "[object Object]" 로 만든다. 매칭·표시에 쓰는 값이라
+ * 그런 문자열이 새어나가면 안 되므로 원시값만 문자열로 바꾼다.
+ *
+ * utils/shared.ts 에 같은 함수가 있지만 여기서 import 하지 않는다.
+ * 이 파일은 MAIN world 번들의 뿌리라, 다른 모듈을 끌어오면 Vite 가 공유 청크를
+ * 분리하면서 진입점에 로더가 생긴다(주입 방식이 달라져 테스트가 깨진다).
+ */
+function toDisplayString(value: unknown): string {
+  if (typeof value === "string") {
+    return value;
+  }
+  if (typeof value === "number" || typeof value === "boolean" || typeof value === "bigint") {
+    return String(value);
+  }
+  return "";
+}
+
 export const MESSAGE_SOURCE = "zzk-page-reservation-hook";
 export const MESSAGE_TYPE = "ZZK_RESERVATION_NETWORK_EVENT";
 
@@ -57,7 +75,7 @@ export function normalizeText(value: unknown): string {
 }
 
 export function normalizeOwnerCandidate(value: unknown): string {
-  const normalized = normalizeText(String(value || ""));
+  const normalized = normalizeText(toDisplayString(value));
   if (!normalized) {
     return "";
   }
@@ -89,9 +107,7 @@ export function normalizeOwnerCandidate(value: unknown): string {
 }
 
 export function isOwnerFieldKey(key: unknown): boolean {
-  const normalized = normalizeText(String(key || ""))
-    .replace(/\s+/g, "")
-    .toLowerCase();
+  const normalized = normalizeText(toDisplayString(key)).replace(/\s+/g, "").toLowerCase();
   if (!normalized) {
     return false;
   }
@@ -305,19 +321,17 @@ export async function extractOwnerCandidateFromFetchRequest(
 }
 
 export function normalizeFieldKey(value: unknown): string {
-  return normalizeText(String(value || ""))
-    .replace(/\s+/g, "")
-    .toLowerCase();
+  return normalizeText(toDisplayString(value)).replace(/\s+/g, "").toLowerCase();
 }
 
 export function normalizeDateCandidate(value: unknown): string {
-  const normalized = normalizeText(String(value || ""));
+  const normalized = normalizeText(toDisplayString(value));
   const match = normalized.match(/(\d{4}-\d{2}-\d{2})/);
   return match ? match[1] : "";
 }
 
 export function normalizeTimeCandidate(value: unknown): string {
-  const normalized = normalizeText(String(value || ""));
+  const normalized = normalizeText(toDisplayString(value));
   const match = normalized.match(/(\d{1,2}):(\d{2})/);
   if (!match) {
     return "";
@@ -339,7 +353,7 @@ export function extractDateTimeParts(value: unknown): { date: string; time: stri
 }
 
 export function normalizeDescriptionCandidate(value: unknown): string {
-  const normalized = normalizeText(String(value || ""));
+  const normalized = normalizeText(toDisplayString(value));
   if (!normalized) {
     return "";
   }
@@ -416,7 +430,7 @@ export function parseReservationRoomIdCandidate(value: unknown): number | null {
     return value;
   }
 
-  const normalized = normalizeText(String(value || ""));
+  const normalized = normalizeText(toDisplayString(value));
   if (!/^\d+$/.test(normalized)) {
     return null;
   }
@@ -502,7 +516,7 @@ export function extractReservationRequestContextFromEntries(
       return;
     }
 
-    const stringValue = typeof rawValue === "string" ? rawValue : String(rawValue || "");
+    const stringValue = typeof rawValue === "string" ? rawValue : toDisplayString(rawValue);
     if (!normalizeText(stringValue)) {
       return;
     }
@@ -740,7 +754,7 @@ export function isReservationMutationRequest(urlValue: unknown, methodValue: unk
 
 function isReservationMutationPath(pathname: unknown): boolean {
   // lms+: /api/space-reservations/{id}
-  return /\/api\/space-reservations(?:\/\d+)?\/?$/i.test(String(pathname || ""));
+  return /\/api\/space-reservations(?:\/\d+)?\/?$/i.test(toDisplayString(pathname));
 }
 
 export function shouldEmitReservationMutationEvent(
@@ -788,7 +802,7 @@ export function readReservationAttemptId(): string {
 export function buildReservationMutationEventPayload(
   options: Record<string, unknown>,
 ): ReservationEventPayload {
-  const eventUrl = String(options && options.url ? options.url : "");
+  const eventUrl = toDisplayString(options?.url);
   const reservationAttemptId =
     options &&
     typeof options.reservationAttemptId === "string" &&

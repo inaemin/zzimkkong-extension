@@ -21,8 +21,16 @@
     "isolatedModules": true,
     "forceConsistentCasingInFileNames": true,
 
+    // React 19 JSX 변환(런타임 import 불필요).
+    "jsx": "react-jsx",
+
     // 크롬 확장 API 타입.
-    "types": ["chrome"]
+    "types": ["chrome"],
+
+    // shadcn 컴포넌트가 쓰는 경로 별칭.
+    // moduleResolution: bundler 에서는 baseUrl 없이 paths 만으로 동작한다
+    // (baseUrl 은 TS 7 에서 제거 예정).
+    "paths": { "@/*": ["./src/*"] }
   },
   "include": ["src/**/*", "tests/**/*", "scripts/**/*", "*.config.js", "*.config.ts"],
   "exclude": ["node_modules", "dist", "src-backup"]
