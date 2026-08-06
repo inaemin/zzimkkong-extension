@@ -3819,6 +3819,13 @@ declare global {
       findHostTimePickerButton: (buttonLabel: string, root: Document | HTMLElement = document) =>
         findHostTimePickerButton(buttonLabel, root),
       isMeaningfulSlackContextValue,
+      deletePendingReservationAttempt,
+      clearReservationAttemptDataset,
+      clearPendingSlackModalState,
+      scheduleCalendarOverlayRefresh,
+      // 백그라운드 경유 전송. 아는 API 가 아니면 이 길로 간다.
+      sendMessage: (message: { type?: string; payload?: Record<string, unknown> }) =>
+        sendMessage(message),
       rememberSlackChannelMention,
       forgetSlackChannelMention,
       shiftPanelDateBy,
@@ -3918,6 +3925,7 @@ declare global {
             : [],
           slackChannelMention: state.slackChannelMention,
           scheduleLoadingDate: state.scheduleLoadingDate,
+          lastGuestRouteChangeAt: state.lastGuestRouteChangeAt,
           activeScheduleDate: state.activeScheduleDate,
           lastReservationActionAt: state.lastReservationActionAt,
           lastReservationContext: state.lastReservationContext,
