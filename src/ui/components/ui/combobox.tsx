@@ -49,9 +49,11 @@ function ComboboxContent({
           data-slot="combobox-content"
           data-chips={!!anchor}
           className={cn(
+            // 테두리는 popover·select 와 같이 ring 으로 준다. border 유틸리티는
+            // 이 shadow root 안에서 색 토큰을 못 받아 검은 선이 그려진다.
             "max-h-(--available-height) w-(--anchor-width) max-w-(--available-width) origin-(--transform-origin)",
-            "overflow-hidden rounded-md border bg-popover p-1 text-popover-foreground shadow-md",
-            "data-open:animate-in data-open:fade-in-0 data-closed:animate-out data-closed:fade-out-0",
+            "overflow-hidden rounded-lg bg-popover p-1 text-popover-foreground shadow-md ring-1 ring-foreground/10 outline-hidden",
+            "data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95 data-closed:animate-out data-closed:fade-out-0 data-closed:zoom-out-95",
             className,
           )}
           {...props}
@@ -110,8 +112,8 @@ function ComboboxChips({
     <ComboboxPrimitive.Chips
       data-slot="combobox-chips"
       className={cn(
-        "flex min-h-9 w-full flex-wrap items-center gap-1 rounded-md border border-input bg-transparent px-2 py-1 text-sm shadow-xs transition-[color,box-shadow]",
-        "focus-within:border-ring focus-within:ring-[3px] focus-within:ring-ring/50",
+        "flex min-h-9 w-full flex-wrap items-center gap-1 rounded-md bg-transparent px-2 py-1 text-sm shadow-xs ring-1 ring-foreground/15 transition-[color,box-shadow]",
+        "focus-within:ring-[3px] focus-within:ring-ring/50",
         "has-disabled:pointer-events-none has-disabled:cursor-not-allowed has-disabled:opacity-50",
         className,
       )}

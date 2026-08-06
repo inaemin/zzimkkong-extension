@@ -84,6 +84,15 @@ export function SlackCopyDialog({
   const [status, setStatus] = React.useState<CopyStatusState>("idle");
 
   const statusMessage = buildStatusMessage(status, channel);
+  // Select 는 items 로 값→라벨 대응을 받는다. 닫힌 상태의 표시에 쓰인다.
+  const reminderLeadItems = React.useMemo(
+    () =>
+      reminderLeadOptions.map((minutes) => ({
+        value: String(minutes),
+        label: formatReminderLeadLabel(minutes),
+      })),
+    [reminderLeadOptions, formatReminderLeadLabel],
+  );
 
   const handleCopy = () => {
     setCopying(true);
@@ -110,36 +119,42 @@ export function SlackCopyDialog({
         </DialogHeader>
 
         <div className="grid gap-4">
-          <div className="grid gap-2">
-            <Label>슬랙 채널</Label>
-            <ChannelCombobox
-              value={channel}
-              onChange={onChannelChange}
-              history={channelHistory}
-              onRemoveFromHistory={onRemoveChannelFromHistory}
-            />
-            <p className="text-xs text-muted-foreground">
-              비워두면 나에게만 보내고, 채널을 고르면 그 채널에 리마인드를 겁니다.
-            </p>
-          </div>
+          {/* 채널과 리마인드 시점을 한 줄에 둔다. 채널이 남는 폭을 갖는다. */}
+          <div className="flex items-start gap-3">
+            <div className="grid min-w-0 flex-1 gap-2">
+              <Label>슬랙 채널</Label>
+              <ChannelCombobox
+                value={channel}
+                onChange={onChannelChange}
+                history={channelHistory}
+                onRemoveFromHistory={onRemoveChannelFromHistory}
+              />
+              <p className="text-xs text-muted-foreground">
+                비워두면 나에게만 보내고, 채널을 고르면 그 채널에 리마인드를 겁니다.
+              </p>
+            </div>
 
-          <div className="grid gap-2">
-            <Label htmlFor="zzk-slack-reminder-lead">리마인드 시점</Label>
-            <Select
-              value={String(reminderLeadMinutes)}
-              onValueChange={(next) => onReminderLeadChange(Number(next))}
-            >
-              <SelectTrigger id="zzk-slack-reminder-lead" className="w-40">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {reminderLeadOptions.map((minutes) => (
-                  <SelectItem key={minutes} value={String(minutes)}>
-                    {formatReminderLeadLabel(minutes)}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <div className="grid w-32 shrink-0 gap-2">
+              <Label htmlFor="zzk-slack-reminder-lead">리마인드 시점</Label>
+              <Select
+                // items 를 넘겨야 닫혔을 때 SelectValue 가 라벨("10분 전")을 그린다.
+                // 안 넘기면 값("10")만 나온다.
+                items={reminderLeadItems}
+                value={String(reminderLeadMinutes)}
+                onValueChange={(next) => onReminderLeadChange(Number(next))}
+              >
+                <SelectTrigger id="zzk-slack-reminder-lead" className="w-full">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {reminderLeadItems.map((item) => (
+                    <SelectItem key={item.value} value={item.value}>
+                      {item.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
           </div>
 
           <div className="grid gap-2">

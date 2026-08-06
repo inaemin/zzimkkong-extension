@@ -319,3 +319,38 @@ test("목록에 없는 채널은 새로 추가할 수 있다", async ({ page }) 
   await page.locator('[data-slot="combobox-item"]').first().click();
   await expect(page.locator('[data-slot="combobox-chip"]')).toHaveText(["#새채널"]);
 });
+
+// 리마인드 시점은 닫혀 있어도 "10분전"처럼 라벨이 보여야 한다. Select 에
+// items 를 안 넘기면 값("10")만 나온다.
+test("리마인드 시점은 닫힌 상태에서도 라벨을 보여주고 채널 옆에 선다", async ({ page }) => {
+  await openSlackModalWithHistory(page);
+
+  await expect(page.locator('[data-slot="select-trigger"]')).toContainText("10분전");
+
+  // 채널 입력과 같은 줄에 있고, 오른쪽에 붙는다.
+  const sideBySide = await page.evaluate(() => {
+    const findDeep = (selector) => {
+      const walk = (node) => {
+        const hit = node.querySelector?.(selector);
+        if (hit) return hit;
+        for (const element of node.querySelectorAll?.("*") ?? []) {
+          if (element.shadowRoot) {
+            const found = walk(element.shadowRoot);
+            if (found) return found;
+          }
+        }
+        return null;
+      };
+      return walk(document);
+    };
+    const chips = findDeep('[data-slot="combobox-chips"]').getBoundingClientRect();
+    const trigger = findDeep('[data-slot="select-trigger"]').getBoundingClientRect();
+    return {
+      sameRow: Math.abs(chips.top - trigger.top) < 40,
+      rightOfChips: trigger.left > chips.right - 5,
+    };
+  });
+
+  expect(sideBySide.sameRow).toBe(true);
+  expect(sideBySide.rightOfChips).toBe(true);
+});
