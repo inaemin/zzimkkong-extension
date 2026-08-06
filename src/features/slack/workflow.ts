@@ -149,11 +149,6 @@ export function createSlackWorkflow(deps: Deps) {
     // React 모달은 자기 마운트를 통째로 걷어낸다.
     closeReactSlackCopyModal();
 
-    if (typeof state.slackModalKeydownHandler === "function") {
-      document.removeEventListener("keydown", state.slackModalKeydownHandler, true);
-      state.slackModalKeydownHandler = null;
-    }
-
     if (restoreMapCalendar) {
       state.slackModalVisible = false;
       setMapCalendarSuppressedBySlack(false);

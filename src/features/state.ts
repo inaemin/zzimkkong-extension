@@ -89,7 +89,6 @@ export interface RadarState {
   pendingSlackModalRequiresNonEditPage: boolean;
   pendingSlackModalReloadAttempted: boolean;
   pendingSlackModalTimer: number | null;
-  slackModalKeydownHandler: ((event: KeyboardEvent) => void) | null;
   slackModalVisible: boolean;
   slackChannelMention: string;
   slackChannelHistory: string[];

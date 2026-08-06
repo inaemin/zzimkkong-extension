@@ -258,7 +258,6 @@ declare global {
     pendingSlackModalRequiresNonEditPage: false,
     pendingSlackModalReloadAttempted: false,
     pendingSlackModalTimer: null,
-    slackModalKeydownHandler: null,
     slackModalVisible: false,
     mapCalendarSuppressedBySlack: false,
     slackChannelMention: readStoredText(SLACK_CHANNEL_MENTION_STORAGE_KEY, ""),
