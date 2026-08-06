@@ -1,5 +1,5 @@
 import type { RadarState } from "../state.js";
-import { cancelTimer, pushDebugEvent } from "../../utils/shared.js";
+import { cancelTimer, parseUrlSafely, pushDebugEvent } from "../../utils/shared.js";
 import { getStorageErrorMessage } from "../../utils/storage.js";
 
 /** sessionStorage 에 넣어두는 대기 모달 상태. */
@@ -303,18 +303,6 @@ export function createSlackSuccessFlow(deps: Deps) {
     }
 
     return origin === "https://techcourse-lms-plus-api.woowahan.com";
-  }
-
-  function parseUrlSafely(urlValue: unknown) {
-    if (typeof urlValue !== "string" || urlValue.trim() === "") {
-      return null;
-    }
-
-    try {
-      return new URL(urlValue, location.origin);
-    } catch {
-      return null;
-    }
   }
 
   return {

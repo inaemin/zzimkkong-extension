@@ -132,3 +132,20 @@ export function cancelTimer(timerId: number | null | undefined): void {
   }
   clearTimeout(timerId);
 }
+
+/**
+ * 상대 경로도 받아 URL 로 만든다. 파싱할 수 없으면 null.
+ *
+ * 호스트가 내려주는 값이라 형식을 믿을 수 없어서, 던지는 대신 null 을 준다.
+ */
+export function parseUrlSafely(urlValue: unknown): URL | null {
+  if (typeof urlValue !== "string" || urlValue.trim() === "") {
+    return null;
+  }
+
+  try {
+    return new URL(urlValue, location.origin);
+  } catch {
+    return null;
+  }
+}

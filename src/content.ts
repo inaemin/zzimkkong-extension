@@ -3,6 +3,7 @@ import { flushSync } from "react-dom";
 
 import {
   cancelTimer,
+  parseUrlSafely,
   toDisplayString,
   normalizeTextForMatch,
   getErrorMessage,
@@ -2985,18 +2986,6 @@ declare global {
     return method === "POST" || method === "PUT" || method === "PATCH" || method === "DELETE"
       ? method
       : "";
-  }
-
-  function parseUrlSafely(urlValue: unknown) {
-    if (typeof urlValue !== "string" || urlValue.trim() === "") {
-      return null;
-    }
-
-    try {
-      return new URL(urlValue, location.origin);
-    } catch {
-      return null;
-    }
   }
 
   function createSlackMessageFingerprint(
