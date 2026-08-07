@@ -56,6 +56,25 @@ test("직접 선언한 web_accessible_resources 가 없다", () => {
   expect(fs.existsSync(path.join(DIST_DIR, "assets/basecoat-dialog.css"))).toBe(false);
 });
 
+// 패키징 스크립트가 "런타임에 직접 부르는 파일"을 검사하는데, 그 목록이 실제
+// 산출물과 어긋나면 릴리스 태그를 밀 때서야 터진다(v1.0.0 에서 실제로 겪었다).
+// CI 에서 미리 잡는다.
+test("패키징이 요구하는 런타임 리소스가 실제로 존재한다", () => {
+  const script = fs.readFileSync(
+    path.resolve(process.cwd(), "scripts/package-extension.mjs"),
+    "utf8",
+  );
+  const declared = script.match(/const runtimeLoadedPaths = \[([^\]]*)\]/)?.[1] ?? "";
+  const paths = [...declared.matchAll(/"([^"]+)"/g)].map((match) => match[1]);
+
+  for (const relativePath of paths) {
+    expect(
+      fs.existsSync(path.join(DIST_DIR, relativePath)),
+      `패키징이 요구하는 ${relativePath} 가 빌드 산출물에 없다`,
+    ).toBe(true);
+  }
+});
+
 test("서비스워커 번들이 모듈로 실제 실행된다", async ({ page }) => {
   // CRXJS 는 서비스워커를 type:"module" 로 등록한다. ES 모듈에서 importScripts()
   // 를 쓰면 "Module scripts don't support importScripts()" 로 부팅이 통째로 깨진다.

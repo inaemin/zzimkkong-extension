@@ -47,9 +47,12 @@ for (const relativePath of contentScripts) {
   }
 }
 
-// 런타임에 chrome.runtime.getURL 로 직접 부르는 파일들.
-// 번들러가 경로를 바꾸면 예약 훅과 Slack 모달 스타일이 조용히 깨지므로 여기서 막는다.
-const runtimeLoadedPaths = ["assets/basecoat-dialog.css"];
+// 런타임에 chrome.runtime.getURL 로 직접 부르는 파일이 있으면 여기에 적는다.
+// 번들러가 경로를 바꾸면 조용히 깨지므로 패키징에서 막는다.
+//
+// 지금은 없다. Shadow DOM 전환으로 스타일이 번들 안에 인라인되면서
+// basecoat-dialog.css 가 사라졌다(build-output.spec.js 가 그 부재를 검증한다).
+const runtimeLoadedPaths = [];
 for (const relativePath of runtimeLoadedPaths) {
   if (!fs.existsSync(path.join(buildDir, relativePath))) {
     throw new Error(`Missing runtime-loaded resource in build output: ${relativePath}`);
