@@ -53,6 +53,12 @@ import {
   readHostFieldDisplayValue,
 } from "./features/form-fields/shared.js";
 import { buildGridFloorGroups } from "./features/radar/slot-model.js";
+import {
+  createQuotaCache,
+  clearQuotaCache,
+  readQuotaCache,
+  writeQuotaCache,
+} from "./features/radar/quota.js";
 import type { PanelElements, RadarState } from "./features/state.js";
 import type { DailyScheduleResult, RoomSchedule } from "./services/lms-data/types.js";
 import { closeFloorMapZoom, openFloorMapZoom } from "./ui/floor-map-zoom-modal.js";
@@ -230,6 +236,11 @@ declare global {
   // 설정을 한 번 읽어 state 초기값으로 쓴다. 이 호출이 필요하면 마이그레이션도
   // 함께 일어난다(예전 키 → 통합 키).
   const initialSettings = getRadarSettings();
+
+  // 예약 한도. 날짜별로 짧게 캐시한다(스케줄과 같은 주기).
+  const quotaCache = createQuotaCache();
+  // 같은 날짜로 이미 나간 조회. 날짜를 빠르게 넘길 때 중복 요청을 막는다.
+  const quotaInflightByDate = new Map<string, Promise<void>>();
 
   const state: RadarState = {
     loading: false,
@@ -767,6 +778,8 @@ declare global {
     state.scheduleCache.clear();
     state.scheduleCacheFetchedAtByDate.clear();
     state.scheduleInflightByDate.clear();
+    // 예약이 생기면 사용량이 곧바로 바뀐다. 한도도 함께 버린다.
+    clearQuotaCache(quotaCache);
     pushDebugEvent("availability", "cache-invalidated", {
       reason: "reservation-mutated",
     });
@@ -781,6 +794,55 @@ declare global {
     state.latestRoomsBySpaceTab.set(toDisplayString(roomType), rooms);
     state.latestMapName =
       typeof payload.mapName === "string" ? payload.mapName : state.latestMapName;
+  }
+
+  /**
+   * 지금 폼에 반영된 선택 구간의 길이(분). 없으면 0.
+   *
+   * 한도 표시가 "이걸 예약하면 얼마 남나"를 보여주는 데 쓴다.
+   */
+  function getSelectedReservationMinutes(): number {
+    const selection = state.appliedSelection;
+    if (!selection) {
+      return 0;
+    }
+    const minutes = selection.endMinute - selection.startMinute;
+    return Number.isFinite(minutes) && minutes > 0 ? minutes : 0;
+  }
+
+  /**
+   * 예약 한도를 받아 캐시에 넣는다. 이미 있거나 조회 중이면 아무것도 하지 않는다.
+   *
+   * 실패해도 조용히 넘어간다 — 한도는 보조 정보라, 못 받았다고 레이더 전체를
+   * 에러로 만들 이유가 없다.
+   */
+  function refreshQuota(date: string): void {
+    if (!isDateString(date) || !getRadarSettings().showQuota) {
+      return;
+    }
+    if (readQuotaCache(quotaCache, date) !== undefined || quotaInflightByDate.has(date)) {
+      return;
+    }
+
+    const inflight = fetchLmsQuota({ date, allowPastDate: true })
+      .then((quota) => {
+        writeQuotaCache(quotaCache, date, { quota });
+        // 지금 그 날짜를 보고 있을 때만 다시 그린다.
+        if (state.activeScheduleDate === date) {
+          const cached = getFreshScheduleCache(date);
+          if (cached) {
+            renderMapCalendarOverlay(cached);
+          }
+        }
+      })
+      .catch((error: unknown) => {
+        pushDebugEvent("quota", "fetch-failed", { date, error: getErrorMessage(error) });
+      })
+      .finally(() => {
+        quotaInflightByDate.delete(date);
+      });
+
+    quotaInflightByDate.set(date, inflight);
   }
 
   function getFreshScheduleCache(date: string): DailyScheduleResult | null {
@@ -1153,6 +1215,9 @@ declare global {
     const headerMinDate = getMinimumSelectableDateForCurrentContext(headerDate) || "";
     // 최소일보다 앞이면 끌어올린다. 지난 날짜는 예약할 수 없다.
     const clampedHeaderDate = clampDateToMin(headerDate, headerMinDate);
+
+    // 이 날짜의 한도가 캐시에 없으면 받아온다. 도착하면 다시 그린다.
+    refreshQuota(clampedHeaderDate);
     if (headerDateInput instanceof HTMLInputElement && clampedHeaderDate) {
       headerDateInput.value = clampedHeaderDate;
     }
@@ -1177,6 +1242,11 @@ declare global {
         state.mapCalendarCollapsed = !state.mapCalendarCollapsed;
         renderMapCalendarOverlay(scheduleData);
       },
+      // 한도는 설정으로 끌 수 있다. 꺼져 있으면 조회도 하지 않는다.
+      quota: getRadarSettings().showQuota
+        ? (readQuotaCache(quotaCache, clampedHeaderDate) ?? null)
+        : null,
+      selectedMinutes: getSelectedReservationMinutes(),
       alwaysOpen: state.mapCalendarAlwaysOpen,
       onAlwaysOpenChange: (nextAlwaysOpen) => {
         state.mapCalendarAlwaysOpen = nextAlwaysOpen;
