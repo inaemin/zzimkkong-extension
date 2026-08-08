@@ -5,6 +5,7 @@ import { addDaysToDateString, formatDateSelectorText } from "@/utils/date-time";
 import { Button } from "@/ui/components/ui/button";
 import { DatePicker } from "@/ui/components/date-picker";
 import { RadarLegend } from "@/ui/components/radar-legend";
+import { RadarQuota } from "@/ui/components/radar-quota";
 import { Label } from "@/ui/components/ui/label";
 import { Switch } from "@/ui/components/ui/switch";
 import { Tabs, TabsList, TabsTrigger } from "@/ui/components/ui/tabs";
@@ -15,6 +16,7 @@ import {
   MAP_CALENDAR_SPACE_TAB_PAIR,
   type SpaceTab,
 } from "@/constants/runtime";
+import type { ReservationQuota } from "@/services/lms-data/types";
 
 // 레이더 헤더의 컨트롤 줄.
 //
@@ -45,6 +47,11 @@ export interface RadarHeaderProps {
   alwaysOpen: boolean;
   onAlwaysOpenChange: (nextAlwaysOpen: boolean) => void;
 
+  /** 예약 한도. null 이거나 무제한이면 표시하지 않는다. */
+  quota?: ReservationQuota | null;
+  /** 지금 고른 구간의 길이(분). 예약 후 잔여를 미리 보여주는 데 쓴다. */
+  selectedMinutes?: number | null;
+
   /** 방 태그 범례. 아직 명령형이라 붙일 자리만 내준다. */
 }
 
@@ -60,6 +67,8 @@ export function RadarHeader({
   onToggleCollapsed,
   alwaysOpen,
   onAlwaysOpenChange,
+  quota = null,
+  selectedMinutes = null,
 }: RadarHeaderProps) {
   // 최소일 이하로는 못 내려간다. 지난 날짜는 예약할 수 없기 때문이다.
   const canGoPrev = !minDate || date > minDate;
@@ -158,6 +167,8 @@ export function RadarHeader({
       </div>
 
       <div className="zzk-map-calendar-header-right">
+        <RadarQuota quota={quota} selectedMinutes={selectedMinutes} />
+
         {/* 폼 제출용 선택이 아니라 즉시 저장되는 설정이라 Switch 를 쓴다. */}
         <div className="zzk-map-calendar-always-open flex items-center gap-1.5">
           <Switch
