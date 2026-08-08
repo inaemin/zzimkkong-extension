@@ -284,7 +284,7 @@ export function createSlackSuccessFlow(deps: Deps) {
   }
 
   // lms+ 에는 예약 수정 페이지가 없어 "수정 제출 후 복귀" 흐름 자체가 존재하지 않는다.
-  // content.js 가 여전히 호출하므로 진입점만 남겨 둔다.
+  // content.ts 가 여전히 호출하므로 진입점만 남겨 둔다.
   function queueSlackModalFromPersistedEditSubmitIfNeeded() {}
 
   function isTrustedReservationNetworkMessage(event: MessageEvent, payload: unknown) {
@@ -332,15 +332,14 @@ export function createSlackSuccessFlow(deps: Deps) {
   };
 }
 
-// content.js 가 주입하는 의존성 묶음.
+// content.ts 가 주입하는 의존성 묶음.
 //
-// content.js 는 아직 .js 라(3단계에서 .tsx 로 다시 쓴다) 여기서 각 의존성의
-// 정확한 타입을 알 수 없다. 지금은 형태만 열어두고, content.js 가 컴포넌트로
-// 쪼개질 때 이 인터페이스를 구체 타입으로 좁힌다.
+// 의존성 상당수가 content.ts 의 IIFE 클로저 안에 정의돼 있어 바깥에서 타입을
+// 끌어올 수 없다. 그래서 여기서는 "쓰는 형태"만 적는다. 해당 함수가 모듈로
+// 빠져나오면 그 자리를 typeof import(...) 로 좁힌다.
 /**
  * 이미 타입이 있는 의존성은 원본에서 끌어온다. 손으로 다시 적으면 원본이
- * 바뀔 때 조용히 어긋난다. content.js 에서만 오는 것들은 아직 .js 라 타입을
- * 알 수 없어 형태만 적는다.
+ * 바뀔 때 조용히 어긋난다. content.ts 클로저 안에만 있는 것들은 형태만 적는다.
  */
 type Deps = {
   state: RadarState;
@@ -348,7 +347,7 @@ type Deps = {
   PENDING_SLACK_MODAL_STORAGE_KEY: string;
   showSlackCopyModal: (context: unknown) => void;
   onReservationMutated?: () => void;
-  // content.js 에 있어 타입을 끌어올 수 없다. 쓰는 형태만 적는다.
+  // content.ts 클로저 안에 있어 타입을 끌어올 수 없다. 쓰는 형태만 적는다.
   normalizeReservationMutationMethod: (value: unknown) => string;
   createSlackMessageFingerprint: (
     context: Record<string, unknown>,

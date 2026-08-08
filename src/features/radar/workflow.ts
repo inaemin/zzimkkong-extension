@@ -1,22 +1,22 @@
 import type { SpaceTab } from "../../constants/runtime.js";
 import type { DailyScheduleResult } from "../../services/lms-data/types.js";
 import type { RadarState } from "../state.js";
+import { getRadarSettings } from "../settings/store.js";
 
-// content.js 가 주입하는 의존성 묶음.
+// content.ts 가 주입하는 의존성 묶음.
 //
-// content.js 는 아직 .js 라(3단계에서 .tsx 로 다시 쓴다) 여기서 각 의존성의
-// 정확한 타입을 알 수 없다. 지금은 형태만 열어두고, content.js 가 컴포넌트로
-// 쪼개질 때 이 인터페이스를 구체 타입으로 좁힌다.
+// 의존성 상당수가 content.ts 의 IIFE 클로저 안에 정의돼 있어 바깥에서 타입을
+// 끌어올 수 없다. 그래서 여기서는 "쓰는 형태"만 적는다. 해당 함수가 모듈로
+// 빠져나오면 그 자리를 typeof import(...) 로 좁힌다.
 /**
  * 이미 타입이 있는 의존성은 원본에서 끌어온다. 손으로 다시 적으면 원본이
- * 바뀔 때 조용히 어긋난다. content.js 에서만 오는 것들(state, 렌더 함수 등)은
- * 아직 .js 라 타입을 알 수 없어 unknown 계열로 남긴다.
+ * 바뀔 때 조용히 어긋난다. content.ts 클로저 안에만 있는 것들(state, 렌더 함수
+ * 등)은 unknown 계열로 남긴다.
  */
 type Deps = {
   state: RadarState;
   MAP_CALENDAR_OVERLAY_ID: string;
   MAP_CALENDAR_LAUNCHER_ID: string;
-  MAP_CALENDAR_ALWAYS_OPEN_STORAGE_KEY: string;
   RADAR_LAUNCHER_Z_INDEX: number;
   DEBUG_MODE: boolean;
   DEV_BUILD: boolean;
@@ -25,14 +25,13 @@ type Deps = {
   renderRadarLauncher: typeof import("../../ui/radar-launcher-mount.js").renderRadarLauncher;
   removeRadarLauncher: typeof import("../../ui/radar-launcher-mount.js").removeRadarLauncher;
   getRadarLauncherHost: typeof import("../../ui/radar-launcher-mount.js").getRadarLauncherHost;
-  readStoredBoolean: typeof import("../../utils/storage.js").readStoredBoolean;
   isDateString: typeof import("../../utils/date-time.js").isDateString;
-  // content.js 에 있어 타입을 끌어올 수 없다. 쓰는 형태만 적는다.
+  // content.ts 클로저 안에 있어 타입을 끌어올 수 없다. 쓰는 형태만 적는다.
   normalizeDateInput: (inputElement: Element | null) => string;
   formatDateSelectorText: typeof import("../../utils/date-time.js").formatDateSelectorText;
   isRadarSupportedPage: typeof import("../../utils/routes.js").isRadarSupportedPage;
   normalizeMapCalendarSpaceTab: typeof import("../../constants/runtime.js").normalizeMapCalendarSpaceTab;
-  // 아래는 content.js 에 있어 타입을 끌어올 수 없다. 쓰는 형태만 적는다.
+  // 아래는 content.ts 클로저 안에 있어 타입을 끌어올 수 없다. 쓰는 형태만 적는다.
   isMapCalendarModalOpenRequested: () => boolean;
   refreshDailySchedule: (date: string) => Promise<unknown>;
   setScheduleLoadingDate: (date: string, isLoading: boolean, tab?: SpaceTab) => void;
@@ -62,14 +61,12 @@ export function createRadarWorkflow(deps: Deps) {
     MAP_CALENDAR_LAUNCHER_ID,
     DEBUG_MODE,
     DEV_BUILD,
-    MAP_CALENDAR_ALWAYS_OPEN_STORAGE_KEY,
     findGuestReservationTabContainer,
     findGuestReservationTabStyleSource,
     buildSlackReservationContext,
     showSlackCopyModal,
     isRadarSupportedPage,
     isMapCalendarModalOpenRequested,
-    readStoredBoolean,
     normalizeMapCalendarSpaceTab,
     isDateString,
     formatDateSelectorText,
@@ -142,7 +139,7 @@ export function createRadarWorkflow(deps: Deps) {
       return false;
     }
     // "항상 열기" 설정이 꺼져 있으면 사용자가 직접 눌러야 한다.
-    return readStoredBoolean(MAP_CALENDAR_ALWAYS_OPEN_STORAGE_KEY, true);
+    return getRadarSettings().alwaysOpen;
   }
 
   function scheduleAutoOpenMapCalendarLauncher(launcher: HTMLElement | null) {

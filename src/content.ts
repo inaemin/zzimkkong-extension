@@ -16,14 +16,11 @@ import {
   writeStoredBoolean,
   readStoredText,
   writeStoredText,
-  readStoredNumber,
-  writeStoredNumber,
 } from "./utils/storage.js";
 import {
   clampDateToMin,
   normalizeDateString,
   isDateString,
-  parseHourMinute,
   minuteToHourMinute,
   normalizeHourMinute,
   normalizeToTenMinute,
@@ -90,10 +87,6 @@ import {
   SLACK_CHANNEL_HISTORY_STORAGE_KEY,
   SLACK_REMINDER_LEAD_TIME_STORAGE_KEY,
   PENDING_SLACK_MODAL_STORAGE_KEY,
-  MAP_CALENDAR_ALWAYS_OPEN_STORAGE_KEY,
-  MAP_CALENDAR_SPACE_TAB_STORAGE_KEY,
-  MAP_CALENDAR_WIDTH_STORAGE_KEY,
-  MAP_CALENDAR_FLOORMAP_OPEN_STORAGE_KEY,
   MAP_CALENDAR_MIN_WIDTH,
   MAP_CALENDAR_VIEWPORT_MARGIN,
   MAP_CALENDAR_SPACE_TAB_MEETING,
@@ -153,8 +146,15 @@ import {
 } from "./features/radar/timeline-layout.js";
 import { createRadarWorkflow } from "./features/radar/workflow.js";
 import { createRadarFormSync } from "./features/radar/form-sync.js";
+import { createLmsFormSync } from "./features/form-fields/lms-form-sync.js";
 import { createSlackWorkflow } from "./features/slack/workflow.js";
 import { createSlackSuccessFlow } from "./features/slack/success-flow.js";
+import {
+  getRadarSettings,
+  rememberRecentPurpose,
+  resetRadarSettings,
+  updateRadarSettings,
+} from "./features/settings/store.js";
 
 // 같은 페이지에 두 번 주입되는 걸 막는 표식.
 /** 렌더 뒤에 채워지는 노드들. 드래그·리사이즈를 붙일 때 쓴다. */
@@ -170,7 +170,11 @@ declare global {
   }
 }
 
-// 이 파일은 3단계에서 React 컴포넌트로 다시 쓴다. 지금은 전역 소비만 import 로 옮긴다.
+// 아직 모듈로 빠져나가지 못한 코드가 모여 있는 파일.
+//
+// 통째로 다시 쓰는 계획은 없다. 기능을 건드릴 때 그 기능이 쓰는 부분만
+// src/features/ 로 떼어내는 식으로 줄인다(예: features/form-fields/lms-form-sync.ts).
+// 떼어낸 코드는 eslint 예외를 못 받으므로 구조 규칙을 지켜야 한다.
 (() => {
   if (window.__zzkAvailabilityLensLoaded) {
     return;
@@ -193,11 +197,11 @@ declare global {
 
   function isFloorMapSectionOpen() {
     // 기본은 접힘.
-    return readStoredBoolean(MAP_CALENDAR_FLOORMAP_OPEN_STORAGE_KEY, false);
+    return getRadarSettings().floorMapOpen;
   }
 
   function persistFloorMapSectionOpen(open: boolean) {
-    writeStoredBoolean(MAP_CALENDAR_FLOORMAP_OPEN_STORAGE_KEY, open);
+    updateRadarSettings({ floorMapOpen: open });
   }
 
   // 타임라인 아래에 층별 평면도(SVG)를 접이식으로 붙인다. lms+ 에는 지도가 없어
@@ -223,6 +227,10 @@ declare global {
   // 예약이 바뀐 뒤 레이더를 다시 그리는 예약 타이머. 여기서만 걸고 푼다.
   let autoScheduleRefreshTimer: number | null = null;
 
+  // 설정을 한 번 읽어 state 초기값으로 쓴다. 이 호출이 필요하면 마이그레이션도
+  // 함께 일어난다(예전 키 → 통합 키).
+  const initialSettings = getRadarSettings();
+
   const state: RadarState = {
     loading: false,
     // 같은 조건(날짜·시간·탭)으로 다시 조회할 때 재사용할 마지막 응답.
@@ -243,13 +251,11 @@ declare global {
     scheduleLoadingTab: null,
     activeScheduleDate: null,
     activeScheduleTab: null,
-    mapCalendarVisible: readStoredBoolean(MAP_CALENDAR_ALWAYS_OPEN_STORAGE_KEY, true),
-    mapCalendarAlwaysOpen: readStoredBoolean(MAP_CALENDAR_ALWAYS_OPEN_STORAGE_KEY, true),
-    mapCalendarSpaceTab: normalizeMapCalendarSpaceTab(
-      readStoredText(MAP_CALENDAR_SPACE_TAB_STORAGE_KEY, MAP_CALENDAR_SPACE_TAB_MEETING),
-    ),
+    mapCalendarVisible: initialSettings.alwaysOpen,
+    mapCalendarAlwaysOpen: initialSettings.alwaysOpen,
+    mapCalendarSpaceTab: initialSettings.spaceTab,
     mapCalendarCollapsed: false,
-    mapCalendarWidth: readStoredNumber(MAP_CALENDAR_WIDTH_STORAGE_KEY, null),
+    mapCalendarWidth: initialSettings.overlayWidth,
     mapCalendarCurrentTimeScrollDate: null,
     // 드래그로 옮긴 모달 위치를 저장소에서 복원한다.
     mapCalendarOffset: readStoredMapCalendarOffset(),
@@ -1174,7 +1180,7 @@ declare global {
       alwaysOpen: state.mapCalendarAlwaysOpen,
       onAlwaysOpenChange: (nextAlwaysOpen) => {
         state.mapCalendarAlwaysOpen = nextAlwaysOpen;
-        writeStoredBoolean(MAP_CALENDAR_ALWAYS_OPEN_STORAGE_KEY, nextAlwaysOpen);
+        updateRadarSettings({ alwaysOpen: nextAlwaysOpen });
         if (nextAlwaysOpen) {
           state.mapCalendarVisible = true;
           openMapCalendarModal();
@@ -1386,7 +1392,6 @@ declare global {
     MAP_CALENDAR_LAUNCHER_ID,
     DEBUG_MODE,
     DEV_BUILD,
-    MAP_CALENDAR_ALWAYS_OPEN_STORAGE_KEY,
     RADAR_LAUNCHER_Z_INDEX,
     findGuestReservationTabContainer,
     findGuestReservationTabStyleSource,
@@ -1395,7 +1400,6 @@ declare global {
     showSlackCopyModal: (context) => showSlackCopyModal(context),
     isRadarSupportedPage,
     isMapCalendarModalOpenRequested,
-    readStoredBoolean,
     normalizeMapCalendarSpaceTab,
     isDateString,
     formatDateSelectorText,
@@ -1421,7 +1425,10 @@ declare global {
     setScheduleLoadingDate,
     renderMapCalendarOverlay,
     refreshAvailability,
-    syncLmsReservationForm,
+    // 팩토리 두 개가 서로를 필요로 한다(이쪽은 폼 반영을, 저쪽은 최신 요청 판별을).
+    // 한쪽을 함수로 감싸 호출 시점에 풀리게 한다.
+    syncLmsReservationForm: (payload, requestId) =>
+      syncLmsReservationForm(payload, requestId ?? null),
   });
 
   function setMapCalendarSuppressedBySlack(shouldSuppress: boolean) {
@@ -1560,7 +1567,7 @@ declare global {
     }
 
     state.mapCalendarWidth = clamped;
-    writeStoredNumber(MAP_CALENDAR_WIDTH_STORAGE_KEY, clamped);
+    updateRadarSettings({ overlayWidth: clamped });
   }
 
   // 가로 스크롤이 실제로 일어나는 요소. 2-pane 구조에서는 timeline-pane 이고,
@@ -2106,240 +2113,13 @@ declare global {
     );
   }
 
-  function findHostRoomDropdownButton(root: Document | HTMLElement = document) {
-    const pickBestButton = (buttons: Element[]): Element | null => {
-      let bestButton = null;
-      let bestScore = Number.NEGATIVE_INFINITY;
-
-      buttons.forEach((candidate: Element) => {
-        if (!(candidate instanceof HTMLButtonElement)) {
-          return;
-        }
-        if (isInsideExtensionSurface(candidate)) {
-          return;
-        }
-        if (!isElementVisible(candidate)) {
-          return;
-        }
-
-        const descriptor = normalizeTextForMatch(
-          `${candidate.textContent || ""} ${candidate.getAttribute("aria-label") || ""} ${
-            candidate.getAttribute("title") || ""
-          }`,
-        );
-
-        let score = 0;
-        if (candidate.hasAttribute("aria-expanded")) {
-          score += 16;
-        }
-        if (
-          descriptor.includes("공간") ||
-          descriptor.includes("space") ||
-          descriptor.includes("room") ||
-          descriptor.includes("회의실")
-        ) {
-          score += 8;
-        }
-        if (descriptor.includes("시작시간") || descriptor.includes("종료시간")) {
-          score -= 12;
-        }
-        if (candidate.closest("form")) {
-          score += 4;
-        }
-
-        if (score > bestScore) {
-          bestScore = score;
-          bestButton = candidate;
-        }
-      });
-
-      return bestScore > 8 ? bestButton : null;
-    };
-
-    const scopedButtons = Array.from(root.querySelectorAll("button")).filter(
-      (candidate) => candidate instanceof HTMLButtonElement,
-    );
-    const scopedBest = pickBestButton(scopedButtons);
-    if (scopedBest instanceof HTMLButtonElement) {
-      return scopedBest;
-    }
-
-    if (root !== document) {
-      const globalButtons = Array.from(document.querySelectorAll("button")).filter(
-        (candidate) => candidate instanceof HTMLButtonElement,
-      );
-      return pickBestButton(globalButtons);
-    }
-
-    return null;
-  }
-
-  //  - 회의실: 이름이 적힌 <button> (선택 시 bg-primary 클래스)
-  //  - 시작 시간: <select>, option value 가 "HH:MM"
-  //  - 이용 시간: <select>, option value 가 30분 단위 개수 ("1"=30분, "2"=60분)
-  // 타임블록 클릭 결과(방/시작/종료)를 이 세 컨트롤에 반영한다.
-  function findLmsRoomButton(roomName: unknown) {
-    const target = normalizeTextForMatch(extractKnownRoomName(roomName || "") || roomName || "");
-    if (!target) {
-      return null;
-    }
-    const buttons = Array.from(document.querySelectorAll("button"));
-    const fallbackCandidates = [];
-    for (const button of buttons) {
-      const label = normalizeTextForMatch(button.textContent || "");
-      if (!label) {
-        continue;
-      }
-      if (label === target) {
-        return button;
-      }
-      // fallback 은 "라벨이 방 이름을 포함" 한 방향만 허용한다. 반대 방향
-      // (target.includes(label))은 "저장"·"선택" 같은 짧은 버튼이 방 이름에 우연히
-      // 포함되면 엉뚱한 버튼을 눌러 다른 공간을 선택할 위험이 있어 제외한다.
-      if (target.length >= 2 && label.includes(target)) {
-        fallbackCandidates.push(button);
-      }
-    }
-    // 후보가 둘 이상이면 어느 버튼인지 확신할 수 없으므로 실패로 둔다
-    // (예약이라는 도메인에서 조용히 잘못된 선택보다 미반영이 안전하다).
-    return fallbackCandidates.length === 1 ? fallbackCandidates[0] : null;
-  }
-
-  function isLmsRoomButtonSelected(button: Element | null) {
-    if (!(button instanceof HTMLElement)) {
-      return false;
-    }
-    // 선택된 방 버튼은 primary 배경 클래스를 가진다.
-    return button.className.includes("bg-primary");
-  }
-
-  // 시작 시간 select 는 "HH:MM" 옵션들을, 이용 시간 select 는 "1"/"2" 옵션을 갖는다.
-  function findLmsStartTimeSelect(startTime: unknown) {
-    const selects = Array.from(document.querySelectorAll("select"));
-    for (const select of selects) {
-      const hasHourMinuteOptions = Array.from(select.options).some((option) =>
-        /^\d{2}:\d{2}$/.test(option.value),
-      );
-      if (!hasHourMinuteOptions) {
-        continue;
-      }
-      if (!startTime || Array.from(select.options).some((option) => option.value === startTime)) {
-        return select;
-      }
-    }
-    return null;
-  }
-
-  function findLmsDurationSelect() {
-    // 이용 시간 select 는 30분 단위 개수를 value 로 갖는다("1","2",...).
-    const selects = Array.from(document.querySelectorAll("select"));
-    for (const select of selects) {
-      const optionValues = Array.from(select.options).map((option) => option.value);
-      const hasHourMinuteOptions = optionValues.some((value) => /^\d{2}:\d{2}$/.test(value));
-      if (hasHourMinuteOptions) {
-        continue;
-      }
-      // "1"/"2" 같은 순수 숫자 옵션이 있으면 이용 시간 select 로 본다.
-      if (optionValues.some((value) => /^\d+$/.test(value))) {
-        return select;
-      }
-    }
-    return null;
-  }
-
-  async function syncLmsReservationForm(
-    payload: Record<string, unknown>,
-    requestId: number | null = null,
-  ) {
-    // 타임블록 연속 클릭 시 이전 sync 가 나중 선택을 덮어쓰지 않도록
-    // 각 await 뒤에서 최신 요청인지 확인한다.
-    const isStaleRequest = () => requestId != null && !isLatestTimelineSelectionRequest(requestId);
-
-    const startTime = normalizeHourMinute(payload.startTime);
-    const endMinute = parseHourMinute(normalizeHourMinute(payload.endTime));
-    const startMinute = parseHourMinute(startTime);
-    const durationMinutes =
-      startMinute !== null && endMinute !== null && endMinute > startMinute
-        ? endMinute - startMinute
-        : null;
-
-    // 0) 날짜 input (type="date", name 없음). 회의실 버튼 클릭으로 React 가 리렌더되기
-    //    전에 먼저 맞춰, 날짜가 바뀐 스케줄로 폼이 반영되게 한다.
-    let dateSynced = true;
-    const targetDate = normalizeDateString(payload.date);
-    if (targetDate) {
-      const dateInput = queryHostDateInput(document, isInsideExtensionSurface);
-      if (dateInput instanceof HTMLInputElement) {
-        setFormElementValue(dateInput, targetDate);
-        dateSynced = normalizeDateString(dateInput.value) === targetDate;
-        // React 가 날짜 변경으로 예약 목록/폼을 다시 그릴 수 있어 한 틱 기다린다.
-        await new Promise((resolve) => window.setTimeout(resolve, 60));
-        if (isStaleRequest()) {
-          return false;
-        }
-      } else {
-        dateSynced = false;
-      }
-    }
-
-    // 1) 회의실 버튼 선택
-    let roomSynced = true;
-    const roomButton = findLmsRoomButton(payload.roomName);
-    if (roomButton instanceof HTMLElement) {
-      if (!isLmsRoomButtonSelected(roomButton)) {
-        roomButton.click();
-        // React 리렌더로 select 들이 새로 붙을 수 있어 한 틱 기다린다.
-        await new Promise((resolve) => window.setTimeout(resolve, 60));
-        if (isStaleRequest()) {
-          return false;
-        }
-      }
-      roomSynced = true;
-    } else {
-      roomSynced = false;
-    }
-
-    // 2) 시작 시간 select
-    let startSynced = true;
-    if (startTime) {
-      const startSelect = findLmsStartTimeSelect(startTime);
-      if (startSelect instanceof HTMLSelectElement) {
-        const hasOption = Array.from(startSelect.options).some(
-          (option) => option.value === startTime,
-        );
-        if (hasOption) {
-          setFormElementValue(startSelect, startTime);
-          startSynced = startSelect.value === startTime;
-        } else {
-          startSynced = false;
-        }
-      } else {
-        startSynced = false;
-      }
-    }
-
-    // 3) 이용 시간 select (30분 단위 개수)
-    let durationSynced = true;
-    if (durationMinutes !== null && durationMinutes > 0) {
-      const durationSelect = findLmsDurationSelect();
-      if (durationSelect instanceof HTMLSelectElement) {
-        const units = String(Math.max(1, Math.round(durationMinutes / 30)));
-        const hasOption = Array.from(durationSelect.options).some(
-          (option) => option.value === units,
-        );
-        if (hasOption) {
-          setFormElementValue(durationSelect, units);
-          durationSynced = durationSelect.value === units;
-        } else {
-          durationSynced = false;
-        }
-      } else {
-        durationSynced = false;
-      }
-    }
-
-    return dateSynced && roomSynced && startSynced && durationSynced;
-  }
+  // 호스트 예약 폼 조작은 이 팩토리가 전담한다. 폼의 생김새(회의실 버튼,
+  // 시작/이용 시간 select)를 아는 코드는 전부 그 안에 있다.
+  const { findHostRoomDropdownButton, syncLmsReservationForm } = createLmsFormSync({
+    isInsideExtensionSurface,
+    setFormElementValue,
+    isLatestTimelineSelectionRequest,
+  });
 
   function readHostReservationTimeValues(root: Document | HTMLElement = document) {
     const startInput = queryHostTimeInput(["start", "starttime", "start_date", "begin", "시작"], {
@@ -3448,7 +3228,7 @@ declare global {
   // lms+ 예약 페이지에는 지연 마운트 조건이 없어 레이더 UI 를 바로 띄울 수 있다.
 
   function syncMapCalendarAlwaysOpenPreference() {
-    state.mapCalendarAlwaysOpen = readStoredBoolean(MAP_CALENDAR_ALWAYS_OPEN_STORAGE_KEY, true);
+    state.mapCalendarAlwaysOpen = getRadarSettings().alwaysOpen;
   }
 
   function syncSlackChannelMentionPreference() {
@@ -3928,6 +3708,13 @@ declare global {
         writeStoredBoolean,
         writeStoredText,
       },
+      // 설정 스토어. 마이그레이션·기본값·구독 동작을 검증할 때 쓴다.
+      settings: {
+        get: () => getRadarSettings(),
+        update: (patch: Record<string, unknown>) => updateRadarSettings(patch),
+        reset: () => resetRadarSettings(),
+        rememberPurpose: (purpose: unknown) => rememberRecentPurpose(purpose),
+      },
       getDebugEvents() {
         return getDebugEvents();
       },
@@ -3939,7 +3726,7 @@ declare global {
 
   function persistMapCalendarSpaceTab(tab: unknown) {
     const normalizedTab = normalizeMapCalendarSpaceTab(tab);
-    writeStoredText(MAP_CALENDAR_SPACE_TAB_STORAGE_KEY, normalizedTab);
+    updateRadarSettings({ spaceTab: normalizedTab });
   }
 
   boot();

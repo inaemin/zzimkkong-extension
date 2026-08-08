@@ -3,8 +3,8 @@
 // 드래그는 DOM 이벤트지만 "어디로 옮길지" 계산은 순수하다. 뷰포트 크기를
 // 인자로 받아 window 의존을 끊었고, 그래서 브라우저 없이 검증할 수 있다.
 
-import { DRAG_SAFE_TOP, MAP_CALENDAR_OFFSET_STORAGE_KEY } from "../../constants/runtime.js";
-import { readStoredText, writeStoredText } from "../../utils/storage.js";
+import { DRAG_SAFE_TOP } from "../../constants/runtime.js";
+import { getRadarSettings, updateRadarSettings } from "../settings/store.js";
 
 /** 모달을 원래 자리에서 얼마나 옮겼는지. */
 export interface OverlayOffset {
@@ -15,24 +15,13 @@ export interface OverlayOffset {
 /** 화면 가장자리에서 띄울 최소 여백(px). */
 const VIEWPORT_MARGIN = 8;
 
-const ORIGIN: OverlayOffset = { x: 0, y: 0 };
-
 export function readStoredMapCalendarOffset(): OverlayOffset {
-  const raw = readStoredText(MAP_CALENDAR_OFFSET_STORAGE_KEY, "");
-  if (!raw) {
-    return ORIGIN;
-  }
-
-  try {
-    const parsed: unknown = JSON.parse(raw);
-    const { x, y } = parsed as { x?: unknown; y?: unknown };
-    return Number.isFinite(Number(x)) && Number.isFinite(Number(y))
-      ? { x: Number(x), y: Number(y) }
-      : ORIGIN;
-  } catch {
-    // 저장된 값이 깨졌으면 기본 위치를 쓴다.
-    return ORIGIN;
-  }
+  // 값 검사·기본값은 설정 스토어가 한다.
+  //
+  // 복사해서 돌려준다. 캐시 안의 객체를 그대로 주면 드래그 계산이 그 자리에서
+  // 값을 고칠 때 저장된 설정까지 조용히 따라 바뀐다.
+  const { x, y } = getRadarSettings().overlayOffset;
+  return { x, y };
 }
 
 export function persistMapCalendarOffset(offset: OverlayOffset): void {
@@ -41,7 +30,7 @@ export function persistMapCalendarOffset(offset: OverlayOffset): void {
   if (!Number.isFinite(x) || !Number.isFinite(y)) {
     return;
   }
-  writeStoredText(MAP_CALENDAR_OFFSET_STORAGE_KEY, JSON.stringify({ x, y }));
+  updateRadarSettings({ overlayOffset: { x, y } });
 }
 
 export function pointInRect(
