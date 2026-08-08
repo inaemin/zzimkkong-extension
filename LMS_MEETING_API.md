@@ -83,7 +83,31 @@ GET /api/space-reservations/quota?date=<YYYY-MM-DD>
 | `dailyLimitMinutes` / `dailyUsedMinutes` / `dailyRemainingMinutes`       | 일일 한도/사용/잔여(분) |
 | `monthlyLimitMinutes` / `monthlyUsedMinutes` / `monthlyRemainingMinutes` | 월간 한도/사용/잔여(분) |
 
-### 4. 예약 생성 (성공 감지 대상)
+### 4. 내 예약 목록
+
+```
+GET /api/space-reservations/me
+```
+
+응답: 내 예약 배열. 날짜·공간 파라미터 없이 **한 번의 요청으로 전부** 받습니다.
+공간별 조회(2번)와 달리 여러 날짜가 섞여 오므로, 지난/예정 구분은 클라이언트가 합니다.
+
+| 필드                    | 설명                           |
+| ----------------------- | ------------------------------ |
+| `id`                    | 예약 ID                        |
+| `date`                  | 예약 날짜(`YYYY-MM-DD`)        |
+| `startTime` / `endTime` | 예약 구간(`HH:MM:SS`)          |
+| `spaceId`               | 공간 ID                        |
+| `spaceName`             | 공간명(예: 수성)               |
+| `floor`                 | 층(정수)                       |
+| `purpose`               | 예약 목적                      |
+| `reserverName`          | 예약자명(예: `닉네임(홍길동)`) |
+| `mine`                  | 내 예약 여부(항상 `true`)      |
+
+> 정렬 보장은 확인되지 않았습니다(관측 샘플은 날짜 내림차순이었으나 계약으로 보지 않습니다).
+> 표시 순서는 클라이언트에서 정렬해 정합니다.
+
+### 5. 예약 생성 (성공 감지 대상)
 
 ```
 POST /api/space-reservations
@@ -117,4 +141,5 @@ POST /api/space-reservations
 ## 참고
 
 - 시간은 모두 `HH:MM:SS` 평면 문자열이며, 확장 내부에서는 분 단위(minute of day)로 변환해 다룹니다.
-- lms+ 관련 구현 위치: `src/services/lms-data/shared.js`(요청·인증), `src/services/lms-data/normalizers.js`(응답 정규화), `src/page-network-hook.js`(예약 성공 감지).
+- lms+ 관련 구현 위치: `src/services/lms-data/shared.ts`(요청·인증), `src/services/lms-data/normalizers.ts`(응답 정규화), `src/page-network-hook.ts`(예약 성공 감지), `src/features/form-fields/lms-form-sync.ts`(예약 폼 반영).
+- 문서에 실제 토큰을 남기지 않습니다. 인증은 페이지가 저장소에 넣어둔 JWT를 런타임에 읽어 씁니다.
