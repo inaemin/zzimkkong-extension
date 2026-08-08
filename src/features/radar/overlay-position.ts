@@ -17,7 +17,11 @@ const VIEWPORT_MARGIN = 8;
 
 export function readStoredMapCalendarOffset(): OverlayOffset {
   // 값 검사·기본값은 설정 스토어가 한다.
-  return getRadarSettings().overlayOffset;
+  //
+  // 복사해서 돌려준다. 캐시 안의 객체를 그대로 주면 드래그 계산이 그 자리에서
+  // 값을 고칠 때 저장된 설정까지 조용히 따라 바뀐다.
+  const { x, y } = getRadarSettings().overlayOffset;
+  return { x, y };
 }
 
 export function persistMapCalendarOffset(offset: OverlayOffset): void {

@@ -1,6 +1,9 @@
+import { debugWarn, pushDebugEvent } from "../../utils/shared.js";
+
 import {
-  DEFAULT_RADAR_SETTINGS,
+  createDefaultRadarSettings,
   loadRadarSettings,
+  normalizeRadarSettings,
   saveRadarSettings,
   withRecentPurpose,
   type RadarSettings,
@@ -26,9 +29,23 @@ export function getRadarSettings(): RadarSettings {
   return cached;
 }
 
+/**
+ * 구독자에게 알린다.
+ *
+ * 목록을 복사해서 돈다 — 리스너 안에서 구독하거나 해제하면(useSyncExternalStore 가
+ * 언마운트 때 그렇게 한다) 순회 중에 Set 이 바뀐다.
+ *
+ * 리스너 하나가 던져도 나머지는 받아야 한다. 여기서 막지 않으면 설정은 저장됐는데
+ * 화면 일부만 안 바뀌고, 예외가 스위치를 누른 쪽까지 올라간다.
+ */
 function notify(settings: RadarSettings): void {
-  listeners.forEach((listener) => {
-    listener(settings);
+  [...listeners].forEach((listener) => {
+    try {
+      listener(settings);
+    } catch (error) {
+      pushDebugEvent("settings", "listener-failed", { error: String(error) });
+      debugWarn("settings", "listener-failed", { error: String(error) });
+    }
   });
 }
 
@@ -36,10 +53,13 @@ function notify(settings: RadarSettings): void {
  * 설정 일부를 바꾼다.
  *
  * 바뀐 값이 없으면 저장도 알림도 하지 않는다 — 같은 값으로 다시 그리는 걸 막는다.
+ *
+ * 캐시에 넣기 전에 정규화한다. 저장할 때만 정리하면 메모리에 있는 값과 저장된 값이
+ * 갈려서, 새로고침 전까지 화면이 저장된 설정과 다르게 동작한다.
  */
 export function updateRadarSettings(patch: Partial<RadarSettings>): RadarSettings {
   const current = getRadarSettings();
-  const next: RadarSettings = { ...current, ...patch };
+  const next = normalizeRadarSettings({ ...current, ...patch });
 
   if (JSON.stringify(next) === JSON.stringify(current)) {
     return current;
@@ -74,7 +94,7 @@ export function getLastUsedPurpose(): string {
 
 /** 설정을 처음 상태로 되돌린다. */
 export function resetRadarSettings(): RadarSettings {
-  return updateRadarSettings({ ...DEFAULT_RADAR_SETTINGS });
+  return updateRadarSettings(createDefaultRadarSettings());
 }
 
 /**

@@ -70,22 +70,35 @@ const LEGACY_KEYS = {
   floorMapOpen: "zzk-map-calendar-floormap-open-v1",
 } as const;
 
-export const DEFAULT_RADAR_SETTINGS: RadarSettings = {
-  displayMode: "float",
-  alwaysOpen: true,
-  spaceTab: MAP_CALENDAR_SPACE_TAB_MEETING,
-  overlayOffset: { x: 0, y: 0 },
-  overlayWidth: null,
-  floorMapOpen: false,
-  showQuota: true,
-  showMyReservations: true,
-  quickReserve: {
-    enabled: false,
-    hotkey: "Alt+Enter",
-    reusePurpose: true,
-  },
-  recentPurposes: [],
-};
+/**
+ * 기본 설정 한 벌을 새로 만든다.
+ *
+ * 상수 하나를 공유하지 않고 매번 만드는 이유: 이 타입에는 중첩 값
+ * (overlayOffset·quickReserve·recentPurposes)이 있어서, 얕은 복사(`{ ...DEFAULT }`)
+ * 로는 그 인스턴스가 그대로 딸려간다. 받은 쪽이 한 번만 손대면 "기본값"이
+ * 조용히 바뀌고, 그 뒤로는 아무도 원래 값을 볼 수 없다.
+ */
+export function createDefaultRadarSettings(): RadarSettings {
+  return {
+    displayMode: "float",
+    alwaysOpen: true,
+    spaceTab: MAP_CALENDAR_SPACE_TAB_MEETING,
+    overlayOffset: { x: 0, y: 0 },
+    overlayWidth: null,
+    floorMapOpen: false,
+    showQuota: true,
+    showMyReservations: true,
+    quickReserve: {
+      enabled: false,
+      hotkey: "Alt+Enter",
+      reusePurpose: true,
+    },
+    recentPurposes: [],
+  };
+}
+
+/** 읽기 전용 참조. 값을 만들 때는 createDefaultRadarSettings() 를 쓴다. */
+export const DEFAULT_RADAR_SETTINGS: Readonly<RadarSettings> = createDefaultRadarSettings();
 
 function asRecord(value: unknown): Record<string, unknown> {
   return value !== null && typeof value === "object" ? (value as Record<string, unknown>) : {};
@@ -165,18 +178,27 @@ export function normalizeRadarSettings(value: unknown): RadarSettings {
   };
 }
 
-/** 저장된 JSON 을 읽는다. 없거나 깨졌으면 null. */
-function readStoredSettingsJson(): unknown {
+/**
+ * 저장된 JSON 읽기 결과.
+ *
+ * "키가 없다"와 "있는데 깨졌다"를 구분한다. 둘 다 null 로 뭉뚱그리면, 통합 키가
+ * 깨졌을 때 마이그레이션이 다시 돌아 **사용자가 그 뒤에 바꾼 설정이 예전 값으로
+ * 되돌아간다**(예전 키는 일부러 남겨 두므로 계속 읽힌다).
+ */
+type StoredSettingsRead =
+  { status: "missing" } | { status: "corrupt" } | { status: "ok"; value: unknown };
+
+function readStoredSettingsJson(): StoredSettingsRead {
   const raw = readStoredText(RADAR_SETTINGS_STORAGE_KEY, "");
   if (!raw) {
-    return null;
+    return { status: "missing" };
   }
   try {
-    return JSON.parse(raw);
+    return { status: "ok", value: JSON.parse(raw) };
   } catch (error) {
     pushDebugEvent("settings", "parse-failed", { error: String(error) });
     debugWarn("settings", "parse-failed", { error: String(error) });
-    return null;
+    return { status: "corrupt" };
   }
 }
 
@@ -214,10 +236,10 @@ export function migrateLegacySettings(): RadarSettings {
   const legacyWidth = readStoredNumber(LEGACY_KEYS.width, null);
 
   const migrated: RadarSettings = {
-    ...DEFAULT_RADAR_SETTINGS,
+    ...createDefaultRadarSettings(),
     alwaysOpen: readStoredBoolean(LEGACY_KEYS.alwaysOpen, DEFAULT_RADAR_SETTINGS.alwaysOpen),
     spaceTab: normalizeMapCalendarSpaceTab(readStoredText(LEGACY_KEYS.spaceTab, "")),
-    overlayOffset: legacyOffset ?? DEFAULT_RADAR_SETTINGS.overlayOffset,
+    overlayOffset: legacyOffset ?? { ...DEFAULT_RADAR_SETTINGS.overlayOffset },
     overlayWidth: legacyWidth,
     floorMapOpen: readStoredBoolean(LEGACY_KEYS.floorMapOpen, DEFAULT_RADAR_SETTINGS.floorMapOpen),
   };
@@ -236,11 +258,18 @@ export function migrateLegacySettings(): RadarSettings {
  *
  * 통합 키가 있으면 그걸 쓰고, 없는데 예전 키가 남아 있으면 옮겨 온다.
  * 둘 다 없으면 기본값이다(첫 설치).
+ *
+ * 통합 키가 깨진 경우에는 마이그레이션을 다시 하지 않는다. 예전 키는 일부러
+ * 남겨 두므로 다시 돌리면 사용자가 그 뒤에 바꾼 값이 예전 값으로 되돌아간다.
  */
 export function loadRadarSettings(): RadarSettings {
   const stored = readStoredSettingsJson();
-  if (stored !== null) {
-    return normalizeRadarSettings(stored);
+  if (stored.status === "ok") {
+    return normalizeRadarSettings(stored.value);
+  }
+
+  if (stored.status === "corrupt") {
+    return createDefaultRadarSettings();
   }
 
   if (hasLegacySettings()) {
@@ -249,7 +278,7 @@ export function loadRadarSettings(): RadarSettings {
     return migrated;
   }
 
-  return { ...DEFAULT_RADAR_SETTINGS };
+  return createDefaultRadarSettings();
 }
 
 export function saveRadarSettings(settings: RadarSettings): void {

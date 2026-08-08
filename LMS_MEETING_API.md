@@ -85,7 +85,7 @@ GET /api/space-reservations/quota?date=<YYYY-MM-DD>
 
 ### 4. 내 예약 목록
 
-```
+```http
 GET /api/space-reservations/me
 ```
 
