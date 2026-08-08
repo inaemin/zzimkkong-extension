@@ -492,10 +492,10 @@ test("드래그로 옮긴 모달 위치가 저장되고 재로드 시 복원된�
   await page.mouse.move(box.x + box.width / 2 - 80, box.y + box.height / 2 + 60, { steps: 8 });
   await page.mouse.up();
 
-  // 저장소에 위치가 기록되어야 한다.
+  // 설정에 위치가 기록되어야 한다(통합 키로 옮겨졌다).
   const stored = await page.evaluate(() => {
-    const raw = localStorage.getItem("zzk-map-calendar-offset-v1");
-    return raw ? JSON.parse(raw) : null;
+    const raw = localStorage.getItem("zzk-radar-settings-v1");
+    return raw ? JSON.parse(raw).overlayOffset : null;
   });
   expect(stored).not.toBeNull();
   expect(Number.isFinite(stored.x)).toBe(true);

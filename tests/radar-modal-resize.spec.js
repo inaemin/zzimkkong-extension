@@ -8,7 +8,14 @@ import {
 
 test.beforeAll(ensureExtensionBuild);
 
+// 예전 키. 이제는 "설정 스토어가 이 값을 읽어 옮겨오는지"를 확인하는 입력으로 쓴다.
+// (마이그레이션 경로 자체는 tests/settings-store.spec.js 가 따로 본다.)
 const WIDTH_STORAGE_KEY = "zzk-map-calendar-width-v1";
+
+/** 설정 스토어에 저장된 너비. 저장 위치가 통합 키로 옮겨졌다. */
+async function readStoredWidth(page) {
+  return page.evaluate(() => window.__zzkTestApi?.settings?.get?.().overlayWidth ?? null);
+}
 
 async function injectContentScriptBundle(page, beforeContentScript) {
   // 번들이 한 덩어리라 "content.js 직전"이 곧 "번들 로드 직전"이다.
@@ -323,7 +330,7 @@ test("resized width is written to localStorage", async ({ page }) => {
   );
   await page.mouse.up();
 
-  const stored = await page.evaluate((key) => window.localStorage.getItem(key), WIDTH_STORAGE_KEY);
+  const stored = await readStoredWidth(page);
   const liveWidth = await page.evaluate(() => {
     const card = window.__zzkQuery('[data-testid="radar-card"]');
     return card.getBoundingClientRect().width;
@@ -389,14 +396,14 @@ test("stored width survives a full page reload", async ({ page }) => {
 test("first-time users with no stored width get the default layout", async ({ page }) => {
   await mountAndOpenRadar(page);
 
-  const result = await page.evaluate((key) => {
+  const result = await page.evaluate(() => {
     const card = window.__zzkQuery('[data-testid="radar-card"]');
     return {
-      stored: window.localStorage.getItem(key),
+      stored: window.__zzkTestApi?.settings?.get?.().overlayWidth ?? null,
       inlineWidth: card.style.width,
       width: card.getBoundingClientRect().width,
     };
-  }, WIDTH_STORAGE_KEY);
+  });
 
   // 저장된 값이 없으면 인라인 너비를 강제하지 않고 기존 레이아웃을 그대로 쓴다.
   expect(result.stored).toBeNull();
@@ -439,10 +446,18 @@ test("out-of-range stored widths are clamped into the supported range", async ({
   ]) {
     await mountGuestMap(page);
     await injectContentScriptBundle(page, async () => {
-      await page.evaluate(({ key, value }) => window.localStorage.setItem(key, value), {
-        key: WIDTH_STORAGE_KEY,
-        value: outOfRange,
-      });
+      // 통합 키까지 지우고 예전 키만 심는다. 앞 회차가 남긴 통합 키가 있으면
+      // 마이그레이션을 건너뛰어(그게 맞는 동작이다) 이번 값이 무시된다.
+      await page.evaluate(
+        ({ key, value }) => {
+          window.localStorage.removeItem("zzk-radar-settings-v1");
+          window.localStorage.setItem(key, value);
+        },
+        {
+          key: WIDTH_STORAGE_KEY,
+          value: outOfRange,
+        },
+      );
     });
     await openRadar(page);
 

@@ -1,6 +1,7 @@
 import type { SpaceTab } from "../../constants/runtime.js";
 import type { DailyScheduleResult } from "../../services/lms-data/types.js";
 import type { RadarState } from "../state.js";
+import { getRadarSettings } from "../settings/store.js";
 
 // content.ts 가 주입하는 의존성 묶음.
 //
@@ -16,7 +17,6 @@ type Deps = {
   state: RadarState;
   MAP_CALENDAR_OVERLAY_ID: string;
   MAP_CALENDAR_LAUNCHER_ID: string;
-  MAP_CALENDAR_ALWAYS_OPEN_STORAGE_KEY: string;
   RADAR_LAUNCHER_Z_INDEX: number;
   DEBUG_MODE: boolean;
   DEV_BUILD: boolean;
@@ -25,7 +25,6 @@ type Deps = {
   renderRadarLauncher: typeof import("../../ui/radar-launcher-mount.js").renderRadarLauncher;
   removeRadarLauncher: typeof import("../../ui/radar-launcher-mount.js").removeRadarLauncher;
   getRadarLauncherHost: typeof import("../../ui/radar-launcher-mount.js").getRadarLauncherHost;
-  readStoredBoolean: typeof import("../../utils/storage.js").readStoredBoolean;
   isDateString: typeof import("../../utils/date-time.js").isDateString;
   // content.ts 클로저 안에 있어 타입을 끌어올 수 없다. 쓰는 형태만 적는다.
   normalizeDateInput: (inputElement: Element | null) => string;
@@ -62,14 +61,12 @@ export function createRadarWorkflow(deps: Deps) {
     MAP_CALENDAR_LAUNCHER_ID,
     DEBUG_MODE,
     DEV_BUILD,
-    MAP_CALENDAR_ALWAYS_OPEN_STORAGE_KEY,
     findGuestReservationTabContainer,
     findGuestReservationTabStyleSource,
     buildSlackReservationContext,
     showSlackCopyModal,
     isRadarSupportedPage,
     isMapCalendarModalOpenRequested,
-    readStoredBoolean,
     normalizeMapCalendarSpaceTab,
     isDateString,
     formatDateSelectorText,
@@ -142,7 +139,7 @@ export function createRadarWorkflow(deps: Deps) {
       return false;
     }
     // "항상 열기" 설정이 꺼져 있으면 사용자가 직접 눌러야 한다.
-    return readStoredBoolean(MAP_CALENDAR_ALWAYS_OPEN_STORAGE_KEY, true);
+    return getRadarSettings().alwaysOpen;
   }
 
   function scheduleAutoOpenMapCalendarLauncher(launcher: HTMLElement | null) {

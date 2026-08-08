@@ -16,8 +16,6 @@ import {
   writeStoredBoolean,
   readStoredText,
   writeStoredText,
-  readStoredNumber,
-  writeStoredNumber,
 } from "./utils/storage.js";
 import {
   clampDateToMin,
@@ -89,10 +87,6 @@ import {
   SLACK_CHANNEL_HISTORY_STORAGE_KEY,
   SLACK_REMINDER_LEAD_TIME_STORAGE_KEY,
   PENDING_SLACK_MODAL_STORAGE_KEY,
-  MAP_CALENDAR_ALWAYS_OPEN_STORAGE_KEY,
-  MAP_CALENDAR_SPACE_TAB_STORAGE_KEY,
-  MAP_CALENDAR_WIDTH_STORAGE_KEY,
-  MAP_CALENDAR_FLOORMAP_OPEN_STORAGE_KEY,
   MAP_CALENDAR_MIN_WIDTH,
   MAP_CALENDAR_VIEWPORT_MARGIN,
   MAP_CALENDAR_SPACE_TAB_MEETING,
@@ -155,6 +149,12 @@ import { createRadarFormSync } from "./features/radar/form-sync.js";
 import { createLmsFormSync } from "./features/form-fields/lms-form-sync.js";
 import { createSlackWorkflow } from "./features/slack/workflow.js";
 import { createSlackSuccessFlow } from "./features/slack/success-flow.js";
+import {
+  getRadarSettings,
+  rememberRecentPurpose,
+  resetRadarSettings,
+  updateRadarSettings,
+} from "./features/settings/store.js";
 
 // 같은 페이지에 두 번 주입되는 걸 막는 표식.
 /** 렌더 뒤에 채워지는 노드들. 드래그·리사이즈를 붙일 때 쓴다. */
@@ -197,11 +197,11 @@ declare global {
 
   function isFloorMapSectionOpen() {
     // 기본은 접힘.
-    return readStoredBoolean(MAP_CALENDAR_FLOORMAP_OPEN_STORAGE_KEY, false);
+    return getRadarSettings().floorMapOpen;
   }
 
   function persistFloorMapSectionOpen(open: boolean) {
-    writeStoredBoolean(MAP_CALENDAR_FLOORMAP_OPEN_STORAGE_KEY, open);
+    updateRadarSettings({ floorMapOpen: open });
   }
 
   // 타임라인 아래에 층별 평면도(SVG)를 접이식으로 붙인다. lms+ 에는 지도가 없어
@@ -227,6 +227,10 @@ declare global {
   // 예약이 바뀐 뒤 레이더를 다시 그리는 예약 타이머. 여기서만 걸고 푼다.
   let autoScheduleRefreshTimer: number | null = null;
 
+  // 설정을 한 번 읽어 state 초기값으로 쓴다. 이 호출이 필요하면 마이그레이션도
+  // 함께 일어난다(예전 키 → 통합 키).
+  const initialSettings = getRadarSettings();
+
   const state: RadarState = {
     loading: false,
     // 같은 조건(날짜·시간·탭)으로 다시 조회할 때 재사용할 마지막 응답.
@@ -247,13 +251,11 @@ declare global {
     scheduleLoadingTab: null,
     activeScheduleDate: null,
     activeScheduleTab: null,
-    mapCalendarVisible: readStoredBoolean(MAP_CALENDAR_ALWAYS_OPEN_STORAGE_KEY, true),
-    mapCalendarAlwaysOpen: readStoredBoolean(MAP_CALENDAR_ALWAYS_OPEN_STORAGE_KEY, true),
-    mapCalendarSpaceTab: normalizeMapCalendarSpaceTab(
-      readStoredText(MAP_CALENDAR_SPACE_TAB_STORAGE_KEY, MAP_CALENDAR_SPACE_TAB_MEETING),
-    ),
+    mapCalendarVisible: initialSettings.alwaysOpen,
+    mapCalendarAlwaysOpen: initialSettings.alwaysOpen,
+    mapCalendarSpaceTab: initialSettings.spaceTab,
     mapCalendarCollapsed: false,
-    mapCalendarWidth: readStoredNumber(MAP_CALENDAR_WIDTH_STORAGE_KEY, null),
+    mapCalendarWidth: initialSettings.overlayWidth,
     mapCalendarCurrentTimeScrollDate: null,
     // 드래그로 옮긴 모달 위치를 저장소에서 복원한다.
     mapCalendarOffset: readStoredMapCalendarOffset(),
@@ -1178,7 +1180,7 @@ declare global {
       alwaysOpen: state.mapCalendarAlwaysOpen,
       onAlwaysOpenChange: (nextAlwaysOpen) => {
         state.mapCalendarAlwaysOpen = nextAlwaysOpen;
-        writeStoredBoolean(MAP_CALENDAR_ALWAYS_OPEN_STORAGE_KEY, nextAlwaysOpen);
+        updateRadarSettings({ alwaysOpen: nextAlwaysOpen });
         if (nextAlwaysOpen) {
           state.mapCalendarVisible = true;
           openMapCalendarModal();
@@ -1390,7 +1392,6 @@ declare global {
     MAP_CALENDAR_LAUNCHER_ID,
     DEBUG_MODE,
     DEV_BUILD,
-    MAP_CALENDAR_ALWAYS_OPEN_STORAGE_KEY,
     RADAR_LAUNCHER_Z_INDEX,
     findGuestReservationTabContainer,
     findGuestReservationTabStyleSource,
@@ -1399,7 +1400,6 @@ declare global {
     showSlackCopyModal: (context) => showSlackCopyModal(context),
     isRadarSupportedPage,
     isMapCalendarModalOpenRequested,
-    readStoredBoolean,
     normalizeMapCalendarSpaceTab,
     isDateString,
     formatDateSelectorText,
@@ -1567,7 +1567,7 @@ declare global {
     }
 
     state.mapCalendarWidth = clamped;
-    writeStoredNumber(MAP_CALENDAR_WIDTH_STORAGE_KEY, clamped);
+    updateRadarSettings({ overlayWidth: clamped });
   }
 
   // 가로 스크롤이 실제로 일어나는 요소. 2-pane 구조에서는 timeline-pane 이고,
@@ -3228,7 +3228,7 @@ declare global {
   // lms+ 예약 페이지에는 지연 마운트 조건이 없어 레이더 UI 를 바로 띄울 수 있다.
 
   function syncMapCalendarAlwaysOpenPreference() {
-    state.mapCalendarAlwaysOpen = readStoredBoolean(MAP_CALENDAR_ALWAYS_OPEN_STORAGE_KEY, true);
+    state.mapCalendarAlwaysOpen = getRadarSettings().alwaysOpen;
   }
 
   function syncSlackChannelMentionPreference() {
@@ -3708,6 +3708,13 @@ declare global {
         writeStoredBoolean,
         writeStoredText,
       },
+      // 설정 스토어. 마이그레이션·기본값·구독 동작을 검증할 때 쓴다.
+      settings: {
+        get: () => getRadarSettings(),
+        update: (patch: Record<string, unknown>) => updateRadarSettings(patch),
+        reset: () => resetRadarSettings(),
+        rememberPurpose: (purpose: unknown) => rememberRecentPurpose(purpose),
+      },
       getDebugEvents() {
         return getDebugEvents();
       },
@@ -3719,7 +3726,7 @@ declare global {
 
   function persistMapCalendarSpaceTab(tab: unknown) {
     const normalizedTab = normalizeMapCalendarSpaceTab(tab);
-    writeStoredText(MAP_CALENDAR_SPACE_TAB_STORAGE_KEY, normalizedTab);
+    updateRadarSettings({ spaceTab: normalizedTab });
   }
 
   boot();
