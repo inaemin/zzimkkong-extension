@@ -80,12 +80,16 @@ export function RadarLegend({ container }: RadarLegendProps) {
         sideOffset={8}
         container={container ?? undefined}
       >
+        {/*
+          색칠 칸을 첫 줄 글자에 맞춘다. items-start + margin 으로 눈대중 보정하는
+          대신 baseline 정렬로 맞춘다 — 글자 크기가 바뀌어도 따라온다.
+        */}
         <ul className="flex flex-col gap-2">
           {LEGEND_ITEMS.map((item) => (
-            <li key={item.colorVariable} className="flex items-start gap-2">
+            <li key={item.colorVariable} className="flex items-baseline gap-2">
               <span
                 aria-hidden="true"
-                className="mt-0.5 size-3 shrink-0 rounded-sm border border-foreground/25"
+                className="size-3 shrink-0 translate-y-px rounded-sm border border-foreground/25"
                 style={{ background: `var(${item.colorVariable})` }}
               />
               <span className="flex flex-col">

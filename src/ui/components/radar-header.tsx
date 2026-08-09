@@ -5,7 +5,6 @@ import { addDaysToDateString, formatDateSelectorText } from "@/utils/date-time";
 import { Button } from "@/ui/components/ui/button";
 import { DatePicker } from "@/ui/components/date-picker";
 import { RadarLegend } from "@/ui/components/radar-legend";
-import { RadarQuota } from "@/ui/components/radar-quota";
 import { Label } from "@/ui/components/ui/label";
 import { Switch } from "@/ui/components/ui/switch";
 import { Tabs, TabsList, TabsTrigger } from "@/ui/components/ui/tabs";
@@ -16,7 +15,6 @@ import {
   MAP_CALENDAR_SPACE_TAB_PAIR,
   type SpaceTab,
 } from "@/constants/runtime";
-import type { ReservationQuota } from "@/services/lms-data/types";
 
 // 레이더 헤더의 컨트롤 줄.
 //
@@ -47,11 +45,6 @@ export interface RadarHeaderProps {
   alwaysOpen: boolean;
   onAlwaysOpenChange: (nextAlwaysOpen: boolean) => void;
 
-  /** 예약 한도. null 이거나 무제한이면 표시하지 않는다. */
-  quota?: ReservationQuota | null;
-  /** 지금 고른 구간의 길이(분). 예약 후 잔여를 미리 보여주는 데 쓴다. */
-  selectedMinutes?: number | null;
-
   /** 방 태그 범례. 아직 명령형이라 붙일 자리만 내준다. */
 }
 
@@ -67,8 +60,6 @@ export function RadarHeader({
   onToggleCollapsed,
   alwaysOpen,
   onAlwaysOpenChange,
-  quota = null,
-  selectedMinutes = null,
 }: RadarHeaderProps) {
   // 최소일 이하로는 못 내려간다. 지난 날짜는 예약할 수 없기 때문이다.
   const canGoPrev = !minDate || date > minDate;
@@ -85,13 +76,13 @@ export function RadarHeader({
             zzk-map-calendar-date-row 는 쓰지 않는다. 그 CSS 가 grid +
             align-items:stretch + 1fr 컬럼이라 버튼이 늘어나 정방형이 깨진다.
           */}
-          <div className="flex items-center gap-1">
+          {/*
+            공간 유형 탭과 날짜 컨트롤은 다른 묶음이라 사이를 조금 더 벌린다.
+            탭에 margin 을 붙이는 대신 gap 이 다른 컨테이너로 감싼다.
+          */}
+          <div className="flex items-center gap-2">
             {/* 공간 유형 전환. 날짜 컨트롤 왼쪽에 둔다. */}
-            <Tabs
-              className="mr-1"
-              value={spaceTab}
-              onValueChange={(next) => onSpaceTabChange(next as SpaceTab)}
-            >
+            <Tabs value={spaceTab} onValueChange={(next) => onSpaceTabChange(next as SpaceTab)}>
               <TabsList className="h-7" aria-label="공간 유형 선택">
                 <TabsTrigger
                   id={MAP_CALENDAR_OVERLAY_TAB_MEETING_ID}
@@ -110,65 +101,66 @@ export function RadarHeader({
               </TabsList>
             </Tabs>
 
-            <Button
-              type="button"
-              variant="outline"
-              size="icon"
-              className="size-7"
-              disabled={!canGoPrev}
-              title={prevDate ? `이전일 (${prevDate})` : "이전일"}
-              aria-label={prevDate ? `이전일 (${prevDate})` : "이전일"}
-              onClick={() => onShiftDate(-1)}
-            >
-              <ChevronLeftIcon className="size-4" />
-            </Button>
+            {/* 날짜 컨트롤은 서로 붙어 있어야 한 묶음으로 읽힌다. */}
+            <div className="flex items-center gap-1">
+              <Button
+                type="button"
+                variant="outline"
+                size="icon"
+                className="size-7"
+                disabled={!canGoPrev}
+                title={prevDate ? `이전일 (${prevDate})` : "이전일"}
+                aria-label={prevDate ? `이전일 (${prevDate})` : "이전일"}
+                onClick={() => onShiftDate(-1)}
+              >
+                <ChevronLeftIcon className="size-4" />
+              </Button>
 
-            {/* 날짜는 보여야 한다. 아이콘만 두면 지금 며칠인지 알 수 없다. */}
-            <DatePicker
-              value={date}
-              onChange={onDateChange}
-              min={minDate || undefined}
-              aria-label="지도 날짜 선택"
-              className="h-7 gap-1 px-2 text-xs"
-            />
+              {/* 날짜는 보여야 한다. 아이콘만 두면 지금 며칠인지 알 수 없다. */}
+              <DatePicker
+                value={date}
+                onChange={onDateChange}
+                min={minDate || undefined}
+                aria-label="지도 날짜 선택"
+                className="h-7 gap-1 px-2 text-xs"
+              />
 
-            <Button
-              type="button"
-              variant="outline"
-              size="icon"
-              className="size-7"
-              title={nextDate ? `다음일 (${nextDate})` : "다음일"}
-              aria-label={nextDate ? `다음일 (${nextDate})` : "다음일"}
-              onClick={() => onShiftDate(1)}
-            >
-              <ChevronRightIcon className="size-4" />
-            </Button>
+              <Button
+                type="button"
+                variant="outline"
+                size="icon"
+                className="size-7"
+                title={nextDate ? `다음일 (${nextDate})` : "다음일"}
+                aria-label={nextDate ? `다음일 (${nextDate})` : "다음일"}
+                onClick={() => onShiftDate(1)}
+              >
+                <ChevronRightIcon className="size-4" />
+              </Button>
 
-            {/* 글자 버튼은 정방형으로 만들면 글씨가 눌린다. 높이만 맞춘다. */}
-            <Button
-              type="button"
-              variant="secondary"
-              size="sm"
-              className="h-7 px-2 text-xs"
-              disabled={isToday}
-              title={`오늘 (${todayDate})`}
-              aria-label={`오늘 (${todayDate})`}
-              onClick={() => onDateChange(todayDate)}
-            >
-              오늘
-            </Button>
+              {/* 글자 버튼은 정방형으로 만들면 글씨가 눌린다. 높이만 맞춘다. */}
+              <Button
+                type="button"
+                variant="secondary"
+                size="sm"
+                className="h-7 px-2 text-xs"
+                disabled={isToday}
+                title={`오늘 (${todayDate})`}
+                aria-label={`오늘 (${todayDate})`}
+                onClick={() => onDateChange(todayDate)}
+              >
+                오늘
+              </Button>
 
-            {/* 스크린리더용. 날짜가 바뀌면 읽어준다. */}
-            <span className="sr-only" aria-live="polite">
-              {formatDateSelectorText(date)}
-            </span>
+              {/* 스크린리더용. 날짜가 바뀌면 읽어준다. */}
+              <span className="sr-only" aria-live="polite">
+                {formatDateSelectorText(date)}
+              </span>
+            </div>
           </div>
         </div>
       </div>
 
       <div className="zzk-map-calendar-header-right">
-        <RadarQuota quota={quota} selectedMinutes={selectedMinutes} />
-
         {/* 폼 제출용 선택이 아니라 즉시 저장되는 설정이라 Switch 를 쓴다. */}
         <div className="zzk-map-calendar-always-open flex items-center gap-1.5">
           <Switch
