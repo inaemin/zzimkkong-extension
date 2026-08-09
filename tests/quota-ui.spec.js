@@ -116,11 +116,30 @@ async function mountPage(page, { quota, withQuotaBlock = true, wrapInFlex = fals
   });
 
   await page.goto(`${WEB_ORIGIN}/space-reservations`, { waitUntil: "domcontentloaded" });
+
+  // "생기지 않는다"를 확인하는 테스트는 한도 응답이 처리된 뒤라야 의미가 있다.
+  // 고정 시간 대기 대신 그 응답을 기다린다.
+  const quotaResponse = page.waitForResponse(
+    (response) => response.url().includes("/api/space-reservations/quota"),
+    { timeout: 6000 },
+  );
+
   await loadContentBundle(page);
   await page.waitForFunction(
     () => document.getElementById("zzk-map-calendar-radar-launcher") instanceof HTMLElement,
     undefined,
     { timeout: 5000 },
+  );
+
+  return { quotaResponse };
+}
+
+/** 패널이 그려질 때까지 기다린다. 타임아웃을 한 곳에서 관리한다. */
+async function waitForPanel(page) {
+  await page.waitForFunction(
+    () => document.getElementById("zzk-quota-panel")?.shadowRoot?.childElementCount > 0,
+    undefined,
+    { timeout: 6000 },
   );
 }
 
@@ -137,11 +156,7 @@ async function readPanelText(page) {
 test("호스트의 요약 블록을 우리 패널이 대신한다", async ({ page }) => {
   await mountPage(page, { quota: LIMITED_QUOTA });
 
-  await page.waitForFunction(
-    () => document.getElementById("zzk-quota-panel")?.shadowRoot?.childElementCount > 0,
-    undefined,
-    { timeout: 6000 },
-  );
+  await waitForPanel(page);
 
   const text = await readPanelText(page);
 
@@ -152,32 +167,51 @@ test("호스트의 요약 블록을 우리 패널이 대신한다", async ({ pag
   expect(text).toContain("17시간 30분");
   expect(text).toContain("20시간");
 
-  // 원래 블록은 감춰진다(지우지 않는다).
-  const hostHidden = await page.evaluate(() => {
-    const node = document.getElementById("host-quota");
-    return { exists: node != null, display: node?.style.display };
-  });
-  expect(hostHidden.exists).toBe(true);
-  expect(hostHidden.display).toBe("none");
+  // 원래 블록은 지우지 않고 감춘다. 감추는 방법(인라인 style/클래스/hidden)은
+  // 구현 선택이므로, 사용자가 보는 결과(안 보인다)로 확인한다.
+  await expect(page.locator("#host-quota")).toBeAttached();
+  await expect(page.locator("#host-quota")).toBeHidden();
 });
 
 test("막대가 progressbar 로 노출된다", async ({ page }) => {
   // 숫자만으로는 얼마나 남았는지 안 들어온다. 막대가 그걸 대신한다.
   await mountPage(page, { quota: LIMITED_QUOTA });
-  await page.waitForFunction(
-    () => document.getElementById("zzk-quota-panel")?.shadowRoot?.childElementCount > 0,
-    undefined,
-    { timeout: 6000 },
-  );
+  await waitForPanel(page);
 
+  // 배열 위치가 아니라 라벨과 짝지어 확인한다. 표시 순서가 바뀌어도 "어느 항목이
+  // 몇 % 인가"는 그대로여야 한다.
   const bars = await page.evaluate(() =>
-    Array.from(
-      document.getElementById("zzk-quota-panel").shadowRoot.querySelectorAll("[role=progressbar]"),
-    ).map((node) => node.getAttribute("aria-valuenow")),
+    Object.fromEntries(
+      Array.from(
+        document
+          .getElementById("zzk-quota-panel")
+          .shadowRoot.querySelectorAll("[role=progressbar]"),
+      ).map((node) => [
+        node.querySelector("[data-slot=progress-label]")?.textContent,
+        node.getAttribute("aria-valuenow"),
+      ]),
+    ),
   );
 
-  // 이번 달 150/1200 = 13%, 오늘 0/180 = 0%.
-  expect(bars).toEqual(["13", "0"]);
+  // 이번 달 150/1200 = 13%, 이 날 0/180 = 0%.
+  expect(bars).toEqual({ "이번 달 남은 시간": "13", "이 날 남은 시간": "0" });
+});
+
+test("호스트처럼 이번 달을 먼저 보여준다", async ({ page }) => {
+  // 순서는 호스트를 따른다. sort 비교 함수가 두 인자를 모두 봐야 엔진과 무관하게
+  // 이 순서가 보장된다.
+  await mountPage(page, { quota: LIMITED_QUOTA });
+  await waitForPanel(page);
+
+  const labels = await page.evaluate(() =>
+    Array.from(
+      document
+        .getElementById("zzk-quota-panel")
+        .shadowRoot.querySelectorAll("[data-slot=progress-label]"),
+    ).map((node) => node.textContent),
+  );
+
+  expect(labels).toEqual(["이번 달 남은 시간", "이 날 남은 시간"]);
 });
 
 test("호스트가 flex 로 감싸도 폭을 물려받아 라벨과 값이 한 줄에 남는다", async ({ page }) => {
@@ -185,11 +219,7 @@ test("호스트가 flex 로 감싸도 폭을 물려받아 라벨과 값이 한 �
   // 물려받지 못하고 내용만큼 줄어드는데, 그러면 값이 들어갈 자리가 모자라
   // 라벨과 값이 두 줄로 갈라진다.
   await mountPage(page, { quota: LIMITED_QUOTA, wrapInFlex: true });
-  await page.waitForFunction(
-    () => document.getElementById("zzk-quota-panel")?.shadowRoot?.childElementCount > 0,
-    undefined,
-    { timeout: 6000 },
-  );
+  await waitForPanel(page);
 
   const rows = await page.evaluate(() =>
     Array.from(
@@ -212,26 +242,38 @@ test("호스트가 flex 로 감싸도 폭을 물려받아 라벨과 값이 한 �
   });
 });
 
+test("호스트가 display 를 되살려도 다시 감춘다", async ({ page }) => {
+  // 호스트가 다시 그리면서 style 만 되돌리는 경우가 있다. 그때 우리가 다시
+  // 감추지 않으면 같은 숫자가 두 벌 나란히 보인다.
+  await mountPage(page, { quota: LIMITED_QUOTA });
+  await waitForPanel(page);
+
+  await page.evaluate(() => {
+    document.getElementById("host-quota").style.display = "";
+  });
+  await page.evaluate(() => {
+    window.__zzkTestApi?.syncGuestUi?.();
+  });
+
+  await expect(page.locator("#host-quota")).toBeHidden();
+});
+
 test("요약 블록이 없으면 아무것도 끼우지 않는다", async ({ page }) => {
   // 호스트 구조가 바뀌면 못 찾는다. 그때 엉뚱한 자리에 그리면 안 된다.
-  await mountPage(page, { quota: LIMITED_QUOTA, withQuotaBlock: false });
-  await page.waitForTimeout(1200);
+  const { quotaResponse } = await mountPage(page, {
+    quota: LIMITED_QUOTA,
+    withQuotaBlock: false,
+  });
+  await quotaResponse;
 
-  const present = await page.evaluate(() => document.getElementById("zzk-quota-panel") != null);
-
-  expect(present).toBe(false);
+  await expect(page.locator("#zzk-quota-panel")).toHaveCount(0);
 });
 
 test("무제한 계정이면 호스트 블록을 그대로 둔다", async ({ page }) => {
   // 보여줄 것이 없으면 물러나야 한다. 감춰만 두면 페이지 정보가 사라진다.
-  await mountPage(page, { quota: UNLIMITED_QUOTA });
-  await page.waitForTimeout(1200);
+  const { quotaResponse } = await mountPage(page, { quota: UNLIMITED_QUOTA });
+  await quotaResponse;
 
-  const host = await page.evaluate(() => {
-    const node = document.getElementById("host-quota");
-    return { display: node?.style.display, text: node?.textContent?.includes("17시간 30분") };
-  });
-
-  expect(host.display).not.toBe("none");
-  expect(host.text).toBe(true);
+  await expect(page.locator("#host-quota")).toBeVisible();
+  await expect(page.locator("#host-quota")).toContainText("17시간 30분");
 });

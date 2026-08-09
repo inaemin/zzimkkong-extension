@@ -1136,13 +1136,7 @@ declare global {
       resizeHandleRef: (node) => {
         shellRefs.resizeHandle = node;
       },
-      // 헤더의 한도 표시도 툴팁을 쓴다. 슬롯과 달리 훑어보는 대상이 아니라,
-      // 지나가다 스치기만 해도 뜨면 성가시다. 잠깐 머무를 때만 띄운다.
-      header: createElement(
-        TooltipProvider,
-        { delay: 300 },
-        createElement(RadarHeader, headerProps),
-      ),
+      header: createElement(RadarHeader, headerProps),
       // 툴팁 delay 기본값이 0 이라 hover 즉시 뜬다. 슬롯은 훑어보는 대상이라
       // 기다렸다 뜨면 정보를 못 읽는다.
       body: gridProps

@@ -61,4 +61,9 @@ function ProgressValue({ className, ...props }: ProgressPrimitive.Value.Props) {
   );
 }
 
-export { Progress, ProgressTrack, ProgressIndicator, ProgressLabel, ProgressValue };
+// ProgressTrack·ProgressIndicator 는 내보내지 않는다.
+//
+// Progress 가 children 뒤에 그 둘을 항상 붙이므로, 소비자가 children 으로 또 넣으면
+// 막대가 두 개 그려진다(실제로 겪었다). 내보내지 않으면 그렇게 쓸 방법이 없다.
+// 색·굵기는 Progress 의 className 에 자식 선택자로 준다.
+export { Progress, ProgressLabel, ProgressValue };

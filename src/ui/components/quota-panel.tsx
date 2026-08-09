@@ -25,21 +25,27 @@ export interface QuotaPanelProps {
   selectedMinutes?: number | null;
 }
 
+/** 모든 막대에 공통인 굵기. 색과 무관하므로 따로 둔다. */
+const TRACK_CLASS = "**:data-[slot=progress-track]:h-1.5";
+
 /** 막대 색. 잔여가 부족하면 경고색이 이긴다. */
-function trackClassName(bar: QuotaBar): string {
+function indicatorClassName(bar: QuotaBar): string {
   if (bar.low) {
-    return "**:data-[slot=progress-track]:h-1.5 **:data-[slot=progress-indicator]:bg-red-500";
+    return "**:data-[slot=progress-indicator]:bg-red-500";
   }
   // 두 항목을 나란히 두므로 색을 갈라 둔다. 라벨을 읽지 않고도 구분된다.
   // 이번 달은 청록, 오늘은 기본색(거의 검정).
-  return bar.label === "오늘"
-    ? "**:data-[slot=progress-track]:h-1.5 **:data-[slot=progress-indicator]:bg-primary"
-    : "**:data-[slot=progress-track]:h-1.5 **:data-[slot=progress-indicator]:bg-teal-500";
+  return bar.kind === "daily"
+    ? "**:data-[slot=progress-indicator]:bg-primary"
+    : "**:data-[slot=progress-indicator]:bg-teal-500";
 }
+
+/** 표시 순서. 호스트가 월간을 먼저 보여준다. */
+const QUOTA_ORDER: Record<QuotaBar["kind"], number> = { monthly: 0, daily: 1 };
 
 /** 호스트가 쓰던 문구. 그대로 따라 쓴다. */
 function panelLabel(bar: QuotaBar): string {
-  return bar.label === "오늘" ? "이 날 남은 시간" : "이번 달 남은 시간";
+  return bar.kind === "daily" ? "이 날 남은 시간" : "이번 달 남은 시간";
 }
 
 function QuotaItem({ bar, selectedMinutes }: { bar: QuotaBar; selectedMinutes: number }) {
@@ -80,7 +86,10 @@ function QuotaItem({ bar, selectedMinutes }: { bar: QuotaBar; selectedMinutes: n
         막대는 "예약 후" 기준으로 찬다. 숫자만 앞서가고 막대는 지금 상태에 머물면
         둘이 다른 말을 하게 된다.
       */}
-      <Progress value={Math.round(previewRatio * 100)} className={`w-full ${trackClassName(bar)}`}>
+      <Progress
+        value={Math.round(previewRatio * 100)}
+        className={`w-full ${TRACK_CLASS} ${indicatorClassName(bar)}`}
+      >
         <ProgressLabel>{panelLabel(bar)}</ProgressLabel>
 
         {/*
@@ -124,7 +133,10 @@ export function QuotaPanel({ quota, selectedMinutes = null }: QuotaPanelProps) {
   const normalizedSelected = Number.isFinite(selectedMinutes) ? (selectedMinutes ?? 0) : 0;
 
   // 호스트는 월간을 먼저 보여준다. 순서를 맞춘다.
-  const ordered = [...bars].sort((left) => (left.label === "오늘" ? 1 : -1));
+  //
+  // 비교 함수는 두 인자를 모두 봐야 한다. 한쪽만 보고 1/-1 을 주면 엔진의 정렬
+  // 구현에 따라 결과가 달라진다(지금은 우연히 맞는다).
+  const ordered = [...bars].sort((left, right) => QUOTA_ORDER[left.kind] - QUOTA_ORDER[right.kind]);
 
   return (
     <div

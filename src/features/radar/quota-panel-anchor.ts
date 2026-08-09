@@ -13,9 +13,6 @@ import { normalizeTextForMatch } from "../../utils/shared.js";
 const MONTHLY_LABEL = "이번달남은시간";
 const DAILY_LABEL = "이날남은시간";
 
-/** 후보를 이 개수 이상 훑지 않는다. 페이지 전체 스캔 비용을 묶어 둔다. */
-const MAX_CANDIDATES = 400;
-
 function hasBothLabels(element: Element): boolean {
   const text = normalizeTextForMatch(element.textContent || "");
   return text.includes(MONTHLY_LABEL) && text.includes(DAILY_LABEL);
@@ -26,13 +23,14 @@ function hasBothLabels(element: Element): boolean {
  *
  * body 부터 위로 훑으면 "둘 다 포함"은 조상 전체가 참이라, 가장 깊은 것을
  * 골라야 요약 블록 자신이 잡힌다.
+ *
+ * 후보 수에 상한을 두지 않는다. querySelectorAll 이 이미 문서 전체를 훑으므로
+ * 앞에서 잘라 봐야 순회 비용은 그대로고, 요약 블록이 뒤쪽에 있으면 못 찾기만 한다.
+ * 대신 라벨 하나로 먼저 걸러 textContent 를 두 번 읽는 요소 수를 줄인다.
  */
 export function findHostQuotaPanel(root: Document | HTMLElement = document): HTMLElement | null {
-  const candidates = Array.from(root.querySelectorAll("div")).slice(0, MAX_CANDIDATES);
-
-  const matched = candidates.filter(
-    (candidate): candidate is HTMLDivElement =>
-      candidate instanceof HTMLDivElement && hasBothLabels(candidate),
+  const matched = Array.from(root.querySelectorAll("div")).filter(
+    (candidate): candidate is HTMLDivElement => hasBothLabels(candidate),
   );
   if (matched.length === 0) {
     return null;

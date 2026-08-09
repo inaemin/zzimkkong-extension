@@ -28,11 +28,13 @@ interface PanelMount {
 let mount: PanelMount | null = null;
 
 function hideHostPanel(panel: HTMLElement): void {
-  if (panel.hasAttribute(HIDDEN_ATTR)) {
-    return;
+  // 원래 display 는 처음 한 번만 적어 둔다. 두 번째부터 적으면 "none" 을 원본으로
+  // 저장해 되돌릴 수 없게 된다.
+  if (!panel.hasAttribute(HIDDEN_ATTR)) {
+    panel.setAttribute(HIDDEN_ATTR, panel.style.display || "");
   }
-  // 원래 display 를 적어 두고 감춘다. 되돌릴 때 그대로 쓴다.
-  panel.setAttribute(HIDDEN_ATTR, panel.style.display || "");
+  // 감추는 건 매번 한다. 호스트가 다시 그리면서 display 를 되살리면 표식은 남아
+  // 있으므로, 여기서 빠져나가면 호스트 블록과 우리 패널이 같이 보인다.
   panel.style.display = "none";
 }
 
