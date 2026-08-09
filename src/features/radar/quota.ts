@@ -68,7 +68,12 @@ export function clearQuotaCache(cache: QuotaCache): void {
 }
 
 /** 화면에 그릴 한 줄(일간 또는 월간). */
+/** 어느 기간의 한도인가. 표시 문구와 분리해 둔다. */
+export type QuotaKind = "daily" | "monthly";
+
 export interface QuotaBar {
+  /** 분기·정렬에 쓰는 식별자. 문구가 바뀌어도 동작이 따라 바뀌지 않는다. */
+  kind: QuotaKind;
   label: string;
   usedMinutes: number;
   limitMinutes: number;
@@ -84,6 +89,7 @@ const LOW_REMAINING_RATIO = 0.25;
 
 /** 한 줄을 만들 재료. 서버가 주는 세 값이 그대로 온다. */
 interface QuotaSource {
+  kind: QuotaKind;
   label: string;
   limitMinutes: number | null;
   usedMinutes: number | null;
@@ -119,6 +125,7 @@ function toBar(source: QuotaSource): QuotaBar | null {
   const clampedRemaining = Math.min(Math.max(remaining, 0), limit);
 
   return {
+    kind: source.kind,
     label: source.label,
     usedMinutes: clampedUsed,
     limitMinutes: limit,
@@ -134,27 +141,34 @@ function toBar(source: QuotaSource): QuotaBar | null {
  * 무제한이거나 한도를 모르면 빈 배열이다 — 보여줄 것이 없으면 자리를 차지하지
  * 않는 편이 낫다.
  */
+/** 응답에서 한 줄 몫의 재료를 꺼낸다. */
+function toQuotaSources(quota: ReservationQuota): QuotaSource[] {
+  return [
+    {
+      kind: "daily",
+      label: "오늘",
+      limitMinutes: quota.dailyLimitMinutes,
+      usedMinutes: quota.dailyUsedMinutes,
+      remainingMinutes: quota.dailyRemainingMinutes,
+    },
+    {
+      kind: "monthly",
+      label: "이번 달",
+      limitMinutes: quota.monthlyLimitMinutes,
+      usedMinutes: quota.monthlyUsedMinutes,
+      remainingMinutes: quota.monthlyRemainingMinutes,
+    },
+  ];
+}
+
 export function buildQuotaBars(quota: ReservationQuota | null): QuotaBar[] {
   if (!quota || quota.unlimited) {
     return [];
   }
 
-  const bars = [
-    toBar({
-      label: "오늘",
-      limitMinutes: quota.dailyLimitMinutes,
-      usedMinutes: quota.dailyUsedMinutes,
-      remainingMinutes: quota.dailyRemainingMinutes,
-    }),
-    toBar({
-      label: "이번 달",
-      limitMinutes: quota.monthlyLimitMinutes,
-      usedMinutes: quota.monthlyUsedMinutes,
-      remainingMinutes: quota.monthlyRemainingMinutes,
-    }),
-  ];
-
-  return bars.filter((bar): bar is QuotaBar => bar !== null);
+  return toQuotaSources(quota)
+    .map(toBar)
+    .filter((bar): bar is QuotaBar => bar !== null);
 }
 
 /** 분을 "1시간 30분" 형태로. 0이면 "0분". */

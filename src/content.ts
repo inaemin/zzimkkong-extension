@@ -53,7 +53,11 @@ import {
   readHostFieldDisplayValue,
 } from "./features/form-fields/shared.js";
 import { buildGridFloorGroups } from "./features/radar/slot-model.js";
+import { findHostQuotaPanel } from "./features/radar/quota-panel-anchor.js";
+import { QuotaPanel } from "./ui/components/quota-panel.js";
+import { removeQuotaPanel, renderQuotaPanel } from "./ui/quota-panel-mount.js";
 import {
+  buildQuotaBars,
   createQuotaCache,
   clearQuotaCache,
   readQuotaCache,
@@ -327,6 +331,7 @@ declare global {
       installTopNavigationClickBypass();
       ensurePanel();
       ensureMapCalendarLauncher();
+      syncQuotaPanel();
       const openedPendingSlackModal = tryOpenPendingSlackCopyModal();
       if (isMapCalendarModalOpenRequested() && !openedPendingSlackModal) {
         openMapCalendarModal();
@@ -413,6 +418,7 @@ declare global {
     installTopNavigationClickBypass();
     ensurePanel();
     ensureMapCalendarLauncher();
+    syncQuotaPanel();
     const openedPendingSlackModal = tryOpenPendingSlackCopyModal();
     const sharingMapId = getSharingMapId();
     if (sharingMapId && state.currentSharingMapId !== sharingMapId) {
@@ -827,13 +833,9 @@ declare global {
     const inflight = fetchLmsQuota({ date, allowPastDate: true })
       .then((quota) => {
         writeQuotaCache(quotaCache, date, { quota });
-        // 지금 그 날짜를 보고 있을 때만 다시 그린다.
-        if (state.activeScheduleDate === date) {
-          const cached = getFreshScheduleCache(date);
-          if (cached) {
-            renderMapCalendarOverlay(cached);
-          }
-        }
+        // 응답이 오기 전에 이미 그렸으므로(그때는 값이 없어 아무것도 안 나온다)
+        // 도착한 뒤 다시 그려야 화면에 뜬다.
+        syncQuotaPanel();
       })
       .catch((error: unknown) => {
         pushDebugEvent("quota", "fetch-failed", { date, error: getErrorMessage(error) });
@@ -843,6 +845,52 @@ declare global {
       });
 
     quotaInflightByDate.set(date, inflight);
+  }
+
+  /**
+   * 호스트의 "남은 시간" 요약 블록을 우리 패널로 바꾼다.
+   *
+   * 호스트도 같은 숫자를 보여주지만 텍스트뿐이라 한눈에 안 들어온다. 같은 자리에
+   * 막대와 "예약 후 잔여"를 얹는다.
+   *
+   * 블록을 못 찾거나 설정이 꺼져 있으면 물러나고 호스트 것을 되살린다.
+   * 호스트 마크업에 기대는 코드라, 구조가 바뀌면 조용히 원래대로 돌아가야 한다.
+   */
+  function syncQuotaPanel() {
+    if (!isRadarSupportedPage() || !getRadarSettings().showQuota) {
+      removeQuotaPanel();
+      return;
+    }
+
+    const hostPanel = findHostQuotaPanel();
+    if (!(hostPanel instanceof HTMLElement)) {
+      removeQuotaPanel();
+      return;
+    }
+
+    // 패널이 보고 있는 날짜는 호스트 폼의 날짜다(레이더 날짜가 아니다).
+    const hostDateInput = queryHostDateInput(document, isInsideExtensionSurface);
+    const panelDate =
+      normalizeDateString(hostDateInput instanceof HTMLInputElement ? hostDateInput.value : "") ||
+      getTodayDateInKST();
+
+    refreshQuota(panelDate);
+
+    // 그릴 것이 있을 때만 자리를 넘겨받는다.
+    //
+    // 무제한 계정이거나 아직 응답이 안 왔으면 우리 패널은 빈 화면이다. 그 상태로
+    // 호스트 블록을 감추면 페이지에서 정보가 사라진다 — 호스트가 보여주던 숫자가
+    // 우리 것보다 낫다.
+    const quota = readQuotaCache(quotaCache, panelDate) ?? null;
+    if (buildQuotaBars(quota).length === 0) {
+      removeQuotaPanel();
+      return;
+    }
+
+    renderQuotaPanel(
+      hostPanel,
+      createElement(QuotaPanel, { quota, selectedMinutes: getSelectedReservationMinutes() }),
+    );
   }
 
   function getFreshScheduleCache(date: string): DailyScheduleResult | null {
@@ -1122,6 +1170,10 @@ declare global {
   }
 
   function renderMapCalendarOverlay(scheduleData: DailyScheduleResult | null) {
+    // 타임블록을 고르면 여기로 다시 온다. 한도 패널의 "예약 후 잔여"도 그 선택을
+    // 보고 있으므로 함께 갱신한다.
+    syncQuotaPanel();
+
     if (state.mapCalendarSuppressedBySlack) {
       state.mapCalendarVisible = false;
       state.lastAutoOpenPath = null;
@@ -1242,11 +1294,6 @@ declare global {
         state.mapCalendarCollapsed = !state.mapCalendarCollapsed;
         renderMapCalendarOverlay(scheduleData);
       },
-      // 한도는 설정으로 끌 수 있다. 꺼져 있으면 조회도 하지 않는다.
-      quota: getRadarSettings().showQuota
-        ? (readQuotaCache(quotaCache, clampedHeaderDate) ?? null)
-        : null,
-      selectedMinutes: getSelectedReservationMinutes(),
       alwaysOpen: state.mapCalendarAlwaysOpen,
       onAlwaysOpenChange: (nextAlwaysOpen) => {
         state.mapCalendarAlwaysOpen = nextAlwaysOpen;
@@ -2408,6 +2455,7 @@ declare global {
     queueSlackModalFromPersistedEditSubmitIfNeeded("location-change");
     ensurePanel();
     ensureMapCalendarLauncher();
+    syncQuotaPanel();
     const openedPendingSlackModal = tryOpenPendingSlackCopyModal();
     if (state.mapCalendarAlwaysOpen) {
       state.mapCalendarVisible = true;
@@ -2443,6 +2491,11 @@ declare global {
       state.scheduleCache.size > 0 ||
       state.mapCalendarVisible ||
       state.loading;
+
+    // 호스트 블록을 되살리는 건 위 가드보다 먼저다. 레이더를 띄운 적이 없어도
+    // 패널만 끼워 넣은 상태일 수 있는데, 그대로 두면 페이지를 떠난 뒤에도
+    // 호스트의 요약 블록이 감춰진 채로 남는다.
+    removeQuotaPanel();
 
     if (!hasActiveGuestState) {
       return;
@@ -3672,6 +3725,7 @@ declare global {
         }
         ensurePanel();
         ensureMapCalendarLauncher();
+        syncQuotaPanel();
         const openedPendingSlackModal = tryOpenPendingSlackCopyModal();
         if (isMapCalendarModalOpenRequested() && !openedPendingSlackModal) {
           openMapCalendarModal();
