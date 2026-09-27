@@ -1,6 +1,13 @@
 import type { SpaceTab } from "../../constants/runtime.js";
 
-import type { Reservation, Room, ReservationQuota, TimelineRange, TimelineSlot } from "./types.js";
+import type {
+  MyReservation,
+  Reservation,
+  Room,
+  ReservationQuota,
+  TimelineRange,
+  TimelineSlot,
+} from "./types.js";
 
 // content.js 와 background.js 가 각자 구현을 주입한다(서비스워커에는 DOM 이 없다).
 export interface LmsDataNormalizerDeps {
@@ -224,6 +231,61 @@ export function createLmsDataNormalizers(deps: LmsDataNormalizerDeps) {
     });
   }
 
+  /** 정수면 그 값, 아니면 null. */
+  function integerOrNull(value: unknown): number | null {
+    const parsed = Number(value);
+    return Number.isInteger(parsed) ? parsed : null;
+  }
+
+  /** 없으면 예약으로 볼 수 없는 필드들. 하나라도 비면 null. */
+  function readMyReservationKeys(entry: unknown) {
+    const id = Number(getProperty(entry, "id"));
+    const date = trimmedString(getProperty(entry, "date"));
+    const startTime = trimmedString(getProperty(entry, "startTime"));
+    const endTime = trimmedString(getProperty(entry, "endTime"));
+
+    if (!Number.isInteger(id) || !date || !startTime || !endTime) {
+      return null;
+    }
+    return { id, date, startTime, endTime };
+  }
+
+  /** /me 응답 한 항목 → MyReservation. 형태가 아니면 null. */
+  function toMyReservation(entry: unknown): MyReservation | null {
+    if (entry == null || typeof entry !== "object") {
+      return null;
+    }
+
+    const keys = readMyReservationKeys(entry);
+    if (keys === null) {
+      return null;
+    }
+
+    return {
+      ...keys,
+      spaceId: integerOrNull(getProperty(entry, "spaceId")),
+      spaceName: trimmedString(getProperty(entry, "spaceName")),
+      floor: integerOrNull(getProperty(entry, "floor")),
+      purpose: trimmedString(getProperty(entry, "purpose")),
+    };
+  }
+
+  /**
+   * 내 예약 목록.
+   *
+   * 정렬하지 않는다 — 서버 순서를 계약으로 보지 않고, 표시 순서는 쓰는 쪽이
+   * 정한다.
+   */
+  function normalizeMyReservations(response: unknown): MyReservation[] {
+    const entries = Array.isArray(response) ? response : getProperty(response, "reservations");
+    if (!Array.isArray(entries)) {
+      return [];
+    }
+    return entries
+      .map(toMyReservation)
+      .filter((reservation): reservation is MyReservation => reservation !== null);
+  }
+
   function normalizeQuota(quotaResponse: unknown): ReservationQuota | null {
     if (quotaResponse == null || typeof quotaResponse !== "object") {
       return null;
@@ -255,5 +317,6 @@ export function createLmsDataNormalizers(deps: LmsDataNormalizerDeps) {
     computeTimelineRange,
     buildTimelineSlots,
     normalizeQuota,
+    normalizeMyReservations,
   };
 }

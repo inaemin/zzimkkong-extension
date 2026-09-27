@@ -74,6 +74,23 @@ export interface TimelineSlot {
   isHourMark: boolean;
 }
 
+/**
+ * 내 예약 하나. GET /api/space-reservations/me 응답의 한 항목.
+ *
+ * 공간별 조회(Reservation)와 달리 날짜·공간이 함께 온다 — 여러 날짜가 섞여
+ * 오기 때문이다.
+ */
+export interface MyReservation {
+  id: number;
+  date: string;
+  startTime: string;
+  endTime: string;
+  spaceId: number | null;
+  spaceName: string;
+  floor: number | null;
+  purpose: string;
+}
+
 /** 일/월 예약 한도 잔량. */
 export interface ReservationQuota {
   unlimited: boolean;

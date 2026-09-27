@@ -18,6 +18,7 @@ import { createLmsDataNormalizers } from "./normalizers.js";
 import type {
   AvailabilityResult,
   DailyScheduleResult,
+  MyReservation,
   ReservationQuota,
   Reservation,
   Room,
@@ -354,6 +355,17 @@ export async function fetchQuota(payload: FetchPayload): Promise<ReservationQuot
   );
 
   return lmsDataNormalizers.normalizeQuota(response);
+}
+
+/**
+ * 내 예약 전부. 날짜·공간 파라미터가 없다 — 한 번에 다 온다.
+ *
+ * 정렬은 계약으로 보지 않는다(관측 샘플은 날짜 내림차순이었다). 표시 순서가
+ * 필요하면 받는 쪽에서 정한다.
+ */
+export async function fetchMyReservations(): Promise<MyReservation[]> {
+  const response = await fetchApiJson(`${LMS_API_BASE_URL}/api/space-reservations/me`);
+  return lmsDataNormalizers.normalizeMyReservations(response);
 }
 
 // 개편 서비스 API 는 Authorization: Bearer <JWT> 로 인증한다. 이 토큰은 페이지 앱이

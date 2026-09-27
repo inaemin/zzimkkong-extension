@@ -115,6 +115,7 @@ import {
   fetchAvailability as fetchLmsAvailability,
   fetchDailySchedule as fetchLmsDailySchedule,
   fetchQuota as fetchLmsQuota,
+  fetchMyReservations as fetchLmsMyReservations,
   loadSpaceContext as loadLmsSpaceContext,
 } from "./services/lms-data/shared.js";
 import { getAvailableFloorMapFloors, getFloorMapDataUri } from "./features/radar/floor-maps.js";
@@ -157,9 +158,12 @@ import {
 import { createRadarWorkflow } from "./features/radar/workflow.js";
 import { createRadarFormSync } from "./features/radar/form-sync.js";
 import { createLmsFormSync } from "./features/form-fields/lms-form-sync.js";
+import { fillPurposeIfEmpty, findPurposeField } from "./features/form-fields/purpose-field.js";
 import { createSlackWorkflow } from "./features/slack/workflow.js";
 import { createSlackSuccessFlow } from "./features/slack/success-flow.js";
+import { RECENT_PURPOSE_LIMIT } from "./features/settings/shared.js";
 import {
+  getLastUsedPurpose,
   getRadarSettings,
   rememberRecentPurpose,
   resetRadarSettings,
@@ -312,6 +316,8 @@ declare global {
     syncSlackChannelMentionPreference();
     syncSlackReminderLeadTimePreference();
     restorePendingSlackModalState();
+    // 기억해 둔 목적이 없으면 지난 예약에서 한 번 가져온다.
+    seedRecentPurposes();
 
     hookHistoryChanges();
     window.addEventListener("popstate", handleLocationChange);
@@ -791,6 +797,18 @@ declare global {
     });
   }
 
+  /**
+   * 예약이 성공한 뒤의 정리.
+   *
+   * 고른 구간은 이제 예약이 됐다. 선택을 남겨 두면 새로 받은 한도(방금 예약이
+   * 이미 빠진 값)에서 "예약 후" 미리보기가 같은 시간을 한 번 더 뺀다.
+   */
+  function handleReservationMutated() {
+    invalidateReservationCaches();
+    resetTimelineSelectionState();
+    syncQuotaPanel();
+  }
+
   // 새로 받은 응답이든 캐시된 응답이든 화면 반영은 같은 경로를 쓴다.
   function applyAvailabilityData(data: unknown, { roomType }: { roomType: unknown }) {
     const payload = (data ?? {}) as Record<string, unknown>;
@@ -822,6 +840,37 @@ declare global {
    * 실패해도 조용히 넘어간다 — 한도는 보조 정보라, 못 받았다고 레이더 전체를
    * 에러로 만들 이유가 없다.
    */
+  /**
+   * 최근 예약 목적을 한 번 채운다. 이미 기억한 게 있으면 하지 않는다.
+   *
+   * 이게 없으면 이 확장으로 예약을 한 번 하기 전까지는 목적 자동 입력이 아무
+   * 일도 하지 않는다. /me 에 지난 예약의 목적이 들어 있으므로 그걸 쓴다.
+   *
+   * 실패는 조용히 넘어간다 — 보조 기능이라 못 받았다고 알릴 일이 아니다.
+   */
+  function seedRecentPurposes(): void {
+    if (!getRadarSettings().quickReserve.reusePurpose || getLastUsedPurpose()) {
+      return;
+    }
+
+    fetchLmsMyReservations()
+      .then((reservations) => {
+        // 최근 예약이 앞에 오도록 날짜·시작시간 내림차순으로 본다. 서버 순서는
+        // 계약이 아니므로 여기서 정한다.
+        [...reservations]
+          .sort((left, right) =>
+            `${right.date} ${right.startTime}`.localeCompare(`${left.date} ${left.startTime}`),
+          )
+          .slice(0, RECENT_PURPOSE_LIMIT)
+          // 오래된 것부터 넣어야 가장 최근 것이 맨 앞에 남는다.
+          .reverse()
+          .forEach((reservation) => rememberRecentPurpose(reservation.purpose));
+      })
+      .catch((error: unknown) => {
+        pushDebugEvent("purpose", "seed-failed", { error: getErrorMessage(error) });
+      });
+  }
+
   function refreshQuota(date: string): void {
     if (!isDateString(date) || !getRadarSettings().showQuota) {
       return;
@@ -2236,6 +2285,9 @@ declare global {
     isInsideExtensionSurface,
     setFormElementValue,
     isLatestTimelineSelectionRequest,
+    // 설정이 꺼져 있으면 빈 문자열 → 목적 칸을 건드리지 않는다.
+    getDefaultPurpose: () =>
+      getRadarSettings().quickReserve.reusePurpose ? getLastUsedPurpose() : "",
   });
 
   function readHostReservationTimeValues(root: Document | HTMLElement = document) {
@@ -3302,7 +3354,7 @@ declare global {
     shouldSkipSlackCopyModal,
     showSlackCopyModal,
     buildLmsSlackReservationContext,
-    onReservationMutated: invalidateReservationCaches,
+    onReservationMutated: handleReservationMutated,
   });
 
   // 개편 서비스(lms+) 예약 생성 응답 body → Slack 모달 context.
@@ -3333,6 +3385,10 @@ declare global {
     const owner =
       typeof responseBody.reserverName === "string" ? responseBody.reserverName.trim() : "";
     const purpose = typeof responseBody.purpose === "string" ? responseBody.purpose.trim() : "";
+
+    // 여기는 예약 생성이 2xx 로 성공한 뒤에만 온다. 실패한 시도의 목적을
+    // 기억하지 않으려면 이 자리여야 한다.
+    rememberRecentPurpose(purpose);
 
     return {
       date,
@@ -3831,6 +3887,15 @@ declare global {
         readStoredBoolean,
         writeStoredBoolean,
         writeStoredText,
+      },
+      // 목적 칸 탐색·채우기. 호스트 폼 모양에 기대는 부분이라 실제 DOM 으로 본다.
+      purposeField: {
+        find: () => findPurposeField(document, { isInsideExtensionSurface }),
+        fill: (purpose: unknown) =>
+          fillPurposeIfEmpty(document, typeof purpose === "string" ? purpose : "", {
+            isInsideExtensionSurface,
+            setFormElementValue,
+          }),
       },
       // 설정 스토어. 마이그레이션·기본값·구독 동작을 검증할 때 쓴다.
       settings: {

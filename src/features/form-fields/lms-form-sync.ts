@@ -6,6 +6,7 @@ import {
 import { normalizeTextForMatch } from "../../utils/shared.js";
 
 import { isElementVisible, queryHostDateInput } from "./host-scan.js";
+import { fillPurposeIfEmpty } from "./purpose-field.js";
 import { extractKnownRoomName } from "./shared.js";
 
 // lms+ 예약 폼에 타임블록 선택 결과를 반영하는 계층.
@@ -40,6 +41,13 @@ interface Deps {
    * 물어보고, 뒤처졌으면 폼을 더 건드리지 않고 빠진다.
    */
   isLatestTimelineSelectionRequest: (requestId: number) => boolean;
+  /**
+   * 비어 있는 목적 칸에 채울 문구. 없으면 목적은 건드리지 않는다.
+   *
+   * 함수로 받는다 — 폼을 채우는 시점의 최신 값이 필요하고, 설정에서 끈 경우
+   * 빈 문자열을 주면 이 모듈이 알아서 넘어간다.
+   */
+  getDefaultPurpose?: () => string;
 }
 
 /** 시작 시간 select 인지(옵션 value 가 "HH:MM"). 이용 시간 select 와 가르는 기준이다. */
@@ -96,7 +104,12 @@ function pickBestRoomDropdownButton(
 // DI 팩토리 래퍼: 길이가 곧 복잡도가 아니다(안쪽 함수는 개별 측정된다).
 // eslint-disable-next-line max-lines-per-function
 export function createLmsFormSync(deps: Deps) {
-  const { isInsideExtensionSurface, setFormElementValue, isLatestTimelineSelectionRequest } = deps;
+  const {
+    isInsideExtensionSurface,
+    setFormElementValue,
+    isLatestTimelineSelectionRequest,
+    getDefaultPurpose,
+  } = deps;
 
   /** 우리 UI 밖의, 눈에 보이는 버튼만 후보로 본다. */
   function isEligibleRoomDropdownButton(candidate: HTMLButtonElement): boolean {
@@ -306,7 +319,25 @@ export function createLmsFormSync(deps: Deps) {
     const startSynced = syncStartTimeSelect(startTime);
     const durationSynced = syncDurationSelect(durationMinutes);
 
+    // 목적은 마지막에 채운다. 회의실 버튼 클릭으로 폼이 다시 그려진 뒤라야
+    // 목적 칸이 제자리에 있다.
+    //
+    // 결과는 반환값에 넣지 않는다. 목적을 못 채워도(칸이 없거나 이미 적혀 있어도)
+    // 날짜·공간·시간 반영은 성공한 것이다.
+    syncPurpose();
+
     return dateSynced && roomSynced && startSynced && durationSynced;
+  }
+
+  /** 비어 있는 목적 칸을 최근에 쓴 문구로 채운다. 설정이 꺼져 있으면 빈 문자열이 온다. */
+  function syncPurpose(): void {
+    if (typeof getDefaultPurpose !== "function") {
+      return;
+    }
+    fillPurposeIfEmpty(document, getDefaultPurpose(), {
+      isInsideExtensionSurface,
+      setFormElementValue,
+    });
   }
 
   return {

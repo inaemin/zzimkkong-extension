@@ -102,7 +102,8 @@ async function mountPage(page, { quota, withQuotaBlock = true, wrapInFlex = fals
     if (url.pathname === "/api/spaces") {
       body = SPACES;
     } else if (url.pathname === "/api/space-reservations/quota") {
-      body = quota;
+      // 함수면 요청 때마다 부른다. 예약 뒤 사용량이 바뀌는 흐름을 흉내 낼 때 쓴다.
+      body = typeof quota === "function" ? quota() : quota;
     }
     await route.fulfill({
       status: 200,
@@ -276,4 +277,61 @@ test("무제한 계정이면 호스트 블록을 그대로 둔다", async ({ pag
 
   await expect(page.locator("#host-quota")).toBeVisible();
   await expect(page.locator("#host-quota")).toContainText("17시간 30분");
+});
+
+test("예약에 성공하면 고른 구간을 한 번 더 빼지 않는다", async ({ page }) => {
+  // 예약 전에는 고른 1시간을 "예약 후" 값으로 미리 뺀다. 예약이 성공하면 새로 받은
+  // 한도에 그 1시간이 이미 빠져 있으므로, 미리보기가 남아 있으면 두 번 빠진다.
+  let reserved = false;
+  const quotaAfterReservation = {
+    ...LIMITED_QUOTA,
+    dailyUsedMinutes: 60,
+    dailyRemainingMinutes: 120,
+    monthlyUsedMinutes: 210,
+    monthlyRemainingMinutes: 990,
+  };
+  await mountPage(page, { quota: () => (reserved ? quotaAfterReservation : LIMITED_QUOTA) });
+  await waitForPanel(page);
+
+  await page.evaluate(() => window.__zzkTestApi.loadAndOpenRadar());
+  const slot = page.locator('.zzk-map-calendar-slot.free[data-zzk-slot-start="10:00"]').first();
+  await slot.click();
+
+  // 1시간 구간이 골라져 "예약 후" 값이 보인다. 잔여 3시간 → 2시간.
+  await expect.poll(() => readPanelText(page)).toContain("(-1시간)");
+
+  reserved = true;
+  await page.evaluate(() => {
+    window.postMessage(
+      {
+        source: "zzk-page-reservation-hook",
+        type: "ZZK_RESERVATION_NETWORK_EVENT",
+        payload: {
+          via: "fetch",
+          ok: true,
+          status: 201,
+          method: "POST",
+          url: "https://techcourse-lms-plus-api.woowahan.com/api/space-reservations",
+          responseBody: {
+            id: 1,
+            spaceId: 3,
+            spaceName: "수성",
+            floor: 11,
+            date: "2026-12-02",
+            startTime: "10:00:00",
+            endTime: "11:00:00",
+            purpose: "학습",
+            reserverName: "애니",
+          },
+        },
+      },
+      "*",
+    );
+  });
+
+  // 새 한도(이 날 2시간 남음)를 그대로 보여주고, 미리보기는 사라진다.
+  await expect.poll(() => readPanelText(page)).toContain("16시간 30분");
+  const text = await readPanelText(page);
+  expect(text).not.toContain("(-");
+  expect(text).toContain("2시간/ 3시간");
 });

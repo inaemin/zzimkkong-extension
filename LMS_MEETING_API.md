@@ -135,11 +135,12 @@ POST /api/space-reservations
 
 1. `GET /api/spaces`로 공간 목록을 받아 `active !== false`만 남기고 층 기준으로 정렬합니다.
 2. 선택한 날짜에 대해 공간별로 `GET /api/space-reservations`를 조회하고, 요청 시간대와 겹치는지로 예약 가능 여부를 계산합니다.
-3. 타임블록 클릭 시 기본 60분(다음 칸이 예약이면 30분)으로 예약 폼(날짜/시작 시간/이용 시간/공간)을 채웁니다.
-4. 페이지의 예약 생성 POST가 2xx로 성공하면, 응답 body를 기반으로 Slack 공유 모달을 엽니다.
+3. 타임블록 클릭 시 기본 60분(다음 칸이 예약이면 30분)으로 예약 폼(날짜/시작 시간/이용 시간/공간)을 채웁니다. 예약 목적 칸이 비어 있으면 최근에 쓴 목적으로 함께 채웁니다.
+4. 페이지의 예약 생성 POST가 2xx로 성공하면, 응답 body를 기반으로 Slack 공유 모달을 열고 그때 쓴 목적을 기억합니다.
+5. 기억해 둔 목적이 없으면 `GET /api/space-reservations/me`의 지난 예약에서 한 번 가져옵니다.
 
 ## 참고
 
 - 시간은 모두 `HH:MM:SS` 평면 문자열이며, 확장 내부에서는 분 단위(minute of day)로 변환해 다룹니다.
-- lms+ 관련 구현 위치: `src/services/lms-data/shared.ts`(요청·인증), `src/services/lms-data/normalizers.ts`(응답 정규화), `src/page-network-hook.ts`(예약 성공 감지), `src/features/form-fields/lms-form-sync.ts`(예약 폼 반영).
+- lms+ 관련 구현 위치: `src/services/lms-data/shared.ts`(요청·인증), `src/services/lms-data/normalizers.ts`(응답 정규화), `src/page-network-hook.ts`(예약 성공 감지), `src/features/form-fields/lms-form-sync.ts`(예약 폼 반영), `src/features/form-fields/purpose-field.ts`(예약 목적 칸).
 - 문서에 실제 토큰을 남기지 않습니다. 인증은 페이지가 저장소에 넣어둔 JWT를 런타임에 읽어 씁니다.
