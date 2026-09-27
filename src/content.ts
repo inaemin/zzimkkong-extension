@@ -797,6 +797,18 @@ declare global {
     });
   }
 
+  /**
+   * 예약이 성공한 뒤의 정리.
+   *
+   * 고른 구간은 이제 예약이 됐다. 선택을 남겨 두면 새로 받은 한도(방금 예약이
+   * 이미 빠진 값)에서 "예약 후" 미리보기가 같은 시간을 한 번 더 뺀다.
+   */
+  function handleReservationMutated() {
+    invalidateReservationCaches();
+    resetTimelineSelectionState();
+    syncQuotaPanel();
+  }
+
   // 새로 받은 응답이든 캐시된 응답이든 화면 반영은 같은 경로를 쓴다.
   function applyAvailabilityData(data: unknown, { roomType }: { roomType: unknown }) {
     const payload = (data ?? {}) as Record<string, unknown>;
@@ -3342,7 +3354,7 @@ declare global {
     shouldSkipSlackCopyModal,
     showSlackCopyModal,
     buildLmsSlackReservationContext,
-    onReservationMutated: invalidateReservationCaches,
+    onReservationMutated: handleReservationMutated,
   });
 
   // 개편 서비스(lms+) 예약 생성 응답 body → Slack 모달 context.
